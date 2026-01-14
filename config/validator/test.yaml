@@ -1,0 +1,7 @@
+#App\Entity\Test:
+#  properties:
+#    name:
+#      - NotBlank: ~
+#      - Length:
+#          max: 10
+#          maxMessage: 'limite {{ limit }} maximo'

@@ -1,0 +1,7 @@
+#App\Entity\Test:
+#  attributes:
+#    id:
+#      groups: ['group1']
+#
+#    name:
+#      groups: [ 'group2' ]
