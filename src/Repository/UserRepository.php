@@ -37,7 +37,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function getWithPagination($search = null): Query
     {
         $queryBuilder = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.u.phone', 'u.name', 'u.lastName')
+            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.name', 'u.lastName')
             ->leftJoin('u.branch', 'b')
             ->addSelect('b.id AS branch_id', 'b.name AS branch_name')
             ->orderBy('u.id', 'ASC');
