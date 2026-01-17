@@ -37,15 +37,15 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function getWithPagination($search = null): Query
     {
         $queryBuilder = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.email', 'u.roles','u.name', 'u.enabled')
+            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled')
+            ->leftJoin('u.branch', 'b')
+            ->addSelect('b.id AS branch_id', 'b.name AS branch_name')
             ->orderBy('u.id', 'ASC');
 
         if ($search) {
             $queryBuilder->andWhere('u.name LIKE :val or u.email LIKE :val');
             $queryBuilder->setParameter('val', '%' . $search . '%');
         }
-
-
         return $queryBuilder->getQuery();
     }
 
@@ -59,29 +59,4 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     }
 
 
-
-    //    /**
-    //     * @return User[] Returns an array of User objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('u')
-    //            ->andWhere('u.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('u.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?User
-    //    {
-    //        return $this->createQueryBuilder('u')
-    //            ->andWhere('u.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
 }
