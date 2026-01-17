@@ -30,7 +30,6 @@ final class CompanyController extends BaseController
             'u.isActive',
             'u.acronym',
             'u.legalName',
-            'u.commercialName',
             'u.rfc',
             'u.taxAddress',
         ];

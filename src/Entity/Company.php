@@ -23,8 +23,6 @@ class Company extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 200, nullable: true)]
     private string $legalName;
 
-    #[ORM\Column(type: Types::STRING, length: 200, nullable: true)]
-    private string $commercialName;
 
     #[ORM\Column(type: Types::STRING, length: 20, nullable: true)]
     private string $rfc;
@@ -52,15 +50,6 @@ class Company extends BaseEntity
         $this->legalName = $legalName;
     }
 
-    public function getCommercialName(): string
-    {
-        return $this->commercialName;
-    }
-
-    public function setCommercialName(string $commercialName): void
-    {
-        $this->commercialName = $commercialName;
-    }
 
     public function getRfc(): string
     {

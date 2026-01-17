@@ -17,7 +17,6 @@ class CompanyFormType extends BaseFormType
 
         $builder->add('acronym');
         $builder->add('legalName');
-        $builder->add('commercialName');
         $builder->add('rfc');
         $builder->add('taxAddress');
     }
