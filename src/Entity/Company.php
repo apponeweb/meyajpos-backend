@@ -12,6 +12,7 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 #[ORM\Entity(repositoryClass: CompanyRepository::class)]
 #[ORM\Table(name: 'tbn_company')]
 #[UniqueEntity(fields: ['name'], message: 'Ya existe una empresa con este nombre.')]
+#[UniqueEntity(fields: ['acronym'], message: 'Ya existe una empresa con estas siglas.')]
 #[ORM\HasLifecycleCallbacks]
 class Company extends BaseEntity
 {
@@ -27,7 +28,7 @@ class Company extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 20, nullable: true)]
     private string $rfc;
 
-    #[ORM\Column(type: Types::TEXT, length: 20, nullable: true)]
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
     private string $taxAddress;
 
     public function getAcronym(): string
