@@ -34,6 +34,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private ?bool $enabled = true;
 
+    #[ORM\Column]
+    private ?bool $barberSn = true;
+
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
@@ -41,11 +44,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $lastName = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    private ?string $phone= null;
+    private ?string $phone = null;
 
-    #[ORM\ManyToOne(targetEntity: Branch::class)]
-    #[ORM\JoinColumn(name: 'branch_id', referencedColumnName: 'id', nullable: true)]
-    private ?Branch $branch = null;
+    #[ORM\ManyToOne(targetEntity: Commission::class)]
+    #[ORM\JoinColumn(name: 'commission_id', referencedColumnName: 'id', nullable: true)]
+    private ?Commission $commission = null;
 
     public function getId(): ?int
     {
@@ -153,15 +156,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getBranch(): ?Branch
-    {
-        return $this->branch;
-    }
-
-    public function setBranch(?Branch $branch): void
-    {
-        $this->branch = $branch;
-    }
 
     public function getPhone(): ?string
     {
@@ -181,6 +175,26 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setLastName(?string $lastName): void
     {
         $this->lastName = $lastName;
+    }
+
+    public function getBarberSn(): ?bool
+    {
+        return $this->barberSn;
+    }
+
+    public function setBarberSn(?bool $barberSn): void
+    {
+        $this->barberSn = $barberSn;
+    }
+
+    public function getCommission(): ?Commission
+    {
+        return $this->commission;
+    }
+
+    public function setCommission(?Commission $commission): void
+    {
+        $this->commission = $commission;
     }
 
 

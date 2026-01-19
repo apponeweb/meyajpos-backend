@@ -84,7 +84,7 @@ abstract class BaseController extends AbstractFOSRestController
         $name = $data['name'] ?? null;
 
         // --- LÓGICA DE RE-ACTIVACIÓN ---
-        if (null === $entity->getId() && $name) {
+        if (null === $entity->getId() && $name !== null) {
             $repository = $this->entityManager->getRepository($this->getEntityClass());
 
             // Buscamos si existe uno con el mismo nombre (incluyendo desactivados/borrados)
