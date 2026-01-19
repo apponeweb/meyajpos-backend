@@ -63,6 +63,13 @@ final class CashBoxController extends BaseController
         return $this->list($request, $repository);
     }
 
+    #[Rest\Get('/cash_box/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(CashBoxRepository $cashBoxRepository)
+    {
+        return $cashBoxRepository->getAllToSelect();
+    }
+
     #[Rest\Post('/cash_box')]
     public function create(Request $request): JsonResponse
     {
@@ -87,10 +94,5 @@ final class CashBoxController extends BaseController
         return $this->getDetails($id);
     }
 
-    #[Rest\Get('/cash_box/all')]
-    #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function all(CashBoxRepository $cashBoxRepository)
-    {
-        return $cashBoxRepository->getAllToSelect();
-    }
+
 }

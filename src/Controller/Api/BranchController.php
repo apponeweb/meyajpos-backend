@@ -56,6 +56,13 @@ final class BranchController extends BaseController
         return $this->list($request, $repository);
     }
 
+    #[Rest\Get('/branch/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(BranchRepository $branchRepository)
+    {
+        return $branchRepository->getAllToSelect();
+    }
+
     #[Rest\Post('/branch')]
     public function create(Request $request): JsonResponse
     {
@@ -80,10 +87,5 @@ final class BranchController extends BaseController
         return $this->getDetails($id);
     }
 
-    #[Rest\Get('/branch/all')]
-    #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function all(BranchRepository $branchRepository)
-    {
-        return $branchRepository->getAllToSelect();
-    }
+
 }
