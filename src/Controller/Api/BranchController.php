@@ -66,14 +66,14 @@ final class BranchController extends BaseController
     #[Rest\Post('/branch')]
     public function create(Request $request): JsonResponse
     {
-        $this->normalizeAddress($request);
+        $this->normalizeAddress($request, 'address');
         return $this->processForm($request, new Branch(), "Sucursal creada correctamente");
     }
 
     #[Rest\Put('/branch/{id}')]
     public function update(Request $request, Branch $id): JsonResponse
     {
-        $this->normalizeAddress($request);
+        $this->normalizeAddress($request, 'address');
         return $this->processForm($request, $id, "Sucursal actualizada correctamente");
     }
 
@@ -89,27 +89,4 @@ final class BranchController extends BaseController
         return $this->getDetails($id);
     }
 
-    /**
-     * Normaliza el campo taxAddress transformando el objeto JSON en un string
-     * para que sea compatible con el campo TEXT de la entidad.
-     */
-    private function normalizeAddress(Request $request): void
-    {
-        $content = json_decode($request->getContent(), true);
-
-        if (isset($content['address']) && is_array($content['address'])) {
-            $content['address'] = json_encode($content['address']);
-
-            // Reinicializamos el Request con el nuevo contenido serializado
-            $request->initialize(
-                $request->query->all(),
-                $request->request->all(),
-                $request->attributes->all(),
-                $request->cookies->all(),
-                $request->files->all(),
-                $request->server->all(),
-                json_encode($content)
-            );
-        }
-    }
 }

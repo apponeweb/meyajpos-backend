@@ -214,4 +214,25 @@ abstract class BaseController extends AbstractFOSRestController
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+
+    public function normalizeAddress(Request $request, $field): void
+    {
+        $content = json_decode($request->getContent(), true);
+
+        if (isset($content[$field]) && is_array($content[$field])) {
+            $content[$field] = json_encode($content[$field]);
+
+            // Reinicializamos el Request con el nuevo contenido serializado
+            $request->initialize(
+                $request->query->all(),
+                $request->request->all(),
+                $request->attributes->all(),
+                $request->cookies->all(),
+                $request->files->all(),
+                $request->server->all(),
+                json_encode($content)
+            );
+        }
+    }
 }

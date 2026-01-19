@@ -50,14 +50,14 @@ final class CompanyController extends BaseController
     #[Rest\Post('/company')]
     public function create(Request $request): JsonResponse
     {
-        $this->normalizeTaxAddress($request);
+        $this->normalizeAddress($request, 'taxAddress');
         return $this->processForm($request, new Company(), "Empresa creada correctamente");
     }
 
     #[Rest\Put('/company/{id}')]
     public function update(Request $request, Company $id): JsonResponse
     {
-        $this->normalizeTaxAddress($request);
+        $this->normalizeAddress($request, 'taxAddress');
         return $this->processForm($request, $id, "Empresa actualizada correctamente");
     }
 
@@ -73,29 +73,4 @@ final class CompanyController extends BaseController
         return $this->getDetails($id);
     }
 
-
-
-    /**
-     * Normaliza el campo taxAddress transformando el objeto JSON en un string
-     * para que sea compatible con el campo TEXT de la entidad.
-     */
-    private function normalizeTaxAddress(Request $request): void
-    {
-        $content = json_decode($request->getContent(), true);
-
-        if (isset($content['taxAddress']) && is_array($content['taxAddress'])) {
-            $content['taxAddress'] = json_encode($content['taxAddress']);
-
-            // Reinicializamos el Request con el nuevo contenido serializado
-            $request->initialize(
-                $request->query->all(),
-                $request->request->all(),
-                $request->attributes->all(),
-                $request->cookies->all(),
-                $request->files->all(),
-                $request->server->all(),
-                json_encode($content)
-            );
-        }
-    }
 }
