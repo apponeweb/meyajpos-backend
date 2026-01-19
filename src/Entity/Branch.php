@@ -12,6 +12,7 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 #[ORM\Entity(repositoryClass: BranchRepository::class)]
 #[ORM\Table(name: 'tbn_branch')]
 #[UniqueEntity(fields: ['name'], message: 'Ya existe una sucursal con este nombre.')]
+#[UniqueEntity(fields: ['acronym'], message: 'Ya existe una sucursal con estas siglas.')]
 #[ORM\HasLifecycleCallbacks]
 class Branch extends BaseEntity
 {
