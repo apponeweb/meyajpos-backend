@@ -86,4 +86,11 @@ final class CashBoxController extends BaseController
     {
         return $this->getDetails($id);
     }
+
+    #[Rest\Get('/cash_box/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(CashBoxRepository $cashBoxRepository)
+    {
+        return $cashBoxRepository->getAllToSelect();
+    }
 }

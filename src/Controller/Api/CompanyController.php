@@ -67,6 +67,13 @@ final class CompanyController extends BaseController
         return $this->getDetails($id);
     }
 
+
+    #[Rest\Get('/company/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(CompanyRepository $companyRepository)
+    {
+        return $companyRepository->getAllToSelect();
+    }
     /**
      * Normaliza el campo taxAddress transformando el objeto JSON en un string
      * para que sea compatible con el campo TEXT de la entidad.
