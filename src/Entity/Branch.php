@@ -25,7 +25,7 @@ class Branch extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 20, unique: true)]
     private string $acronym;
 
-    #[ORM\Column(type: Types::TEXT, length: 250, nullable: true)]
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
     private string $address;
 
     public function getAddress(): string
