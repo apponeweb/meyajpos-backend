@@ -139,18 +139,48 @@ abstract class BaseController extends AbstractFOSRestController
             }
         }
 
-        return $form;
+        return $this->json([
+            'message' => 'Validación fallida',
+            'errors' => $this->getFormErrors($form)
+        ], Response::HTTP_BAD_REQUEST);
     }
 
     /**
      * Helper para extraer errores del formulario de forma legible
      */
-    private function getFormErrors(FormInterface $form): array
+    protected function getFormErrors(\Symfony\Component\Form\FormInterface $form): array
     {
-        $errors = [];
-        foreach ($form->getErrors(true) as $error) {
-            $errors[$error->getOrigin()->getName()][] = $error->getMessage();
+        $errors = [
+            'children' => []
+        ];
+
+        // 1. Recorrer cada campo del formulario (children)
+        foreach ($form->all() as $child) {
+            $childErrors = [];
+
+            // 2. Extraer los mensajes de error de este campo específico
+            foreach ($child->getErrors() as $error) {
+                $childErrors[] = $error->getMessage();
+            }
+
+            // 3. Solo agregar al JSON si el campo realmente tiene errores
+            if (!empty($childErrors)) {
+                $errors['children'][$child->getName()] = [
+                    'errors' => $childErrors
+                ];
+            }
         }
+
+        // 4. (Opcional) Errores globales del formulario (no asociados a un campo)
+        $formErrors = [];
+        foreach ($form->getErrors() as $error) {
+            $formErrors[] = $error->getMessage();
+        }
+
+        if (!empty($formErrors)) {
+            $errors['errors'] = $formErrors;
+        }
+
         return $errors;
     }
 
