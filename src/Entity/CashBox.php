@@ -25,8 +25,12 @@ class CashBox extends BaseEntity
     private string $ticketSerie;
 
     #[ORM\Column(type: Types::INTEGER, nullable: true)]
-    private int $currentFolio = 0;
+    private ?int $currentFolio = 0;
 
+    public function __construct()
+    {
+        $this->currentFolio = 0;
+    }
     public function getBranch(): ?Branch
     {
         return $this->branch;
