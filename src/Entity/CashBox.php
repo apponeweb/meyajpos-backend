@@ -51,12 +51,12 @@ class CashBox extends BaseEntity
         $this->ticketSerie = $ticketSerie;
     }
 
-    public function getCurrentFolio(): int
+    public function getCurrentFolio(): ?int
     {
         return $this->currentFolio;
     }
 
-    public function setCurrentFolio(int $currentFolio): void
+    public function setCurrentFolio(?int $currentFolio): void
     {
         $this->currentFolio = $currentFolio;
     }
