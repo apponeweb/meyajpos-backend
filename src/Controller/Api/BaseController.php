@@ -139,10 +139,7 @@ abstract class BaseController extends AbstractFOSRestController
             }
         }
 
-        return $this->json([
-            'message' => 'Validación fallida',
-            'errors' => $form
-        ], Response::HTTP_BAD_REQUEST);
+        return $form;
     }
 
     /**
