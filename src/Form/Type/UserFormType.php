@@ -31,6 +31,8 @@ class UserFormType extends AbstractType
                 'multiple' => true,
             ])
             ->add('enabled')
+            ->add('enabled')
+            ->add('barberSn')
             ->add('commission', EntityType::class, [
                 'class' => Commission::class,
                 'choice_label' => 'id',
