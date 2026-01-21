@@ -11,7 +11,7 @@ use Doctrine\ORM\Query\Expr\Base;
 #[ORM\Entity(repositoryClass: CommissionDetailsRepository::class)]
 #[ORM\Table(name: 'tbn_commission_detail')]
 #[ORM\HasLifecycleCallbacks]
-class CommissionDetail extends Base
+class CommissionDetail extends BaseEntity
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
