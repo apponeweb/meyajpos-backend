@@ -20,6 +20,7 @@ final class PaymentTypeController extends BaseController
     {
         return PaymentTypeFormType::class;
     }
+
     protected function getListSelectFields(): array
     {
         return [
@@ -31,10 +32,18 @@ final class PaymentTypeController extends BaseController
             'u.referenceRequired',
         ];
     }
+
     #[Rest\Get('/payment_type')]
     public function index(Request $request, PaymentTypeRepository $repository): JsonResponse
     {
         return $this->list($request, $repository);
+    }
+
+    #[Rest\Get('/payment_type/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(PaymentTypeRepository $masterProductRepository)
+    {
+        return $masterProductRepository->getAllToSelect();
     }
 
     #[Rest\Post('/payment_type')]

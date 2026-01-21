@@ -70,31 +70,38 @@ final class MasterProductController extends BaseController
         ];
     }
 
-    #[Rest\Get('/master-product')]
+    #[Rest\Get('/master_product')]
     public function index(Request $request, MasterProductRepository $repository): JsonResponse
     {
         return $this->list($request, $repository);
     }
 
-    #[Rest\Post('/master-product')]
+    #[Rest\Get('/master_product/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(MasterProductRepository $masterProductRepository)
+    {
+        return $masterProductRepository->getAllToSelect();
+    }
+
+    #[Rest\Post('/master_product')]
     public function create(Request $request): JsonResponse
     {
         return $this->processForm($request, new MasterProduct(), "Producto maestro creado correctamente");
     }
 
-    #[Rest\Put('/master-product/{id}')]
+    #[Rest\Put('/master_product/{id}')]
     public function update(Request $request, MasterProduct $id): JsonResponse
     {
         return $this->processForm($request, $id, "Producto maestro actualizado correctamente");
     }
 
-    #[Rest\Delete('/master-product/{id}')]
+    #[Rest\Delete('/master_product/{id}')]
     public function remove(MasterProduct $id): JsonResponse
     {
         return $this->delete($id);
     }
 
-    #[Rest\Get('/master-product/{id}')]
+    #[Rest\Get('/master_product/{id}')]
     public function get(MasterProduct $id): JsonResponse
     {
         return $this->getDetails($id);
