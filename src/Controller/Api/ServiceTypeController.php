@@ -39,6 +39,13 @@ final class ServiceTypeController extends BaseController
         return $this->list($request, $repository);
     }
 
+    #[Rest\Get('/service_type/all')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function all(ServiceTypeRepository $serviceTypeRepository)
+    {
+        return $serviceTypeRepository->getAllToSelect();
+    }
+
     #[Rest\Post('/service_type')]
     public function create(Request $request): JsonResponse
     {
