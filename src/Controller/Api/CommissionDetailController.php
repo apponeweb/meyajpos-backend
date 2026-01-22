@@ -53,6 +53,7 @@ final class CommissionDetailController extends BaseController
         $qb->andWhere('u.commission = :commissionId')->setParameter('commissionId', $commissionId);
     }
 
+
     /**
      * Listar los detalles de una comisión específica
      */
@@ -91,4 +92,11 @@ final class CommissionDetailController extends BaseController
     {
         return $this->delete($detail);
     }
+
+    #[Rest\Get('/commission/{id}/detail')]
+    public function get(CommissionDetail $detail): JsonResponse
+    {
+        return $this->getDetails($detail);
+    }
+
 }
