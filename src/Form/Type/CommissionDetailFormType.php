@@ -8,6 +8,7 @@ use App\Enum\ApplicableCommission;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -20,12 +21,8 @@ class CommissionDetailFormType extends AbstractType
             ->add('percentage', NumberType::class, [
                 'scale' => 4,
             ])
-            ->add('applicableCommission', ChoiceType::class, [
-                'choices' => [
-                    'Todos' => ApplicableCommission::ALL,
-                    'Tipo de servicio' => ApplicableCommission::SERVICE_TYPE,
-                    'Producto de inventariado' => ApplicableCommission::INVENTORY_PRODUCT,
-                ],
+            ->add('applicableCommission', EnumType::class, [
+                'class' => ApplicableCommission::class,
             ])
             ->add('serviceType', EntityType::class, [
                 'class' => ServiceType::class,

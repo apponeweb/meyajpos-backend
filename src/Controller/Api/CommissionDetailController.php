@@ -53,6 +53,10 @@ final class CommissionDetailController extends BaseController
         $qb->andWhere('u.commission = :commissionId')->setParameter('commissionId', $commissionId);
     }
 
+    protected function getSearchFields(): array
+    {
+        return ['u.percentage', 'st.name'];
+    }
 
     /**
      * Listar los detalles de una comisión específica
@@ -66,7 +70,7 @@ final class CommissionDetailController extends BaseController
     /**
      * Adicionar un detalle a una comisión
      */
-    #[Rest\Post('/commission/{id}/details')]
+    #[Rest\Post('/commission/{commission}/details')]
     public function addDetail(Request $request, Commission $commission): JsonResponse
     {
         $detail = new CommissionDetail();

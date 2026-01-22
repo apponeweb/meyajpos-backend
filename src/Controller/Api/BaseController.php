@@ -25,6 +25,10 @@ abstract class BaseController extends AbstractFOSRestController
 
     abstract protected function getFormTypeClass(): string;
 
+    protected function getSearchFields(): array
+    {
+        return ['u.name', 'u.description'];
+    }
     /**
      * Lista paginada genérica
      */
@@ -41,7 +45,14 @@ abstract class BaseController extends AbstractFOSRestController
         $this->configureListQuery($qb, $request);
 
         if ($search) {
-            $qb->andWhere('u.name LIKE :val OR u.description LIKE :val')
+            $searchFields = $this->getSearchFields();
+            $orStatements = $qb->expr()->orX();
+
+            foreach ($searchFields as $field) {
+                $orStatements->add($qb->expr()->like($field, ':val'));
+            }
+
+            $qb->andWhere($orStatements)
                 ->setParameter('val', '%' . $search . '%');
         }
 
