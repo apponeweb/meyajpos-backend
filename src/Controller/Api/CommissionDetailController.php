@@ -77,7 +77,7 @@ final class CommissionDetailController extends BaseController
     /**
      * Actualizar un detalle
      */
-    #[Rest\Put('/commission_detail/{id}')]
+    #[Rest\Put('/commission/{id}/detail')]
     public function updateDetail(Request $request, CommissionDetail $detail): JsonResponse
     {
         return $this->processForm($request, $detail, "Detalle actualizado");
@@ -86,7 +86,7 @@ final class CommissionDetailController extends BaseController
     /**
      * Eliminar un detalle (Usa el método delete del BaseController)
      */
-    #[Rest\Delete('/commission_detail/{id}')]
+    #[Rest\Delete('/commission/{id}/detail')]
     public function removeDetail(CommissionDetail $detail): JsonResponse
     {
         return $this->delete($detail);
