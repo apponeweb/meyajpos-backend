@@ -80,7 +80,8 @@ final class MasterProductController extends BaseController
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function all(MasterProductRepository $masterProductRepository)
     {
-        return $masterProductRepository->getAllToSelect();
+        $extraColumns = ['price'];
+        return $masterProductRepository->getAllToSelect($extraColumns);
     }
 
     #[Rest\Post('/master_product')]

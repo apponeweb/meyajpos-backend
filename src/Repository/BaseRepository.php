@@ -47,10 +47,21 @@ abstract class BaseRepository extends ServiceEntityRepository
     /**
      * Lista genérica para elementos de selección (Combos)
      */
-    public function getAllToSelect(): array
+    public function getAllToSelect(array $extraColumns = []): array
     {
+        // Definimos las columnas base obligatorias
+        $columns = ['u.id', 'u.name'];
+
+        // Si vienen columnas extras, las limpiamos y mezclamos con las base
+        if (!empty($extraColumns)) {
+            foreach ($extraColumns as $column) {
+                // Aseguramos que la columna tenga el alias del QueryBuilder 'u.'
+                $columns[] = str_contains($column, '.') ? $column : 'u.' . $column;
+            }
+        }
+
         return $this->createQueryBuilder('u')
-            ->select('u.id', 'u.name')
+            ->select($columns) // Pasamos el arreglo directamente
             ->where('u.isActive = :active')
             ->andWhere('u.deletedAt IS NULL')
             ->setParameter('active', true)
