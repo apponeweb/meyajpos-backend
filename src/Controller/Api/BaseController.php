@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\Sale;
 use App\Repository\BaseRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -129,6 +130,21 @@ abstract class BaseController extends AbstractFOSRestController
                 $user = $this->security->getUser();
                 $userId = ($user && method_exists($user, 'getId')) ? (int)$user->getId() : null;
 
+                if ($entity instanceof Sale) {
+                    // 1. Asignar la fecha actual como fecha de venta
+                    if (method_exists($entity, 'setSaleDate')) {
+                        $entity->setSaleDate($now);
+                    }
+                    // 2. Asignar el usuario autenticado como el vendedor/usuario de la venta
+                    if ($user && method_exists($entity, 'setUser')) {
+                        $entity->setUser($user);
+                    }
+                    if (null === $entity->getId()) { // Solo si es una creación nueva
+                        $newFolio = $this->generateDailyFolio($now);
+                        $entity->setFolio($newFolio);
+                    }
+                }
+
                 if (null === $entity->getId()) {
                     if (method_exists($entity, 'setCreatedAt')) $entity->setCreatedAt($now);
                     if ($userId && method_exists($entity, 'setCreatedBy')) $entity->setCreatedBy($userId);
@@ -156,6 +172,29 @@ abstract class BaseController extends AbstractFOSRestController
         ], Response::HTTP_BAD_REQUEST);
     }
 
+    private function generateDailyFolio(\DateTime $date): string
+    {
+        $repository = $this->entityManager->getRepository(Sale::class);
+
+        // Definir el rango del día (desde las 00:00:00 hasta las 23:59:59)
+        $startOfDay = (clone $date)->setTime(0, 0, 0);
+        $endOfDay = (clone $date)->setTime(23, 59, 59);
+
+        // Contar cuántas ventas se han realizado hoy
+        $count = $repository->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->where('s.saleDate BETWEEN :start AND :end')
+            ->setParameter('start', $startOfDay)
+            ->setParameter('end', $endOfDay)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $nextNumber = (int)$count + 1;
+
+        // Formato: AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
+        // Ejemplo: 20260126-0001
+        return sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
+    }
     /**
      * Helper para extraer errores del formulario de forma legible
      */

@@ -33,23 +33,12 @@ class SaleFormType extends AbstractType
                         ->setParameter('active', true);
                 }
             ])
-            ->add('folio')
-            ->add('user', EntityType::class, [
-                'class' => User::class,
-                'choice_label' => 'name',
-                'query_builder' => function (EntityRepository $er) {
-                    return $er->createQueryBuilder('u')
-                        ->where('u.enabled = :enabled')
-                        ->setParameter('enabled', true);
-                },
-                'placeholder' => 'Seleccione Usuario/Vendedor',
-            ])
+//            ->add('folio')
             ->add('subtotal')
             ->add('totalTax')
             ->add('total')
             ->add('status', EnumType::class, [
                 'class' => SaleStatus::class,
-                // Esto asegura que se trate como el valor escalar (1, 2, 3)
             ])
             ->add('cancellationReason');
         $builder->add('details', CollectionType::class, [
