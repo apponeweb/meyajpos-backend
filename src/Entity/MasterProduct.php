@@ -12,6 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'tbd_master_product')]
 #[UniqueEntity(fields: ['name'], message: 'Ya existe un producto maestro con este nombre.')]
 #[UniqueEntity(fields: ['sku'], message: 'Ya existe un sku con este nombre.')]
+#[UniqueEntity(fields: ['barcode'], message: 'Ya existe un sku con este nombre.')]
 #[ORM\HasLifecycleCallbacks]
 class MasterProduct extends BaseEntity
 {
