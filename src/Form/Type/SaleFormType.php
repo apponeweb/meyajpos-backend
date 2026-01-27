@@ -51,6 +51,11 @@ class SaleFormType extends AbstractType
             'allow_delete' => true,
             'by_reference' => false,
         ]);
+        $builder->add('tips', CollectionType::class, [
+            'entry_type' => TipFormType::class,
+            'allow_add' => true,
+            'by_reference' => false, // Esencial para que se vinculen a la Sale
+        ]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void

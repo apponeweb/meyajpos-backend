@@ -2,7 +2,10 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\PaymentType;
 use App\Entity\Sale;
+use App\Entity\SalePayment;
+use App\Entity\Tip;
 use App\Form\Type\SaleFormType;
 use App\Repository\SaleRepository;
 use Doctrine\ORM\QueryBuilder;
@@ -117,13 +120,25 @@ final class SaleController extends BaseController
 
         if ($form->isSubmitted() && $form->isValid()) {
 
+            // 1. Procesar Pagos y sus campos de auditoría
             foreach ($sale->getPayments() as $payment) {
-                if (method_exists($payment, 'setCreatedBy')) {
-                    $payment->setCreatedBy($user->getId());
+                $payment->setCreatedBy($user->getId()); // Suponiendo que BaseEntity tiene este método
+                $payment->setUpdatedBy($user->getId()); // Suponiendo que BaseEntity tiene este método
+            }
+
+            // 2. Procesar Propinas, vincularlas a un pago y auditoría
+            foreach ($sale->getTips() as $tip) {
+                $tip->setCreatedBy($user->getId());
+                $tip->setUpdatedBy($user->getId());
+                $tip->setTipDate(new \DateTime());
+
+                // Buscamos el pago que financia esta propina (basado en el paymentType)
+                $matchingPayment = $this->findMatchingPayment($sale, $tip->getPaymentType());
+                if ($matchingPayment) {
+                    $tip->setSalePayment($matchingPayment);
                 }
-                if (method_exists($payment, 'setUpdatedBy')) {
-                    $payment->setUpdatedBy($user->getId());
-                }
+
+                $this->entityManager->persist($tip);
             }
 
             $this->entityManager->persist($sale);
@@ -142,6 +157,18 @@ final class SaleController extends BaseController
         ], JsonResponse::HTTP_BAD_REQUEST);
     }
 
+    /**
+     * Busca el pago dentro de la venta actual que coincida con el tipo de pago de la propina
+     */
+    private function findMatchingPayment(Sale $sale, PaymentType $type): ?SalePayment
+    {
+        foreach ($sale->getPayments() as $payment) {
+            if ($payment->getPaymentType() === $type) {
+                return $payment;
+            }
+        }
+        return null;
+    }
 
     private function generateDailyFolio(\DateTime $date): string
     {

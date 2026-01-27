@@ -58,6 +58,8 @@ class Sale extends BaseEntity
     #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'])]
     private Collection $payments;
 
+    private $tips;
+
     public function addPayment(SalePayment $payment): self
     {
         if (!$this->payments->contains($payment)) {
@@ -83,27 +85,8 @@ class Sale extends BaseEntity
         $this->saleDate = new \DateTime();
     }
 
-    #[Assert\Callback]
-    public function validatePayments(ExecutionContextInterface $context): void
-    {
-        $totalSale = (float)$this->total;
-        $totalPayments = 0;
 
-        foreach ($this->payments as $payment) {
-            $totalPayments += (float)$payment->getAmountReceived();
-        }
-
-        // Comparamos con un pequeño delta para evitar errores de precisión de punto flotante
-        if (abs($totalSale - $totalPayments) > 0.0001) {
-            $context->buildViolation('La suma de los pagos (%payments%) no coincide con el total de la venta (%total%).')
-                ->setParameter('%payments%', number_format($totalPayments, 2))
-                ->setParameter('%total%', number_format($totalSale, 2))
-                ->atPath('payments')
-                ->addViolation();
-        }
-    }
-
-    #[ORM\OneToMany(mappedBy: 'sale', targetEntity: SaleDetail::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    #[ORM\OneToMany(targetEntity: SaleDetail::class, mappedBy: 'sale', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $details;
 
     public function __construct()
@@ -111,6 +94,25 @@ class Sale extends BaseEntity
         // Es vital inicializar esto como ArrayCollection
         $this->details = new ArrayCollection();
         $this->payments = new ArrayCollection();
+        $this->tips = new ArrayCollection();
+    }
+
+    public function addTip(Tip $tip): self
+    {
+        if (!$this->tips->contains($tip)) {
+            $this->tips->add($tip);
+        }
+        return $this;
+    }
+
+    public function removeTip(Tip $tip): self
+    {
+        if ($this->tips->removeElement($tip)) {
+            // En tu caso, la entidad Tip no tiene una relación inversa 'sale'
+            // (está vinculada a SalePayment), por lo que solo la removemos de la colección.
+        }
+
+        return $this;
     }
 
     public function removeDetail(SaleDetail $detail): self
@@ -243,7 +245,70 @@ class Sale extends BaseEntity
         return $this->payments;
     }
 
+    #[Assert\Callback]
+    public function validatePayments(ExecutionContextInterface $context): void
+    {
+        $totalVenta = (float)$this->total;
+        $totalPagos = 0;
+        $totalPropinas = 0;
 
+        // Sumar todos los pagos recibidos
+        foreach ($this->payments as $payment) {
+            $totalPagos += (float)$payment->getAmountReceived();
+        }
+
+        // Sumar todas las propinas registradas
+        // Asegúrate de tener la propiedad $tips y su getter en esta entidad
+        foreach ($this->tips as $tip) {
+            $totalPropinas += (float)$tip->getAmount();
+        }
+
+        $montoEsperado = $totalVenta + $totalPropinas;
+
+        // Usamos round para evitar problemas de precisión con decimales
+        if (round($totalPagos, 2) !== round($montoEsperado, 2)) {
+            $context->buildViolation('La suma de los pagos (%payments%) no coincide con el total de la venta + propinas (%total%).')
+                ->setParameter('%payments%', number_format($totalPagos, 2))
+                ->setParameter('%total%', number_format($montoEsperado, 2))
+                ->atPath('payments')
+                ->addViolation();
+        }
+    }
+
+
+    #[Assert\Callback]
+    public function validateTotalWithTips(ExecutionContextInterface $context): void
+    {
+        $totalVenta = (float)$this->total;
+        $totalPagos = 0;
+        $totalPropinas = 0;
+
+        foreach ($this->payments as $payment) {
+            $totalPagos += (float)$payment->getAmountReceived();
+        }
+
+        // Accedemos a las propinas (asumiendo que las manejas en la venta)
+        foreach ($this->tips as $tip) {
+            $totalPropinas += (float)$tip->getAmount();
+        }
+
+        $montoNecesario = $totalVenta + $totalPropinas;
+
+        // Si el cliente pagó menos de lo que suman Venta + Propina
+        if (round($totalPagos, 2) < round($montoNecesario, 2)) {
+            $context->buildViolation('El total recibido (%pagos%) es insuficiente para cubrir la venta (%venta%) y las propinas (%propinas%).')
+                ->setParameter('%pagos%', number_format($totalPagos, 2))
+                ->setParameter('%venta%', number_format($totalVenta, 2))
+                ->setParameter('%propinas%', number_format($totalPropinas, 2))
+                ->atPath('payments')
+                ->addViolation();
+        }
+    }
+
+    public function getTips(): ArrayCollection
+    {
+        return $this->tips;
+    }
 
 
 }

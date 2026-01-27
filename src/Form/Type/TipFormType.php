@@ -14,31 +14,20 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Form\Extension\Core\Type\NumberType;
 
 class TipFormType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
-            ->add('salePayment')
-            ->add('paymentType', EntityType::class, [
-                'class' => PaymentType::class,
-                'choice_label' => 'id',
-                'required' => false,
-                'query_builder' => function (EntityRepository $er) {
-                    return $er->createQueryBuilder('c')
-                        ->where('c.deletedAt IS NULL');
-                },
-                'invalid_message' => 'El tipo de pago seleccionado no es válida.',
-            ])
-            ->add('amount') ;
+            ->add('user', EntityType::class, ['class' => User::class])
+            ->add('paymentType', EntityType::class, ['class' => PaymentType::class])
+            ->add('amount', NumberType::class);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
     {
-        $resolver->setDefaults([
-            'data_class' => Tip::class,
-            'csrf_protection' => false,
-        ]);
+        $resolver->setDefaults(['data_class' => Tip::class, 'csrf_protection' => false]);
     }
 }

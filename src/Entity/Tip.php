@@ -10,6 +10,7 @@ use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 
 #[ORM\Entity(repositoryClass: TipRepository::class)]
 #[ORM\Table(name: 'tbn_tip')]
+#[ORM\HasLifecycleCallbacks]
 class Tip extends BaseEntity
 {
     #[ORM\Id]
