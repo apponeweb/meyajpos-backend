@@ -16,5 +16,16 @@ class MasterProductRepository extends BaseRepository
         parent::__construct($registry, MasterProduct::class);
     }
 
-
+    public function findDetailsByBarcode(string $barcode): ?array
+    {
+        return $this->createQueryBuilder('m')
+            ->select('m.id', 'm.name', 'm.price')
+            ->where('m.barcode = :barcode')
+            ->andWhere('m.isActive = :active')
+            ->andWhere('m.deletedAt IS NULL')
+            ->setParameter('barcode', $barcode)
+            ->setParameter('active', true)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

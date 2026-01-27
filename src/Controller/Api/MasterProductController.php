@@ -107,4 +107,21 @@ final class MasterProductController extends BaseController
     {
         return $this->getDetails($id);
     }
+
+    #[Rest\Get('/master_product/barcode/{barcode}')]
+    public function getByBarcode(string $barcode, MasterProductRepository $repository): JsonResponse
+    {
+        $product = $repository->findDetailsByBarcode($barcode);
+
+        if (!$product) {
+            return $this->json([
+                'message' => 'Producto no encontrado con el código de barras proporcionado',
+                'data' => null
+            ], JsonResponse::HTTP_NOT_FOUND);
+        }
+        return $this->json([
+            'message' => 'Producto recuperado con éxito',
+            'data' => $product
+        ], JsonResponse::HTTP_OK);
+    }
 }

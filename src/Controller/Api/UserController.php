@@ -96,7 +96,7 @@ final class UserController extends AbstractFOSRestController
 
     #[Rest\Post('/user/{id}')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function updateUser(Request $request, EntityManagerInterface $entityManager,UserRepository $userRepository, User $id): User|FormInterface
+    public function updateUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, User $id): User|FormInterface
     {
         $user = $id;
         $form = $this->createForm(UserFormType::class, $user);
@@ -154,4 +154,10 @@ final class UserController extends AbstractFOSRestController
         return $this->json(['message' => "La contraseña ha sido cambiada exitosamente."], 200);
     }
 
+    #[Rest\Get('/user/list/barbers')]
+    #[Rest\View(serializerEnableMaxDepthChecks: true)]
+    public function getBarbers(UserRepository $userRepository): array
+    {
+        return $userRepository->findAllBarbers();
+    }
 }
