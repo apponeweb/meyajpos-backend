@@ -21,8 +21,8 @@ class SaleDetail extends Base
     #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false)]
     private ?Sale $sale = null;
 
-    #[ORM\Column(type: Types::INTEGER)]
-    private int $itemLine; // Renglon
+    #[ORM\Column(type: Types::STRING, length: 100, unique: true)]
+    private string $itemLine;
 
     #[ORM\ManyToOne(targetEntity: MasterProduct::class)]
     #[ORM\JoinColumn(name: 'product_id', referencedColumnName: 'id', nullable: false)]
@@ -77,15 +77,17 @@ class SaleDetail extends Base
         $this->sale = $sale;
     }
 
-    public function getItemLine(): int
+    public function getItemLine(): string
     {
         return $this->itemLine;
     }
 
-    public function setItemLine(int $itemLine): void
+    public function setItemLine(string $itemLine): void
     {
         $this->itemLine = $itemLine;
     }
+
+
 
     public function getProduct(): ?MasterProduct
     {

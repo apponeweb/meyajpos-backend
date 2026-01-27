@@ -20,8 +20,7 @@ class SaleDetailFormType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
-
-            ->add('itemLine', IntegerType::class, [
+            ->add('itemLine', TextType::class, [
                 'label' => 'Renglón',
             ])
             ->add('product', EntityType::class, [
