@@ -33,7 +33,6 @@ class SaleFormType extends AbstractType
                         ->setParameter('active', true);
                 }
             ])
-//            ->add('folio')
             ->add('subtotal')
             ->add('totalTax')
             ->add('total')
@@ -45,6 +44,12 @@ class SaleFormType extends AbstractType
             'entry_type' => SaleDetailFormType::class,
             'allow_add' => true,
             'by_reference' => false, // Importante para que use addDetail()
+        ]);
+        $builder->add('payments', CollectionType::class, [
+            'entry_type' => SalePaymentFormType::class,
+            'allow_add' => true,
+            'allow_delete' => true,
+            'by_reference' => false,
         ]);
     }
 

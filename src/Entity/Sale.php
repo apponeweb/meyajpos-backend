@@ -11,6 +11,8 @@ use Symfony\Component\Serializer\Annotation\Context;
 use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: SaleRepository::class)]
 #[ORM\Table(name: 'tbd_sale')]
@@ -53,12 +55,53 @@ class Sale extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
     private ?string $cancellationReason = null;
 
+    #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'])]
+    private Collection $payments;
+
+    public function addPayment(SalePayment $payment): self
+    {
+        if (!$this->payments->contains($payment)) {
+            $this->payments->add($payment);
+            $payment->setSale($this);
+        }
+        return $this;
+    }
+
+    public function removePayment(SalePayment $payment): self
+    {
+        if ($this->payments->removeElement($payment)) {
+            if ($payment->getSale() === $this) {
+                $payment->setSale(null);
+            }
+        }
+        return $this;
+    }
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
         $this->saleDate = new \DateTime();
     }
 
+    #[Assert\Callback]
+    public function validatePayments(ExecutionContextInterface $context): void
+    {
+        $totalSale = (float)$this->total;
+        $totalPayments = 0;
+
+        foreach ($this->payments as $payment) {
+            $totalPayments += (float)$payment->getAmountReceived();
+        }
+
+        // Comparamos con un pequeño delta para evitar errores de precisión de punto flotante
+        if (abs($totalSale - $totalPayments) > 0.0001) {
+            $context->buildViolation('La suma de los pagos (%payments%) no coincide con el total de la venta (%total%).')
+                ->setParameter('%payments%', number_format($totalPayments, 2))
+                ->setParameter('%total%', number_format($totalSale, 2))
+                ->atPath('payments')
+                ->addViolation();
+        }
+    }
 
     #[ORM\OneToMany(mappedBy: 'sale', targetEntity: SaleDetail::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $details;
@@ -67,6 +110,7 @@ class Sale extends BaseEntity
     {
         // Es vital inicializar esto como ArrayCollection
         $this->details = new ArrayCollection();
+        $this->payments = new ArrayCollection();
     }
 
     public function removeDetail(SaleDetail $detail): self
@@ -193,6 +237,13 @@ class Sale extends BaseEntity
     {
         $this->cancellationReason = $cancellationReason;
     }
+
+    public function getPayments(): Collection
+    {
+        return $this->payments;
+    }
+
+
 
 
 }

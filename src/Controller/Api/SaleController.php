@@ -81,9 +81,112 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Post('/sale')]
-    public function create(Request $request): JsonResponse
+    public function create(Request $request, \App\Repository\CashBoxSessionRepository $sessionRepo): JsonResponse
     {
-        return $this->processForm($request, new Sale(), "Venta registrada correctamente");
+        $user = $this->security->getUser();
+
+        // 1. Validar sesión abierta
+        $activeSession = $sessionRepo->findOneBy([
+            'user' => $user,
+            'status' => \App\Enum\CashBoxSessionStatus::OPEN
+        ]);
+
+        if (!$activeSession) {
+            return $this->json([
+                'message' => 'Error de Caja',
+                'errors' => ['cashBox' => 'No puedes registrar ventas sin una sesión de caja abierta.']
+            ], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        $sale = new Sale();
+        $now = new \DateTime();
+        // Asignamos datos automáticos antes de procesar el formulario
+        $sale->setUser($user);
+        $sale->setCashBox($activeSession->getCashBox());
+        $sale->setSaleDate($now);
+        $newFolio = $this->generateDailyFolio($now);
+        $sale->setFolio($newFolio);
+        $sale->setCreatedAt($now);
+        $sale->setUpdatedAt($now);
+        $sale->setCreatedBy($user->getId());
+        $sale->setUpdatedBy($user->getId());
+
+        // 2. Procesar Formulario
+        $form = $this->createForm($this->getFormTypeClass(), $sale);
+        $form->submit(json_decode($request->getContent(), true));
+
+        if ($form->isSubmitted() && $form->isValid()) {
+
+            foreach ($sale->getPayments() as $payment) {
+                if (method_exists($payment, 'setCreatedBy')) {
+                    $payment->setCreatedBy($user->getId());
+                }
+                if (method_exists($payment, 'setUpdatedBy')) {
+                    $payment->setUpdatedBy($user->getId());
+                }
+            }
+
+            $this->entityManager->persist($sale);
+            $this->entityManager->flush();
+
+            return $this->json([
+                'message' => "Venta y pagos registrados correctamente",
+                'data' => ['id' => $sale->getId(), 'folio' => $sale->getFolio()]
+            ], JsonResponse::HTTP_OK);
+        }
+
+        // 3. Captura de errores detallada (Aquí resolvemos el JSON vacío)
+        return $this->json([
+            'message' => 'Validación fallida',
+            'errors' => $this->getFormErrorsAsArray($form)
+        ], JsonResponse::HTTP_BAD_REQUEST);
+    }
+
+
+    private function generateDailyFolio(\DateTime $date): string
+    {
+        $repository = $this->entityManager->getRepository(Sale::class);
+
+        // Definir el rango del día (desde las 00:00:00 hasta las 23:59:59)
+        $startOfDay = (clone $date)->setTime(0, 0, 0);
+        $endOfDay = (clone $date)->setTime(23, 59, 59);
+
+        // Contar cuántas ventas se han realizado hoy
+        $count = $repository->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->where('s.saleDate BETWEEN :start AND :end')
+            ->setParameter('start', $startOfDay)
+            ->setParameter('end', $endOfDay)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $nextNumber = (int)$count + 1;
+
+        // Formato: AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
+        // Ejemplo: 20260126-0001
+        return sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
+    }
+
+    private function getFormErrorsAsArray($form): array
+    {
+        $errors = [];
+
+        // Errores globales (Ej: La validación de suma de pagos en la Entidad)
+        foreach ($form->getErrors() as $error) {
+            $errors['global'][] = $error->getMessage();
+        }
+
+        // Errores en campos individuales
+        foreach ($form->all() as $child) {
+            if (!$child->isValid()) {
+                $childErrors = $this->getFormErrorsAsArray($child);
+                if (!empty($childErrors)) {
+                    $errors['fields'][$child->getName()] = $childErrors;
+                }
+            }
+        }
+
+        return $errors;
     }
 
     #[Rest\Put('/sale/{id}')]

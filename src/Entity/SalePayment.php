@@ -8,15 +8,16 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: SalePaymentRepository::class)]
 #[ORM\Table(name: 'tbr_sale_payment')]
+#[ORM\HasLifecycleCallbacks]
 class SalePayment extends BaseEntity
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column(type: Types::BIGINT)]
-    protected ?int $id = null;
+    private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: Sale::class)]
-    #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\ManyToOne(targetEntity: Sale::class, inversedBy: 'payments')]
+    #[ORM\JoinColumn(nullable: false)]
     private ?Sale $sale = null;
 
     #[ORM\ManyToOne(targetEntity: PaymentType::class)]
@@ -44,6 +45,19 @@ class SalePayment extends BaseEntity
         // Valores por defecto según tus requerimientos
         $this->exchangeRateUsed = '0.000000';
         $this->amountLocalCurrency = '0.00';
+    }
+
+    #[ORM\PrePersist]
+    public function setupDefaultValues(): void
+    {
+        if ($this->amountLocalCurrency === '0.00') {
+            $this->amountLocalCurrency = $this->amountReceived;
+        }
+
+        if ($this->exchangeRateUsed === '0.000000') {
+            $this->exchangeRateUsed = '1.000000';
+        }
+        $this->createdAt = new \DateTime();
     }
 
     public function getId(): ?int

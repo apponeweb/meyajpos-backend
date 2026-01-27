@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Branch;
+use App\Entity\CashBoxSession;
 use App\Entity\SalePayment;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -16,5 +17,26 @@ class SalePaymentRepository extends BaseRepository
         parent::__construct($registry, SalePayment::class);
     }
 
+
+    public function getTotalCashBySession(CashBoxSession $session): float
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->select('SUM(p.amountReceived)')
+            ->innerJoin('p.sale', 's')
+            ->innerJoin('p.paymentType', 'pt') // Ajustado a 'paymentType'
+            ->where('s.cashBox = :cashBox')
+            ->andWhere('s.saleDate >= :openingDate')
+            ->andWhere('pt.name = :methodName') // Usamos el alias 'pt'
+            ->setParameter('cashBox', $session->getCashBox())
+            ->setParameter('openingDate', $session->getOpeningDate())
+            ->setParameter('methodName', 'Efectivo');
+
+        if ($session->getClosingDate()) {
+            $qb->andWhere('s.saleDate <= :closingDate')
+                ->setParameter('closingDate', $session->getClosingDate());
+        }
+
+        return (float)$qb->getQuery()->getSingleScalarResult();
+    }
 
 }
