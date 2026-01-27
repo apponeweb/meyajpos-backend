@@ -19,7 +19,7 @@ class Tip extends BaseEntity
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: SalePayment::class)]
-    #[ORM\JoinColumn(name: 'sale_payment_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'sale_payment_id', referencedColumnName: 'id', nullable: true)]
     private ?SalePayment $salePayment = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
@@ -27,7 +27,7 @@ class Tip extends BaseEntity
     private ?User $user = null;
 
     #[ORM\ManyToOne(targetEntity: PaymentType::class)]
-    #[ORM\JoinColumn(name: 'payment_type_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'payment_type_id', referencedColumnName: 'id', nullable: true)]
     private ?PaymentType $paymentType = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2)]

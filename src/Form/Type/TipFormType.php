@@ -22,7 +22,7 @@ class TipFormType extends AbstractType
     {
         $builder
             ->add('user', EntityType::class, ['class' => User::class])
-            ->add('paymentType', EntityType::class, ['class' => PaymentType::class])
+//            ->add('paymentType', EntityType::class, ['class' => PaymentType::class])
             ->add('amount', NumberType::class);
     }
 

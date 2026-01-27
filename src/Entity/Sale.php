@@ -248,7 +248,7 @@ class Sale extends BaseEntity
     #[Assert\Callback]
     public function validatePayments(ExecutionContextInterface $context): void
     {
-        $totalVenta = (float)$this->total;
+        $totalVenta = (float)$this->subtotal;
         $totalPagos = 0;
         $totalPropinas = 0;
 
@@ -279,7 +279,7 @@ class Sale extends BaseEntity
     #[Assert\Callback]
     public function validateTotalWithTips(ExecutionContextInterface $context): void
     {
-        $totalVenta = (float)$this->total;
+        $totalVenta = (float)$this->subtotal;
         $totalPagos = 0;
         $totalPropinas = 0;
 

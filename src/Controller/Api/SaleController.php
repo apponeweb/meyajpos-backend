@@ -133,10 +133,10 @@ final class SaleController extends BaseController
                 $tip->setTipDate(new \DateTime());
 
                 // Buscamos el pago que financia esta propina (basado en el paymentType)
-                $matchingPayment = $this->findMatchingPayment($sale, $tip->getPaymentType());
-                if ($matchingPayment) {
-                    $tip->setSalePayment($matchingPayment);
-                }
+//                $matchingPayment = $this->findMatchingPayment($sale, $tip->getPaymentType());
+//                if ($matchingPayment) {
+//                    $tip->setSalePayment($matchingPayment);
+//                }
 
                 $this->entityManager->persist($tip);
             }

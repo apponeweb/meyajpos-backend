@@ -37,7 +37,6 @@ final class TipController extends BaseController
 
     protected function configureListQuery(QueryBuilder $qb, Request $request): void
     {
-        $qb->join('u.salePayment', 'sp'); // 'u' siempre es la entidad principal
         $qb->join('u.user', 'user'); // 'u' siempre es la entidad principal
         $qb->join('u.paymentType', 'pt'); // 'u' siempre es la entidad principal
 
