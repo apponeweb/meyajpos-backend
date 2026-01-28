@@ -34,12 +34,21 @@ class CashBoxMovement extends BaseEntity
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2)]
     private string $amount;
 
+    #[ORM\Column(name: 'cash_change', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $change = '0.00';
+
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private \DateTimeInterface $movementDate;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'user_id', referencedColumnName: 'id', nullable: false)]
     private ?User $user = null;
+
+    public function __construct()
+    {
+        $this->movementDate = new \DateTime();
+        $this->change = "0.0";
+    }
 
     public function getDescription(): ?string
     {
@@ -121,4 +130,17 @@ class CashBoxMovement extends BaseEntity
         $this->user = $user;
         return $this;
     }
+
+    public function getChange(): string
+    {
+        return $this->change;
+    }
+
+    public function setChange(?string $change): self
+    {
+        $this->change = $change ?? "0.00";
+        return $this;
+    }
+
+
 }

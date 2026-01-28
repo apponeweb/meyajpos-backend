@@ -2,12 +2,18 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\CashBoxMovement;
 use App\Entity\PaymentType;
 use App\Entity\Sale;
 use App\Entity\SalePayment;
 use App\Entity\Tip;
+use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementConcept;
+use App\Enum\CashMovementType;
 use App\Form\Type\SaleFormType;
+use App\Repository\CashBoxSessionRepository;
 use App\Repository\SaleRepository;
+use App\Service\CashBoxMovementService;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -84,14 +90,14 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Post('/sale')]
-    public function create(Request $request, \App\Repository\CashBoxSessionRepository $sessionRepo): JsonResponse
+    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovement): JsonResponse
     {
         $user = $this->security->getUser();
 
         // 1. Validar sesión abierta
         $activeSession = $sessionRepo->findOneBy([
             'user' => $user,
-            'status' => \App\Enum\CashBoxSessionStatus::OPEN
+            'status' => CashBoxSessionStatus::OPEN
         ]);
 
         if (!$activeSession) {
@@ -132,20 +138,35 @@ final class SaleController extends BaseController
                 $tip->setUpdatedBy($user->getId());
                 $tip->setTipDate(new \DateTime());
 
-                // Buscamos el pago que financia esta propina (basado en el paymentType)
-//                $matchingPayment = $this->findMatchingPayment($sale, $tip->getPaymentType());
-//                if ($matchingPayment) {
-//                    $tip->setSalePayment($matchingPayment);
-//                }
-
                 $this->entityManager->persist($tip);
             }
 
             $this->entityManager->persist($sale);
+
+
+            // Solo si hubo flujo de efectivo real (dinero a la gaveta)
+            $totalCashReceived = $sale->getSubtotal();
+            if ($totalCashReceived > 0) {
+                $movement = new CashBoxMovement();
+                $movement->setType(CashMovementType::INCOME);
+                $movement->setConcept(CashMovementConcept::SALE);
+                $movement->setAmount($totalCashReceived);
+                $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
+                $movement->setChange($sale->getChange());
+
+                $movementResult = $cashBoxMovement->createMovement($movement);
+
+                if (!$movementResult['success']) {
+                    // Opcional: Podrías decidir si revertir la venta o solo loguear el error
+                    // En un POS, si la venta se guardó pero la caja falló, usualmente solo logueamos.
+                }
+            }
+
+
             $this->entityManager->flush();
 
             return $this->json([
-                'message' => "Venta y pagos registrados correctamente",
+                'message' => "Venta registrada correctamente",
                 'data' => ['id' => $sale->getId(), 'folio' => $sale->getFolio()]
             ], JsonResponse::HTTP_OK);
         }
@@ -157,18 +178,6 @@ final class SaleController extends BaseController
         ], JsonResponse::HTTP_BAD_REQUEST);
     }
 
-    /**
-     * Busca el pago dentro de la venta actual que coincida con el tipo de pago de la propina
-     */
-    private function findMatchingPayment(Sale $sale, PaymentType $type): ?SalePayment
-    {
-        foreach ($sale->getPayments() as $payment) {
-            if ($payment->getPaymentType() === $type) {
-                return $payment;
-            }
-        }
-        return null;
-    }
 
     private function generateDailyFolio(\DateTime $date): string
     {
@@ -191,7 +200,7 @@ final class SaleController extends BaseController
 
         // Formato: AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
         // Ejemplo: 20260126-0001
-        return sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
+        return "V-".sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
     }
 
     private function getFormErrorsAsArray($form): array
@@ -214,19 +223,6 @@ final class SaleController extends BaseController
         }
 
         return $errors;
-    }
-
-    #[Rest\Put('/sale/{id}')]
-    public function update(Request $request, Sale $id): JsonResponse
-    {
-        // Útil para cancelaciones o cambios de estado
-        return $this->processForm($request, $id, "Venta actualizada correctamente");
-    }
-
-    #[Rest\Delete('/sale/{id}')]
-    public function remove(Sale $id): JsonResponse
-    {
-        return $this->delete($id);
     }
 
     #[Rest\Get('/sale/{id}')]

@@ -8,6 +8,7 @@ enum CashMovementConcept: string
     case PROVIDER_PAYMENT = 'PAGO_PROVEEDOR';
     case CHANGE_EXCHANGE = 'CAMBIO';
     case OTHER = 'OTRO';
+    case SALE = 'VENTA';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum CashMovementConcept: string
             self::PROVIDER_PAYMENT => 'Pago a proveedor',
             self::CHANGE_EXCHANGE => 'Suministro para cambio',
             self::OTHER => 'Otro concepto',
+            self::SALE => 'Venta',
         };
     }
 }

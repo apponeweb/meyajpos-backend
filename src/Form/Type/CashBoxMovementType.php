@@ -20,6 +20,7 @@ class CashBoxMovementType extends AbstractType
             ->add('type', EnumType::class, ['class' => CashMovementType::class])
             ->add('concept', EnumType::class, ['class' => CashMovementConcept::class])
             ->add('amount', NumberType::class, ['scale' => 2])
+            ->add('change', NumberType::class, ['scale' => 2])
             ->add('description', TextType::class, ['required' => false]);
     }
 

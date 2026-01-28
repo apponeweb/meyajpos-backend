@@ -38,7 +38,7 @@ class SaleDetail extends Base
     private ?string $discount = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2, nullable: true)]
-    private string $subtotal;
+    private ?string $subtotal = '0.00';
 
     #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2, nullable: true)]
     private string $tax;
@@ -56,6 +56,12 @@ class SaleDetail extends Base
 
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
     private ?string $observations = null;
+
+
+    public function __construct()
+    {
+        $this->subtotal = 0;
+    }
 
     public function getId(): ?int
     {
@@ -86,7 +92,6 @@ class SaleDetail extends Base
     {
         $this->itemLine = $itemLine;
     }
-
 
 
     public function getProduct(): ?MasterProduct
@@ -134,9 +139,10 @@ class SaleDetail extends Base
         return $this->subtotal;
     }
 
-    public function setSubtotal(string $subtotal): void
+    public function setSubtotal(?string $subtotal): self
     {
-        $this->subtotal = $subtotal;
+        $this->subtotal = $subtotal ?? "0.00";
+        return $this;
     }
 
     public function getTax(): string

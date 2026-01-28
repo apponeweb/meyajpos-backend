@@ -60,6 +60,11 @@ class Sale extends BaseEntity
 
     private $tips;
 
+
+    #[ORM\Column(name: 'cash_change', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $change = '0.00';
+
+
     public function addPayment(SalePayment $payment): self
     {
         if (!$this->payments->contains($payment)) {
@@ -95,6 +100,8 @@ class Sale extends BaseEntity
         $this->details = new ArrayCollection();
         $this->payments = new ArrayCollection();
         $this->tips = new ArrayCollection();
+        $this->change = "0.0";
+        $this->saleDate = new \DateTime();
     }
 
     public function addTip(Tip $tip): self
@@ -264,6 +271,7 @@ class Sale extends BaseEntity
         }
 
         $montoEsperado = $totalVenta + $totalPropinas;
+        $totalPagos = ($totalPagos - $this->change);
 
         // Usamos round para evitar problemas de precisión con decimales
         if (round($totalPagos, 2) !== round($montoEsperado, 2)) {
@@ -293,6 +301,7 @@ class Sale extends BaseEntity
         }
 
         $montoNecesario = $totalVenta + $totalPropinas;
+        $totalPagos = ($totalPagos - $this->change);
 
         // Si el cliente pagó menos de lo que suman Venta + Propina
         if (round($totalPagos, 2) < round($montoNecesario, 2)) {
@@ -308,6 +317,17 @@ class Sale extends BaseEntity
     public function getTips(): ArrayCollection
     {
         return $this->tips;
+    }
+
+    public function getChange(): string
+    {
+        return $this->change;
+    }
+
+    public function setChange(?string $change): self
+    {
+        $this->change = $change ?? "0.00";
+        return $this;
     }
 
 

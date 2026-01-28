@@ -36,6 +36,7 @@ class SaleFormType extends AbstractType
             ->add('subtotal')
             ->add('totalTax')
             ->add('total')
+            ->add('change')
             ->add('status', EnumType::class, [
                 'class' => SaleStatus::class,
             ])

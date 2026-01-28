@@ -11,6 +11,7 @@ use App\Repository\CashBoxMovementRepository;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\SalePaymentRepository;
 use App\Repository\SaleRepository;
+use App\Service\CashBoxMovementService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,21 +25,16 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class CashBoxMovementController extends AbstractController
 {
     public function __construct(
-        private EntityManagerInterface $entityManager,
         private Security               $security
     )
     {
     }
 
-    // src/Controller/Api/CashBoxMovementController.php
-
     #[Route('/create', name: 'api_cash_movement_create', methods: ['POST'])]
-//    #[IsGranted('ROLE_CASH_MOVEMENTS')]
     public function create(
-        Request                   $request,
-        CashBoxSessionRepository  $sessionRepo,
-        CashBoxMovementRepository $movementRepo,
-        SalePaymentRepository     $paymentRepo // Cambiado a repositorio de pagos
+        Request                  $request,
+        CashBoxSessionRepository $sessionRepo,
+        CashBoxMovementService   $movementService
     ): JsonResponse
     {
         $user = $this->security->getUser();
@@ -60,38 +56,25 @@ class CashBoxMovementController extends AbstractController
         $form->submit(json_decode($request->getContent(), true));
 
         if ($form->isSubmitted() && $form->isValid()) {
+            // LLAMADA AL SERVICIO
+            $result = $movementService->createMovement($movement);
 
-            if ($movement->getType() === CashMovementType::EXPENSE) {
-                // Calculamos el saldo usando los pagos reales en efectivo
-                $currentBalance = $this->calculateCurrentBalance($activeSession, $movementRepo, $paymentRepo);
-                $requestedAmount = floatval($movement->getAmount());
+            if (!$result['success']) {
+                $errorKey = (str_contains($result['error'], 'Saldo')) ? 'amount' : 'session';
 
-                if ($requestedAmount > $currentBalance) {
-                    return $this->json([
-                        'message' => 'Validación fallida',
-                        'errors' => [
-                            'children' => [
-                                'amount' => [
-                                    'errors' => [
-                                        sprintf('Saldo insuficiente. Efectivo real en caja: %s', number_format($currentBalance, 2))
-                                    ]
-                                ]
-                            ]
+                return $this->json([
+                    'message' => 'Validación fallida',
+                    'errors' => [
+                        'children' => [
+                            $errorKey => ['errors' => [$result['error']]]
                         ]
-                    ], Response::HTTP_BAD_REQUEST);
-                }
+                    ]
+                ], $result['code']);
             }
-
-            $movement->setCashBoxSession($activeSession);
-            $movement->setUser($user);
-            $movement->setMovementDate(new \DateTime());
-
-            $this->entityManager->persist($movement);
-            $this->entityManager->flush();
 
             return $this->json([
                 'message' => 'Movimiento registrado correctamente',
-                'data' => ['id' => $movement->getId()]
+                'data' => ['id' => $result['movement']->getId()]
             ], Response::HTTP_OK);
         }
 
@@ -99,23 +82,6 @@ class CashBoxMovementController extends AbstractController
             'message' => 'Validación fallida',
             'errors' => $this->formatFormErrors($form)
         ], Response::HTTP_BAD_REQUEST);
-    }
-
-    private function calculateCurrentBalance(
-        CashBoxSession            $session,
-        CashBoxMovementRepository $movementRepo,
-        SalePaymentRepository     $paymentRepo
-    ): float
-    {
-        $initialAmount = (float)$session->getInitialAmount();
-
-        // Movimientos manuales previos (Ingresos - Egresos)
-        $manualMovementsDiff = $movementRepo->getTotalOffsetBySession($session);
-
-        // PAGOS recibidos específicamente en efectivo desde que se abrió la caja
-        $actualCashFromSales = $paymentRepo->getTotalCashBySession($session);
-
-        return $initialAmount + $manualMovementsDiff + $actualCashFromSales;
     }
 
 
