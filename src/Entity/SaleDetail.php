@@ -6,9 +6,11 @@ use App\Repository\SaleDetailRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Query\Expr\Base;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 
 #[ORM\Entity(repositoryClass: SaleDetailRepository::class)]
 #[ORM\Table(name: 'tbd_sale_detail')]
+#[UniqueEntity(fields: ['itemLine'], message: 'Ya existe un registro con este itemLine.')]
 #[ORM\HasLifecycleCallbacks]
 class SaleDetail extends Base
 {

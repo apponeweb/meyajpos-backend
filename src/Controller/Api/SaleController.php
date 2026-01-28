@@ -126,6 +126,8 @@ final class SaleController extends BaseController
 
         if ($form->isSubmitted() && $form->isValid()) {
 
+            $firstPayment = $sale->getPayments()->first();
+
             // 1. Procesar Pagos y sus campos de auditoría
             foreach ($sale->getPayments() as $payment) {
                 $payment->setCreatedBy($user->getId()); // Suponiendo que BaseEntity tiene este método
@@ -137,7 +139,9 @@ final class SaleController extends BaseController
                 $tip->setCreatedBy($user->getId());
                 $tip->setUpdatedBy($user->getId());
                 $tip->setTipDate(new \DateTime());
-
+                if ($firstPayment) {
+                    $tip->setSalePayment($firstPayment);
+                }
                 $this->entityManager->persist($tip);
             }
 
@@ -157,8 +161,7 @@ final class SaleController extends BaseController
                 $movementResult = $cashBoxMovement->createMovement($movement);
 
                 if (!$movementResult['success']) {
-                    // Opcional: Podrías decidir si revertir la venta o solo loguear el error
-                    // En un POS, si la venta se guardó pero la caja falló, usualmente solo logueamos.
+                    return $this->json($movementResult);
                 }
             }
 
@@ -200,7 +203,7 @@ final class SaleController extends BaseController
 
         // Formato: AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
         // Ejemplo: 20260126-0001
-        return "V-".sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
+        return "V-" . sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
     }
 
     private function getFormErrorsAsArray($form): array
