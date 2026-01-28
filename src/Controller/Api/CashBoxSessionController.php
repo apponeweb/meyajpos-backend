@@ -14,8 +14,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\SecurityBundle\Security;
+use FOS\RestBundle\Controller\Annotations as Rest;
 
-#[Route('/cash-session')]
 class CashBoxSessionController extends AbstractController
 {
     public function __construct(
@@ -25,7 +25,7 @@ class CashBoxSessionController extends AbstractController
     {
     }
 
-    #[Route('/open', name: 'api_cash_open', methods: ['POST'])]
+    #[Rest\Post('/open', name: 'api_cash_open', methods: ['POST'])]
     public function open(Request $request, CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
@@ -39,7 +39,13 @@ class CashBoxSessionController extends AbstractController
         if ($activeSessionForUser) {
             return $this->json([
                 'message' => 'Validación fallida',
-                'errors' => ['user' => 'Ya tienes una sesión abierta en la caja: ' . $activeSessionForUser->getCashBox()->getName()]
+                'errors' => [
+                    'children' => [
+                        'cashBox' => [
+                            'errors' => ['Ya tienes una sesión abierta en la caja: ' . $activeSessionForUser->getCashBox()->getName()]
+                        ]
+                    ]
+                ]
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -59,11 +65,17 @@ class CashBoxSessionController extends AbstractController
             if ($activeSessionForBox) {
                 return $this->json([
                     'message' => 'Validación fallida',
-                    'errors' => ['cashBox' => 'Esta caja ya está siendo utilizada por otro cajero.']
+                    'errors' => [
+                        'children' => [
+                            'cashBox' => [
+                                'errors' => ['Esta caja ya está siendo utilizada por otro cajero.']
+                            ]
+                        ]
+                    ]
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            // Asignación automática de Branch y Metadatos
+            // Asignación automática
             $session->setBranch($cashBox->getBranch());
             $session->setOpeningDate(new \DateTime());
             $session->setUser($user);
@@ -78,13 +90,14 @@ class CashBoxSessionController extends AbstractController
             ], Response::HTTP_OK);
         }
 
+        // Errores naturales del formulario (ya vienen con el formato formatFormErrors)
         return $this->json([
             'message' => 'Validación fallida',
             'errors' => $this->formatFormErrors($form)
         ], Response::HTTP_BAD_REQUEST);
     }
 
-    #[Route('/close', name: 'api_cash_close', methods: ['POST'])]
+    #[Rest\Post('/close', name: 'api_cash_close', methods: ['POST'])]
     public function closeCurrent(Request $request, CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
@@ -98,7 +111,13 @@ class CashBoxSessionController extends AbstractController
         if (!$session) {
             return $this->json([
                 'message' => 'Validación fallida',
-                'errors' => ['session' => 'No tienes ninguna sesión de caja abierta actualmente.']
+                'errors' => [
+                    'children' => [
+                        'session' => [
+                            'errors' => ['No tienes ninguna sesión de caja abierta actualmente.']
+                        ]
+                    ]
+                ]
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -119,13 +138,14 @@ class CashBoxSessionController extends AbstractController
             ], Response::HTTP_OK);
         }
 
+        // Errores de validación del formulario (ej: monto final incorrecto)
         return $this->json([
             'message' => 'Validación fallida',
             'errors' => $this->formatFormErrors($form)
         ], Response::HTTP_BAD_REQUEST);
     }
 
-    #[Route('/status', name: 'api_cash_status', methods: ['GET'])]
+    #[Rest\Get('/status', name: 'api_cash_status', methods: ['GET'])]
     public function status(CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
