@@ -25,7 +25,7 @@ class CashBoxSessionController extends AbstractController
     {
     }
 
-    #[Rest\Post('/open', name: 'api_cash_open', methods: ['POST'])]
+    #[Rest\Post('/cash-session/open', name: 'api_cash_open', methods: ['POST'])]
     public function open(Request $request, CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
@@ -97,7 +97,7 @@ class CashBoxSessionController extends AbstractController
         ], Response::HTTP_BAD_REQUEST);
     }
 
-    #[Rest\Post('/close', name: 'api_cash_close', methods: ['POST'])]
+    #[Rest\Post('/cash-session/close', name: 'api_cash_close', methods: ['POST'])]
     public function closeCurrent(Request $request, CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
@@ -145,7 +145,7 @@ class CashBoxSessionController extends AbstractController
         ], Response::HTTP_BAD_REQUEST);
     }
 
-    #[Rest\Get('/status', name: 'api_cash_status', methods: ['GET'])]
+    #[Rest\Get('/cash-session/status', name: 'api_cash_status', methods: ['GET'])]
     public function status(CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
