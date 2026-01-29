@@ -58,7 +58,7 @@ class Sale extends BaseEntity
     #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'])]
     private Collection $payments;
 
-    private $tips;
+    private Collection $tips;
 
 
     #[ORM\Column(name: 'cash_change', type: 'decimal', precision: 10, scale: 2, nullable: true)]
@@ -314,9 +314,9 @@ class Sale extends BaseEntity
         }
     }
 
-    public function getTips(): ArrayCollection
+    public function getTips(): Collection
     {
-        return $this->tips;
+        return $this->tips ?? new ArrayCollection();
     }
 
     public function getChange(): string

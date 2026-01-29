@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Repository\SalePaymentRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Ignore;
 
 #[ORM\Entity(repositoryClass: SalePaymentRepository::class)]
 #[ORM\Table(name: 'tbr_sale_payment')]
@@ -15,7 +16,7 @@ class SalePayment extends BaseEntity
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column(type: Types::BIGINT)]
     private ?int $id = null;
-
+    #[Ignore]
     #[ORM\ManyToOne(targetEntity: Sale::class, inversedBy: 'payments')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Sale $sale = null;

@@ -7,6 +7,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Query\Expr\Base;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Serializer\Annotation\Ignore;
 
 #[ORM\Entity(repositoryClass: SaleDetailRepository::class)]
 #[ORM\Table(name: 'tbd_sale_detail')]
@@ -18,7 +19,7 @@ class SaleDetail extends Base
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column(type: Types::BIGINT)]
     private ?int $id = null;
-
+    #[Ignore]
     #[ORM\ManyToOne(targetEntity: Sale::class)]
     #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false)]
     private ?Sale $sale = null;
