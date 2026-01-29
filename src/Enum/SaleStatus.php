@@ -4,9 +4,9 @@ namespace App\Enum;
 
 enum SaleStatus: int
 {
-    case IN_PROGRESS = 3;
     case PAID = 1;
     case CANCELLED = 2;
+    case IN_PROGRESS = 3;
 
     public function getLabel(): string
     {
