@@ -93,7 +93,7 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Post('/sale')]
-    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovement): JsonResponse
+    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService): JsonResponse
     {
         $user = $this->security->getUser();
 
@@ -187,7 +187,7 @@ final class SaleController extends BaseController
                 $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
                 $movement->setChange($sale->getChange());
 
-                $movementResult = $cashBoxMovement->createMovement($movement);
+                $movementResult = $cashBoxMovementService->createMovement($movement);
 
                 if (!$movementResult['success']) {
                     return $this->json($movementResult);

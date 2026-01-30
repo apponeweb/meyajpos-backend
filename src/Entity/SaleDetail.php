@@ -64,6 +64,7 @@ class SaleDetail extends Base
     public function __construct()
     {
         $this->subtotal = 0;
+        $this->itemLine = uniqid();
     }
 
     public function getId(): ?int

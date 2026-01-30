@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\CashBoxMovement;
 use App\Entity\User;
 use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
 use App\Repository\CashBoxMovementRepository;
 use App\Repository\CashBoxSessionRepository;
@@ -42,7 +43,7 @@ class CashBoxMovementService
             'status' => CashBoxSessionStatus::OPEN
         ]);
 
-        if (!$session) {
+        if (!$session && $movement->getConcept() !== CashMovementConcept::OPEN_CASH_BOX) {
             return [
                 'success' => false,
                 'error' => 'No tienes una sesión de caja abierta.',

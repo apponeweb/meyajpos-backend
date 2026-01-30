@@ -22,6 +22,7 @@ class SaleDetailFormType extends AbstractType
         $builder
             ->add('itemLine', TextType::class, [
                 'label' => 'Renglón',
+                'mapped' => false
             ])
             ->add('product', EntityType::class, [
                 'class' => MasterProduct::class,

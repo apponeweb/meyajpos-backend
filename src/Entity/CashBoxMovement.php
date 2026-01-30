@@ -31,8 +31,8 @@ class CashBoxMovement extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 120, nullable: true)]
     private ?string $description = null; // Para detalles adicionales del concepto
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2)]
-    private string $amount;
+    #[ORM\Column(type: Types::DECIMAL, precision: 18, scale: 2, nullable: true)]
+    private string $amount= '0.00';
 
     #[ORM\Column(name: 'cash_change', type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $change = '0.00';

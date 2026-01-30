@@ -2,11 +2,15 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
 use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementConcept;
+use App\Enum\CashMovementType;
 use App\Form\Type\CashBoxOpeningType;
 use App\Form\Type\CashBoxClosingType;
 use App\Repository\CashBoxSessionRepository;
+use App\Service\CashBoxMovementService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,7 +30,7 @@ class CashBoxSessionController extends AbstractController
     }
 
     #[Rest\Post('/cash-session/open', name: 'api_cash_open', methods: ['POST'])]
-    public function open(Request $request, CashBoxSessionRepository $repo): JsonResponse
+    public function open(Request $request, CashBoxSessionRepository $repo, CashBoxMovementService $cashBoxMovementService): JsonResponse
     {
         $user = $this->security->getUser();
 
@@ -80,9 +84,26 @@ class CashBoxSessionController extends AbstractController
             $session->setOpeningDate(new \DateTime());
             $session->setUser($user);
             $session->setStatus(CashBoxSessionStatus::OPEN);
+            $session->setCreatedBy($user->getId());
+            $session->setUpdatedBy($user->getId());
 
             $this->entityManager->persist($session);
             $this->entityManager->flush();
+
+            $movement = new CashBoxMovement();
+            $movement->setCashBoxSession($session);
+            $movement->setUser($user);
+            $movement->setCreatedBy($user->getId());
+            $movement->setUpdatedBy($user->getId());
+            $movement->setType(CashMovementType::INCOME);
+            $movement->setConcept(CashMovementConcept::OPEN_CASH_BOX);
+            $movement->setAmount($session->getInitialAmount());
+            $movement->setDescription("Apertura de caja: " . $session->getCashBox()->getName());
+            $movementResult = $cashBoxMovementService->createMovement($movement);
+
+            if (!$movementResult['success']) {
+                return $this->json($movementResult);
+            }
 
             return $this->json([
                 'message' => 'Caja abierta correctamente',
@@ -98,7 +119,7 @@ class CashBoxSessionController extends AbstractController
     }
 
     #[Rest\Post('/cash-session/close', name: 'api_cash_close', methods: ['POST'])]
-    public function closeCurrent(Request $request, CashBoxSessionRepository $repo): JsonResponse
+    public function closeCurrent(Request $request, CashBoxSessionRepository $repo, CashBoxMovementService $cashBoxMovementService): JsonResponse
     {
         $user = $this->security->getUser();
 
@@ -129,6 +150,20 @@ class CashBoxSessionController extends AbstractController
             $session->setClosingDate(new \DateTime());
             $session->setClosingUser($user);
             $session->setStatus(CashBoxSessionStatus::CLOSED);
+            $session->setUpdatedBy($user->getId());
+
+            $movement = new CashBoxMovement();
+            $movement->setCashBoxSession($session);
+            $movement->setUser($user);
+            $movement->setCreatedBy($user->getId());
+            $movement->setUpdatedBy($user->getId());
+            $movement->setType(CashMovementType::INCOME);
+            $movement->setConcept(CashMovementConcept::CLOSE_CASH_BOX);
+            $movement->setDescription("Cierre de caja: " . $session->getCashBox()->getName());
+            $movementResult = $cashBoxMovementService->createMovement($movement);
+            if (!$movementResult['success']) {
+                return $this->json($movementResult);
+            }
 
             $this->entityManager->flush();
 
