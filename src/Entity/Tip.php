@@ -7,9 +7,10 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Context;
 use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
+use Symfony\Component\Serializer\Annotation\Ignore;
 
 #[ORM\Entity(repositoryClass: TipRepository::class)]
-#[ORM\Table(name: 'tbn_tip')]
+#[ORM\Table(name: 'tbd_tip')]
 #[ORM\HasLifecycleCallbacks]
 class Tip extends BaseEntity
 {
@@ -17,7 +18,7 @@ class Tip extends BaseEntity
     #[ORM\GeneratedValue]
     #[ORM\Column(name: 'tip_id')]
     private ?int $id = null;
-
+    #[Ignore]
     #[ORM\ManyToOne(targetEntity: SalePayment::class)]
     #[ORM\JoinColumn(name: 'sale_payment_id', referencedColumnName: 'id', nullable: true)]
     private ?SalePayment $salePayment = null;

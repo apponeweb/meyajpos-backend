@@ -6,6 +6,8 @@ use App\Repository\SalePaymentRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Ignore;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 
 #[ORM\Entity(repositoryClass: SalePaymentRepository::class)]
 #[ORM\Table(name: 'tbr_sale_payment')]
@@ -41,8 +43,12 @@ class SalePayment extends BaseEntity
     #[ORM\Column(length: 80, nullable: true)]
     private ?string $reference = null;
 
+    #[ORM\OneToMany(targetEntity: Tip::class, mappedBy: 'salePayment')]
+    private Collection $tips;
+
     public function __construct()
     {
+        $this->tips = new ArrayCollection();
         // Valores por defecto según tus requerimientos
         $this->exchangeRateUsed = '0.000000';
         $this->amountLocalCurrency = '0.00';
@@ -140,6 +146,34 @@ class SalePayment extends BaseEntity
     public function setReference(?string $reference): self
     {
         $this->reference = $reference;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Tip>
+     */
+    public function getTips(): Collection
+    {
+        return $this->tips;
+    }
+
+    public function addTip(Tip $tip): self
+    {
+        if (!$this->tips->contains($tip)) {
+            $this->tips->add($tip);
+            $tip->setSalePayment($this);
+        }
+        return $this;
+    }
+
+    public function removeTip(Tip $tip): self
+    {
+        if ($this->tips->removeElement($tip)) {
+            // set the owning side to null (unless already changed)
+            if ($tip->getSalePayment() === $this) {
+                $tip->setSalePayment(null);
+            }
+        }
         return $this;
     }
 }

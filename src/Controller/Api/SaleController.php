@@ -3,8 +3,11 @@
 namespace App\Controller\Api;
 
 use App\Entity\CashBoxMovement;
+use App\Entity\CommissionDetail;
+use App\Entity\CommissionGenerated;
 use App\Entity\PaymentType;
 use App\Entity\Sale;
+use App\Entity\SaleDetail;
 use App\Entity\SalePayment;
 use App\Entity\Tip;
 use App\Enum\CashBoxSessionStatus;
@@ -125,6 +128,32 @@ final class SaleController extends BaseController
         $form->submit(json_decode($request->getContent(), true));
 
         if ($form->isSubmitted() && $form->isValid()) {
+
+            $saleDetails = $sale->getDetails();
+            /** @var SaleDetail $detail */
+            foreach ($saleDetails as $detail) {
+                if ($detail->getServiceProvider()->getBarberSn()) {
+                    $commision = $detail->getServiceProvider()->getCommission()->getId();
+                    $productType = $detail->getProduct()->getServiceType()->getId();
+                    $commisionDetail = $this->entityManager->getRepository(CommissionDetail::class)->findOneBy(['commission' => $commision, 'serviceType' => $productType]);
+                    if ($commisionDetail) {
+                        $percentage = $commisionDetail->getPercentage();
+                        $commissionAmount = ($detail->getTotal() * $percentage) / 100;
+
+                        $commisionGenerated = new CommissionGenerated();
+                        $commisionGenerated->setUser($detail->getServiceProvider());
+                        $commisionGenerated->setSaleDetail($detail);
+                        $commisionGenerated->setPercentage($percentage);
+                        $commisionGenerated->setCommissionAmount($commissionAmount);
+                        $commisionGenerated->setCreatedAt(new \DateTime());
+                        $commisionGenerated->setUpdatedAt(new \DateTime());
+                        $commisionGenerated->setCreatedBy($user->getId());
+                        $commisionGenerated->setUpdatedBy($user->getId());
+                        $this->entityManager->persist($commisionGenerated);
+                    }
+                }
+
+            }
 
             $firstPayment = $sale->getPayments()->first();
 

@@ -7,9 +7,17 @@ use App\Repository\CommissionDetailsRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Query\Expr\Base;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 
 #[ORM\Entity(repositoryClass: CommissionDetailsRepository::class)]
-#[ORM\Table(name: 'tbn_commission_detail')]
+#[ORM\Table(name: 'tbd_commission_detail')]
+// Definimos el índice único para la dupla
+#[ORM\UniqueConstraint(name: 'uniq_commission_service_type', columns: ['commission_id', 'service_type_id'])]
+// Opcional: Validador de Symfony para lanzar errores controlados
+#[UniqueEntity(
+    fields: ['commission', 'serviceType'],
+    message: 'Ya existe una configuración de comisión para este tipo de servicio.'
+)]
 #[ORM\HasLifecycleCallbacks]
 class CommissionDetail extends BaseEntity
 {
