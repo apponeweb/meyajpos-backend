@@ -131,7 +131,7 @@ final class SaleController extends BaseController
 
             $saleDetails = $sale->getDetails();
             /** @var SaleDetail $detail */
-            foreach ($saleDetails as $detail) {
+            foreach ($saleDetails ?? [] as $detail) {
                 if ($detail->getServiceProvider()->getBarberSn()) {
                     $commision = $detail->getServiceProvider()->getCommission()->getId();
                     $productType = $detail->getProduct()->getServiceType()->getId();
