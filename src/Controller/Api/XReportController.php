@@ -8,7 +8,6 @@ use App\Entity\Sale;
 use App\Entity\XReport;
 use App\Entity\XReportDetail;
 use App\Enum\CashBoxSessionStatus;
-use App\Enum\PaymentTypeEnum;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\CashBoxMovementRepository;
 use App\Repository\XReportRepository;
@@ -44,14 +43,7 @@ class XReportController extends AbstractController
             return $this->json(['error' => 'No tiene una sesión de la caja activa'], 404);
         }
 
-        // 2. Mapeo de JSON a Enums
-        $paymentMapping = [
-            '3' => PaymentTypeEnum::CASH,
-            '2' => PaymentTypeEnum::CARD,
-            '1' => PaymentTypeEnum::TRAMSFER,
-        ];
-
-        // 3. Crear encabezado del reporte
+        // 2. Crear encabezado del reporte
         $report = new XReport();
         $report->setCashSession($session);
         $report->setUser($user);
@@ -59,22 +51,25 @@ class XReportController extends AbstractController
         $report->setUpdatedBy($user->getId());
         $report->setXReportDate(new \DateTime());
         $report->setReportNumber($reportRepo->count(['cashSession' => $session]) + 1);
-        $report->setObservations($data['observations'] ?? 'Reporte Corte X');
+        $report->setObservations($data['observations'] ?? 'Reporte Corte X Dinámico');
 
         $saleRepository = $em->getRepository(Sale::class);
         $paymentTypeRepo = $em->getRepository(PaymentType::class);
         $movementRepo = $em->getRepository(CashBoxMovement::class);
 
-        // 4. Procesar dinámicamente cada método de pago
-        foreach ($paymentMapping as $jsonKey => $enumValue) {
-            $paymentTypeEntity = $paymentTypeRepo->find($enumValue->value);
-            if (!$paymentTypeEntity) continue;
+        // 3. Obtener TODOS los tipos de pago activos de la BD
+        $allPaymentTypes = $paymentTypeRepo->findBy(['isActive' => true]);
 
-            // Obtener ventas del sistema para este método de pago
-            $systemAmount = $saleRepository->getSummaryByPaymentType($session, $enumValue->value);
+        // 4. Procesar dinámicamente cada método de pago de la BD
+        foreach ($allPaymentTypes as $paymentTypeEntity) {
+            $ptId = $paymentTypeEntity->getId();
 
-            // Lógica específica para CASH: (Ventas + Inicial) - Extracciones
-            if ($enumValue === PaymentTypeEnum::CASH) {
+            // Obtener ventas del sistema para este ID de tipo de pago
+            $systemAmount = $saleRepository->getSummaryByPaymentType($session, $ptId);
+
+            // Lógica para Efectivo: Usamos la propiedad de la entidad isCash()
+            if ($paymentTypeEntity->isCash()) {
+                // (Ventas + Inicial) - Extracciones
                 $systemAmount = bcadd($systemAmount, $session->getInitialAmount(), 2);
                 $withdrawals = $movementRepo->getTotalWithdrawals($session);
                 $systemAmount = bcsub($systemAmount, $withdrawals, 2);
@@ -83,23 +78,27 @@ class XReportController extends AbstractController
             $detail = new XReportDetail();
             $detail->setPaymentType($paymentTypeEntity);
             $detail->setSystemAmount($systemAmount);
-            $detail->setDeclaredAmount((string)($data[$jsonKey] ?? '0.00'));
+
+            // Mapeamos el declarado buscando el ID en el JSON enviado
+            // JSON esperado: {"1": "100.00", "2": "50.00", "observations": "..."}
+            $detail->setDeclaredAmount((string)($data[$ptId] ?? '0.00'));
+
             $detail->setCreatedBy($user->getId());
             $detail->setUpdatedBy($user->getId());
 
-            // El cálculo de la diferencia del detalle ocurre en su PrePersist
             $report->addDetail($detail);
         }
 
-        // Al hacer flush, el PrePersist de XReport ejecutará syncTotalsFromDetails()
         $em->persist($report);
         $em->flush();
 
-        // 5. Construir el desglose detallado para la respuesta
+        // 5. Construir respuesta (asegurando que getDetails() exista en XReport)
         $detailsResponse = [];
+        // Nota: Si getDetails() falla, revisa el getter en la entidad XReport
         foreach ($report->getDetails() as $detail) {
             $detailsResponse[] = [
                 'payment_type' => $detail->getPaymentType()->getName(),
+                'is_cash' => $detail->getPaymentType()->isCash(),
                 'system_amount' => $detail->getSystemAmount(),
                 'declared_amount' => $detail->getDeclaredAmount(),
                 'difference' => $detail->getDifference()
@@ -111,7 +110,7 @@ class XReportController extends AbstractController
             'data' => [
                 'id' => $report->getId(),
                 'report_number' => $report->getReportNumber(),
-                'date_time' => $report->getXReportDate()->format('Y-m-d H:i:s'),
+                'date_time' => $report->getXReportDate()->format('d/m/Y H:i:s'),
                 'totals' => [
                     'system_total' => $report->getSystemTotal(),
                     'declared_total' => $report->getDeclaredTotal(),
