@@ -110,7 +110,6 @@ class XReportController extends AbstractController
                 'difference' => $detail->getDifference()
             ];
         }
-
         return $this->json([
             'status' => 'success',
             'data' => [
