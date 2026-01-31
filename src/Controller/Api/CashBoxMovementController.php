@@ -13,6 +13,7 @@ use App\Repository\SalePaymentRepository;
 use App\Repository\SaleRepository;
 use App\Service\CashBoxMovementService;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\Pagination\Paginator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,9 +26,72 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class CashBoxMovementController extends AbstractController
 {
     public function __construct(
-        private Security               $security
+        private Security $security
     )
     {
+    }
+
+    #[Route('', name: 'app_cash_movement_index', methods: ['GET'])]
+    public function index(
+        Request                   $request,
+        CashBoxMovementRepository $movementRepository,
+        CashBoxSessionRepository  $sessionRepo
+    ): JsonResponse
+    {
+        $user = $this->getUser();
+
+        // 1. Obtener sesión activa del cajero
+        $activeSession = $sessionRepo->findOneBy([
+            'user' => $user,
+            'status' => CashBoxSessionStatus::OPEN
+        ]);
+
+        if (!$activeSession) {
+            return $this->json([
+                'total' => 0,
+                'results' => [],
+                'message' => 'No hay una sesión de caja activa para este usuario.'
+            ]);
+        }
+
+        $current = $request->query->getInt('current', 1);
+        $pageSize = $request->query->getInt('pageSize', 10);
+
+        // 2. Empaquetar filtros incluyendo la SESIÓN
+        $filters = [
+            'session' => $activeSession, // Pasamos el objeto o el ID
+            'date' => $request->query->get('date'),
+            'type' => $request->query->get('type'),
+            'concept' => $request->query->get('concept'),
+        ];
+
+        $query = $movementRepository->getWithPagination($filters);
+
+        // 3. Paginación estándar
+        $query->setFirstResult(($current - 1) * $pageSize)
+            ->setMaxResults($pageSize);
+
+        $paginator = new Paginator($query, true);
+
+        // 4. Transformar resultados
+        $results = [];
+        foreach ($paginator as $movement) {
+            $results[] = [
+                'id' => $movement->getId(),
+                'type' => $movement->getType()->value,
+                'concept' => $movement->getConcept()->value,
+                'amount' => $movement->getAmount(),
+                'date' => $movement->getMovementDate()->format('Y-m-d H:i:s'),
+                'description' => $movement->getDescription()
+            ];
+        }
+
+        return $this->json([
+            'total' => count($paginator),
+            'results' => $results,
+            'current' => $current,
+            'pageSize' => $pageSize
+        ]);
     }
 
     #[Route('/create', name: 'api_cash_movement_create', methods: ['POST'])]
@@ -82,76 +146,6 @@ class CashBoxMovementController extends AbstractController
             'message' => 'Validación fallida',
             'errors' => $this->formatFormErrors($form)
         ], Response::HTTP_BAD_REQUEST);
-    }
-
-
-    #[Route('/list-current', name: 'api_cash_movement_list', methods: ['GET'])]
-//    #[IsGranted('ROLE_CASH_MOVEMENTS')]
-    public function listCurrent(
-        CashBoxSessionRepository  $sessionRepo,
-        CashBoxMovementRepository $movementRepo,
-        SalePaymentRepository     $paymentRepo // Cambiado de SaleRepository a SalePaymentRepository
-    ): JsonResponse
-    {
-        $user = $this->security->getUser();
-
-        // 1. Obtener la sesión activa del usuario logueado
-        $activeSession = $sessionRepo->findOneBy([
-            'user' => $user,
-            'status' => CashBoxSessionStatus::OPEN
-        ]);
-
-        if (!$activeSession) {
-            return $this->json([
-                'message' => 'Validación fallida',
-                'errors' => ['session' => 'No hay una sesión activa para este usuario.']
-            ], Response::HTTP_BAD_REQUEST);
-        }
-
-        // 2. Obtener historial de movimientos manuales de la sesión
-        $movements = $movementRepo->findBy(
-            ['cashBoxSession' => $activeSession],
-            ['movementDate' => 'DESC']
-        );
-
-        // 3. Cálculos de Saldo
-        $initial = (float)$activeSession->getInitialAmount();
-
-        // Suma neta de ingresos y egresos manuales (Ingresos - Egresos)
-        $movementsDiff = $movementRepo->getTotalOffsetBySession($activeSession);
-
-        // Suma de pagos realizados en EFECTIVO en las ventas de esta sesión
-        $salesCash = $paymentRepo->getTotalCashBySession($activeSession);
-
-        // Balance final esperado en la gaveta
-        $currentBalance = $initial + $movementsDiff + $salesCash;
-
-        // 4. Transformar datos para el Frontend
-        $results = array_map(function (CashBoxMovement $m) {
-            return [
-                'id' => $m->getId(),
-                'type' => $m->getType()->value,
-                'typeLabel' => $m->getType()->label(),
-                'concept' => $m->getConcept()->value,
-                'conceptLabel' => $m->getConcept()->label(),
-                'amount' => $m->getAmount(),
-                'description' => $m->getDescription(),
-                'date' => $m->getMovementDate()->format('Y-m-d H:i:s')
-            ];
-        }, $movements);
-
-        return $this->json([
-            'message' => 'Movimientos recuperados con éxito',
-            'data' => [
-                'summary' => [
-                    'initialAmount' => $initial,
-                    'totalSalesCash' => $salesCash,
-                    'manualBalance' => $movementsDiff,
-                    'currentBalance' => $currentBalance
-                ],
-                'results' => $results
-            ]
-        ], Response::HTTP_OK);
     }
 
 

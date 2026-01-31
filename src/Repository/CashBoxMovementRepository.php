@@ -6,6 +6,7 @@ use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
 use App\Enum\CashMovementType;
 use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\Query;
 
 /**
  * @extends BaseRepository<CashBoxMovement>
@@ -45,5 +46,41 @@ class CashBoxMovementRepository extends BaseRepository
             ->getOneOrNullResult();
 
         return $qb['total'] ?? '0.00';
+    }
+
+    public function getWithPagination($search = null): Query
+    {
+        $qb = $this->createQueryBuilder('m')
+            ->orderBy('m.movementDate', 'DESC');
+
+        // IMPORTANTE: Si enviamos la sesión en el array de búsqueda, filtramos por ella
+        if (is_array($search)) {
+            // Filtro obligatorio: Sesión activa
+            if (!empty($search['session'])) {
+                $qb->andWhere('m.cashBoxSession = :session')
+                    ->setParameter('session', $search['session']);
+            }
+
+            // Filtros opcionales
+            if (!empty($search['date'])) {
+                $start = new \DateTime($search['date'] . ' 00:00:00');
+                $end = new \DateTime($search['date'] . ' 23:59:59');
+                $qb->andWhere('m.movementDate BETWEEN :start AND :end')
+                    ->setParameter('start', $start)
+                    ->setParameter('end', $end);
+            }
+
+            if (!empty($search['type'])) {
+                $qb->andWhere('m.type = :type')
+                    ->setParameter('type', $search['type']);
+            }
+
+            if (!empty($search['concept'])) {
+                $qb->andWhere('m.concept = :concept')
+                    ->setParameter('concept', $search['concept']);
+            }
+        }
+
+        return $qb->getQuery();
     }
 }
