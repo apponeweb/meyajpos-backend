@@ -111,8 +111,8 @@ class CashBoxMovementController extends AbstractController
         if (!$activeSession) {
             return $this->json([
                 'message' => 'Validación fallida',
-                'errors' => ['session' => 'No tienes una sesión de caja abierta.']
-            ], Response::HTTP_BAD_REQUEST);
+                'errors' => ['No tienes una sesión de caja abierta.']
+            ], Response::HTTP_NOT_FOUND);
         }
 
         $movement = new CashBoxMovement();
