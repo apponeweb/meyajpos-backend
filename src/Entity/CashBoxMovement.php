@@ -22,7 +22,7 @@ class CashBoxMovement extends BaseEntity
     #[ORM\JoinColumn(name: 'cash_box_session_id', referencedColumnName: 'id', nullable: false)]
     private ?CashBoxSession $cashBoxSession = null;
 
-    #[ORM\Column(type: Types::SMALLINT, enumType: CashMovementType::class)]
+    #[ORM\Column(type: Types::STRING,length: 50, enumType: CashMovementType::class)]
     private CashMovementType $type;
 
     #[ORM\Column(type: Types::STRING, length: 50, enumType: CashMovementConcept::class)]

@@ -52,7 +52,7 @@ class CashBoxMovementService
         }
 
         // 3. Lógica de validación de saldo para Egresos
-        if ($movement->getType() === CashMovementType::EXPENSE) {
+        if ($movement->getType() === CashMovementType::EXTRACTION) {
             $currentBalance = $this->calculateCurrentBalance($session);
             $requestedAmount = (float)$movement->getAmount();
 
@@ -68,6 +68,8 @@ class CashBoxMovementService
         // 4. Asignación de valores automáticos
         $movement->setCashBoxSession($session);
         $movement->setUser($user);
+        $movement->setCreatedBy($user->getId());
+        $movement->setUpdatedBy($user->getId());
 
         // Evitamos el error de "property must not be accessed before initialization"
         $movement->setMovementDate(new \DateTime());

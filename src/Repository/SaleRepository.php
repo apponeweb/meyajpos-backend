@@ -3,8 +3,11 @@
 namespace App\Repository;
 
 use App\Entity\Branch;
+use App\Entity\CashBoxSession;
 use App\Entity\MasterProduct;
+use App\Entity\PaymentType;
 use App\Entity\Sale;
+use App\Enum\SaleStatus;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -59,7 +62,7 @@ class SaleRepository extends BaseRepository
             // Sumamos el total y el cambio de forma independiente
             ->select('SUM(s.total) as totalSales, SUM(s.change) as totalChange')
             ->andWhere('s.status = :paidStatus')
-            ->setParameter('paidStatus', \App\Enum\SaleStatus::PAID->value);
+            ->setParameter('paidStatus', SaleStatus::PAID->value);
 
         if (!empty($filters['startDate']) && !empty($filters['endDate'])) {
             $qb->andWhere('s.saleDate BETWEEN :start AND :end')
@@ -80,5 +83,32 @@ class SaleRepository extends BaseRepository
             'totalChange' => (float)($result['totalChange'] ?? 0),
             'netCash' => (float)(($result['totalSales'] ?? 0) - ($result['totalChange'] ?? 0))
         ];
+    }
+
+    /**
+     * Devuelve la suma de ventas de una sesión específica filtrada por un método de pago.
+     * Se consulta a través de SaleDetail para obtener precisión por PaymentType.
+     */
+    public function getSummaryByPaymentType(CashBoxSession $session, int $paymentType): string
+    {
+        $now = new \DateTime();
+
+        $qb = $this->createQueryBuilder('s')
+            ->select('SUM(sd.amountReceived) as totalAmount')
+            ->innerJoin('s.payments', 'sd')
+            ->where('s.cashBox = :cashBox')
+            ->andWhere('s.status = :paidStatus')
+            ->andWhere('sd.paymentType = :paymentType')
+            ->andWhere('s.createdAt >= :openedAt')
+            ->andWhere('s.createdAt <= :now')
+            ->setParameter('cashBox', $session->getCashBox())
+            ->setParameter('paidStatus', SaleStatus::PAID->value)
+            ->setParameter('paymentType', $paymentType)
+            ->setParameter('openedAt', $session->getOpeningDate())
+            ->setParameter('now', $now);
+
+        $result = $qb->getQuery()->getOneOrNullResult();
+
+        return $result['totalAmount'] ?? '0.00';
     }
 }

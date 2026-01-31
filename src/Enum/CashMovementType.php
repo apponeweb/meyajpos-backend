@@ -2,16 +2,16 @@
 
 namespace App\Enum;
 
-enum CashMovementType: int
+enum CashMovementType: string
 {
-    case INCOME = 1;
-    case EXPENSE = 2;
+    case INCOME = 'INGRESO';
+    case EXTRACTION = 'EXTRACCIÓN';
 
     public function label(): string
     {
         return match ($this) {
             self::INCOME => 'Ingreso',
-            self::EXPENSE => 'Egreso',
+            self::EXTRACTION => 'Extracción',
         };
     }
 }
