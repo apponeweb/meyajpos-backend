@@ -69,8 +69,14 @@ class XReportController extends AbstractController
 
             // Lógica para Efectivo: Usamos la propiedad de la entidad isCash()
             if ($paymentTypeEntity->isCash()) {
-                // (Ventas + Inicial) - Extracciones
+                // 1. (Ventas + Inicial)
                 $systemAmount = bcadd($systemAmount, $session->getInitialAmount(), 2);
+
+                // 2. Sumar Depósitos (+ depositos)
+                $deposits = $movementRepo->getTotalDeposits($session);
+                $systemAmount = bcadd($systemAmount, $deposits, 2);
+
+                // 3. Restar Extracciones (- Extracciones)
                 $withdrawals = $movementRepo->getTotalWithdrawals($session);
                 $systemAmount = bcsub($systemAmount, $withdrawals, 2);
             }

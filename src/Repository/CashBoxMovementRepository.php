@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
+use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
 use Doctrine\Persistence\ManagerRegistry;
 use Doctrine\ORM\Query;
@@ -46,6 +47,20 @@ class CashBoxMovementRepository extends BaseRepository
             ->getOneOrNullResult();
 
         return $qb['total'] ?? '0.00';
+    }
+    public function getTotalDeposits(CashBoxSession $session): string
+    {
+        $qb = $this->createQueryBuilder('m')
+            ->select('SUM(m.amount)')
+            ->where('m.cashBoxSession = :session')
+            ->andWhere('m.type = :type')
+            ->andWhere('m.concept != :saleConcept')
+            ->setParameter('session', $session)
+            ->setParameter('type', CashMovementType::INCOME)
+            ->setParameter('saleConcept', CashMovementConcept::SALE)
+            ->getQuery();
+
+        return $qb->getSingleScalarResult() ?? '0.00';
     }
 
     public function getWithPagination($search = null): Query
