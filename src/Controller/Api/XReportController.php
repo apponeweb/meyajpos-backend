@@ -46,9 +46,9 @@ class XReportController extends AbstractController
 
         // 2. Mapeo de JSON a Enums
         $paymentMapping = [
-            'cash' => PaymentTypeEnum::CASH,
-            'card' => PaymentTypeEnum::CARD,
-            'transfer' => PaymentTypeEnum::TRAMSFER,
+            '3' => PaymentTypeEnum::CASH,
+            '2' => PaymentTypeEnum::CARD,
+            '1' => PaymentTypeEnum::TRAMSFER,
         ];
 
         // 3. Crear encabezado del reporte
