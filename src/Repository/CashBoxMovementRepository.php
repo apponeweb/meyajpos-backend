@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
+use App\Enum\CashMovementType;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -30,5 +31,19 @@ class CashBoxMovementRepository extends BaseRepository
         $result = $qb->getQuery()->getOneOrNullResult();
 
         return (float)($result['totalIn'] ?? 0) - (float)($result['totalOut'] ?? 0);
+    }
+
+    public function getTotalWithdrawals(CashBoxSession $session): string
+    {
+        $qb = $this->createQueryBuilder('m')
+            ->select('SUM(m.amount) as total')
+            ->where('m.cashBoxSession = :session')
+            ->andWhere('m.type = :type')
+            ->setParameter('session', $session)
+            ->setParameter('type', CashMovementType::EXTRACTION)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $qb['total'] ?? '0.00';
     }
 }

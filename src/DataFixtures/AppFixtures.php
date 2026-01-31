@@ -2,6 +2,7 @@
 
 namespace App\DataFixtures;
 
+use App\Entity\Currency;
 use App\Entity\PaymentType;
 use App\Entity\ServiceType;
 use App\Entity\User;
@@ -86,18 +87,32 @@ class AppFixtures extends Fixture
         $serviceType3->setDescription('CEJA');
         $manager->persist($serviceType2);
 
-
         $paymentType1 = new PaymentType();
-        $paymentType1->setName('Débito');
-        $paymentType1->setDescription('Débito');
+        $paymentType1->setName('Transferencia');
+        $paymentType1->setDescription('Transferencia');
         $paymentType1->setReferenceRequired(true);
         $manager->persist($paymentType1);
 
         $paymentType2 = new PaymentType();
-        $paymentType2->setName('Efectivo');
-        $paymentType2->setDescription('Efectivo');
+        $paymentType2->setName('Tarjeta');
+        $paymentType2->setDescription('Tarjeta');
         $paymentType2->setReferenceRequired(false);
         $manager->persist($paymentType2);
+
+        $paymentType3 = new PaymentType();
+        $paymentType3->setName('Efectivo');
+        $paymentType3->setDescription('Efectivo');
+        $paymentType3->setReferenceRequired(false);
+        $paymentType3->setIsCash(true);
+        $manager->persist($paymentType3);
+
+
+        $currency = new Currency();
+        $currency->setName('MX');
+        $currency->setSymbol('MX');
+        $currency->setCode('MX');
+        $currency->setExchangeRate(0);
+        $manager->persist($currency);
 
 
         $manager->flush();

@@ -62,6 +62,15 @@ class XReport extends BaseEntity
 
 
     // --- Getters & Setters ---
+
+    /**
+     * @return Collection<int, XReportDetail>
+     */
+    public function getDetails(): Collection
+    {
+        return $this->details;
+    }
+
     public function addDetail(XReportDetail $detail): self
     {
         if (!$this->details->contains($detail)) {
