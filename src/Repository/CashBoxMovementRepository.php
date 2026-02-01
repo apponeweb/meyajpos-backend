@@ -56,10 +56,13 @@ class CashBoxMovementRepository extends BaseRepository
             ->select('SUM(m.amount)')
             ->where('m.cashBoxSession = :session')
             ->andWhere('m.type = :type')
-            ->andWhere('m.concept != :saleConcept')
+            ->andWhere('m.concept NOT IN (:excludedConcepts)')
             ->setParameter('session', $session)
             ->setParameter('type', CashMovementType::INCOME)
-            ->setParameter('saleConcept', CashMovementConcept::SALE)
+            ->setParameter('excludedConcepts', [
+                CashMovementConcept::SALE,
+                CashMovementConcept::OPEN_CASH_BOX
+            ])
             ->getQuery();
 
         return $qb->getSingleScalarResult() ?? '0.00';
