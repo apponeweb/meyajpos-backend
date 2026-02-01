@@ -81,7 +81,7 @@ class CashBoxMovementController extends AbstractController
                 'type' => $movement->getType()->value,
                 'concept' => $movement->getConcept()->value,
                 'amount' => $movement->getAmount(),
-                'date' => $movement->getMovementDate()->format('Y-m-d H:i:s'),
+                'date' => $movement->getMovementDate()->format('d/m/Y H:i:s'),
                 'description' => $movement->getDescription()
             ];
         }
