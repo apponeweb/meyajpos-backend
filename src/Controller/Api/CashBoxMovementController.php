@@ -98,7 +98,9 @@ class CashBoxMovementController extends AbstractController
     public function create(
         Request                  $request,
         CashBoxSessionRepository $sessionRepo,
-        CashBoxMovementService   $movementService
+        CashBoxMovementService   $movementService,
+        SalePaymentRepository    $paymentRepo,
+        EntityManagerInterface   $entityManager
     ): JsonResponse
     {
         $user = $this->security->getUser();
@@ -132,7 +134,8 @@ class CashBoxMovementController extends AbstractController
                         'children' => [
                             $errorKey => ['errors' => [$result['error']]]
                         ]
-                    ]
+                    ],
+                    'details' => $result['details'] ?? []
                 ], $result['code']);
             }
 

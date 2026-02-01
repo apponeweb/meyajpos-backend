@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
+use App\Entity\Sale;
 use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
 use Doctrine\Persistence\ManagerRegistry;
@@ -48,6 +49,7 @@ class CashBoxMovementRepository extends BaseRepository
 
         return $qb['total'] ?? '0.00';
     }
+
     public function getTotalDeposits(CashBoxSession $session): string
     {
         $qb = $this->createQueryBuilder('m')
@@ -97,5 +99,50 @@ class CashBoxMovementRepository extends BaseRepository
         }
 
         return $qb->getQuery();
+    }
+
+    public function getCurrentCashBalance(CashBoxSession $session): array
+    {
+
+        // 2. Acceso al repositorio de Sale para obtener ventas en efectivo
+        // Usamos getEntityManager() en lugar de $_em
+        $salesRepo = $this->getEntityManager()->getRepository(Sale::class);
+
+        // Suponiendo que tienes el método getTotalCashSalesBySession en SaleRepository
+        $salesCash = $salesRepo->getTotalCashSalesBySession($session);
+
+        // 3. Ingresos Manuales (Tipo: INCOME, excluyendo el concepto SALE)
+        $manualIncomes = $this->createQueryBuilder('m')
+            ->select('SUM(m.amount)')
+            ->where('m.cashBoxSession = :session')
+            ->andWhere('m.type = :type')
+            ->andWhere('m.concept != :saleConcept')
+            ->setParameter('session', $session)
+            ->setParameter('type', \App\Enum\CashMovementType::INCOME)
+            ->setParameter('saleConcept', \App\Enum\CashMovementConcept::SALE)
+            ->getQuery()
+            ->getSingleScalarResult() ?? '0.00';
+
+        // 4. Egresos / Extracciones (Tipo: EXTRACTION)
+        $manualExtraction = $this->createQueryBuilder('m')
+            ->select('SUM(m.amount)')
+            ->where('m.cashBoxSession = :session')
+            ->andWhere('m.type = :type')
+            ->setParameter('session', $session)
+            ->setParameter('type', \App\Enum\CashMovementType::EXTRACTION)
+            ->getQuery()
+            ->getSingleScalarResult() ?? '0.00';
+
+
+        // CÁLCULO FINAL CON BC-MATH
+        // (Fondo Ventas + Depósitos Manuales) - Retiros Manuales
+        $totalIn = bcadd($salesCash, $manualIncomes, 2);
+
+        $final = bcsub($totalIn, $manualExtraction, 2);
+
+        return [
+            'general' => ['final' => $final],
+            'details' => ['salesCash' => $salesCash, 'manualIncomes' => $manualIncomes, 'manualExtraction' => $manualExtraction, 'abstract' => "$salesCash + $manualIncomes - $manualExtraction = $final"],
+        ];
     }
 }

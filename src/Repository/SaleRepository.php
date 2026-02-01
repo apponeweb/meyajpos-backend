@@ -111,4 +111,15 @@ class SaleRepository extends BaseRepository
 
         return $result['totalAmount'] ?? '0.00';
     }
+
+    public function getTotalCashSalesBySession(CashBoxSession $session): string
+    {
+        return $this->createQueryBuilder('s')
+            ->select('SUM(s.subtotal)') // O el campo donde guardes el subtotal pagado en efectivo
+            ->where('s.cashBox = :cashBox')
+            // Si tienes múltiples métodos de pago, aquí filtrarías solo por efectivo
+            ->setParameter('cashBox', $session->getCashBox())
+            ->getQuery()
+            ->getSingleScalarResult() ?? '0.00';
+    }
 }

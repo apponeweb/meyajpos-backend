@@ -53,14 +53,15 @@ class CashBoxMovementService
 
         // 3. Lógica de validación de saldo para Egresos
         if ($movement->getType() === CashMovementType::EXTRACTION) {
-            $currentBalance = $this->calculateCurrentBalance($session);
-            $requestedAmount = (float)$movement->getAmount();
-
-            if ($requestedAmount > $currentBalance) {
+            $currentBalance = $this->movementRepo->getCurrentCashBalance($session);
+            $final = $currentBalance['general']['final'] ?? 0;
+            // Si el monto a retirar es mayor que el saldo actual
+            if (bccomp($movement->getAmount(), $final, 2) === 1) {
                 return [
                     'success' => false,
-                    'error' => sprintf('Saldo insuficiente. Efectivo real en caja: %s', number_format($currentBalance, 2)),
-                    'code' => 400
+                    'error' => "Saldo insuficiente. Solo hay $" . $final . " en caja.",
+                    'code' => 400,
+                    'details' => $currentBalance['details']
                 ];
             }
         }

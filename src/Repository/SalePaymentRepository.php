@@ -23,10 +23,10 @@ class SalePaymentRepository extends BaseRepository
         $qb = $this->createQueryBuilder('p')
             ->select('SUM(p.amountReceived)')
             ->innerJoin('p.sale', 's')
-            ->innerJoin('p.paymentType', 'pt') // Ajustado a 'paymentType'
+            ->innerJoin('p.paymentType', 'pt')
             ->where('s.cashBox = :cashBox')
             ->andWhere('s.saleDate >= :openingDate')
-            ->andWhere('pt.name = :methodName') // Usamos el alias 'pt'
+            ->andWhere('pt.name = :methodName')
             ->setParameter('cashBox', $session->getCashBox())
             ->setParameter('openingDate', $session->getOpeningDate())
             ->setParameter('methodName', 'Efectivo');
