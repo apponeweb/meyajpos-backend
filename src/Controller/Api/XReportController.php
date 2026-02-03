@@ -145,7 +145,8 @@ class XReportController extends AbstractController
                     'declared_total' => $report->getDeclaredTotal(),
                     'difference' => $report->getDifference()
                 ],
-                'details' => $detailsResponse
+                'details' => $detailsResponse,
+                'ticket' => null
             ]
         ], 201);
     }

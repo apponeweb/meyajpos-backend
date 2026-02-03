@@ -199,7 +199,11 @@ final class SaleController extends BaseController
 
             return $this->json([
                 'message' => "Venta registrada correctamente",
-                'data' => ['id' => $sale->getId(), 'folio' => $sale->getFolio()]
+                'data' => [
+                    'id' => $sale->getId(),
+                    'folio' => $sale->getFolio(),
+                    'ticket' => null
+                ]
             ], JsonResponse::HTTP_OK);
         }
 
