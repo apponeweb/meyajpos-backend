@@ -25,9 +25,10 @@ class XReportController extends AbstractController
 {
     #[Route('/preview', name: 'app_x_report_preview', methods: ['GET'])]
     public function preview(
-        CashBoxSessionRepository $cashBoxSessionRepository,
-        EntityManagerInterface   $em,
-        UserInterface            $user
+        CashBoxSessionRepository  $cashBoxSessionRepository,
+        EntityManagerInterface    $em,
+        UserInterface             $user,
+        CashBoxMovementRepository $movementRepo
     ): JsonResponse
     {
         $session = $cashBoxSessionRepository->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
@@ -61,6 +62,8 @@ class XReportController extends AbstractController
                 'session_id' => $session->getId(),
                 'initial_amount' => $session->getInitialAmount(),
                 'system_total' => $totalSystem,
+                'total_deposits' => $movementRepo->getTotalDeposits($session),
+                'total_extractions' => $movementRepo->getTotalWithdrawals($session),
                 'details' => $previewDetails
             ]
         ]);
@@ -68,12 +71,13 @@ class XReportController extends AbstractController
 
     #[Route('/generate', name: 'app_x_report_generate', methods: ['POST'])]
     public function generate(
-        Request $request,
+        Request                  $request,
         CashBoxSessionRepository $cashBoxSessionRepository,
-        XReportRepository $reportRepo,
-        EntityManagerInterface $em,
-        UserInterface $user
-    ): JsonResponse {
+        XReportRepository        $reportRepo,
+        EntityManagerInterface   $em,
+        UserInterface            $user
+    ): JsonResponse
+    {
         // El JSON llega como {"3":"20", "2":"60.00", ...}
         $data = json_decode($request->getContent(), true);
 
