@@ -122,4 +122,38 @@ class SaleRepository extends BaseRepository
             ->getQuery()
             ->getSingleScalarResult() ?? '0.00';
     }
+
+
+    public function getCountByPaymentType(CashBoxSession $session, int $paymentTypeId): int
+    {
+        return (int)$this->createQueryBuilder('s')
+            ->select('COUNT(s.id)')
+            ->where('s.cashBox = :session')
+            ->andWhere('s.paymentType = :paymentType')
+            ->andWhere('s.isActive = :active')
+            ->setParameter('session', $session->getCashBox())
+            ->setParameter('paymentType', $paymentTypeId)
+            ->setParameter('active', true)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Suma el total de propinas de la sesión.
+     */
+    public function getTotalTipsBySession(CashBoxSession $session): string
+    {
+        $result = $this->createQueryBuilder('s')
+            ->select('SUM(s.tipAmount)') // Ajusta según el nombre real de tu campo en Sale
+            ->where('s.cashBox = :session')
+            ->andWhere('s.isActive = :active')
+            ->setParameter('session', $session->getCashBox())
+            ->setParameter('active', true)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $result ?? '0.00';
+    }
+
+
 }

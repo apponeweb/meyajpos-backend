@@ -18,6 +18,10 @@ class ZReport extends BaseEntity
     #[ORM\Column]
     private ?int $id = null;
 
+    #[ORM\OneToOne(targetEntity: XReport::class)]
+    #[ORM\JoinColumn(name: 'x_report_id', referencedColumnName: 'id', nullable: false)]
+    private ?XReport $xReport = null;
+
     #[ORM\OneToOne(targetEntity: CashBoxSession::class)]
     #[ORM\JoinColumn(name: 'cash_box_session_id', referencedColumnName: 'id', nullable: false)]
     private ?CashBoxSession $cashBoxSession = null;
@@ -222,6 +226,16 @@ class ZReport extends BaseEntity
     public function setCashDifference(string $cashDifference): void
     {
         $this->cashDifference = $cashDifference;
+    }
+
+    public function getXReport(): ?XReport
+    {
+        return $this->xReport;
+    }
+
+    public function setXReport(?XReport $xReport): void
+    {
+        $this->xReport = $xReport;
     }
 
 }

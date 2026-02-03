@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Branch;
 use App\Entity\CashBoxSession;
+use App\Entity\PaymentType;
 use App\Entity\SalePayment;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -39,4 +40,25 @@ class SalePaymentRepository extends BaseRepository
         return (float)$qb->getQuery()->getSingleScalarResult();
     }
 
+    public function getSummaryBySessionAndType(CashBoxSession $session, PaymentType $paymentType): array
+    {
+        $result = $this->createQueryBuilder('sp')
+            ->select('SUM(sp.amountReceived) as amount')
+            ->addSelect('COUNT(sp.id) as count')
+            ->innerJoin('sp.sale', 's')
+            ->where('s.cashBox = :session')
+            ->andWhere('sp.paymentType = :paymentType')
+            ->andWhere('sp.isActive = :active')
+            ->andWhere('s.isActive = :active')
+            ->setParameter('session', $session->getCashBox())
+            ->setParameter('paymentType', $paymentType)
+            ->setParameter('active', true)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return [
+            'amount' => $result['amount'] ?? '0.00',
+            'count' => (int)($result['count'] ?? 0)
+        ];
+    }
 }
