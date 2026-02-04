@@ -291,7 +291,7 @@ final class SaleController extends BaseController
                         "nombreComercial" => $company->getName(),
                         "razonSocial" => $company->getLegalName(),
                         "direccion" => $formattedAddress,
-                        "telefono" => '81 0000 0000', // Definir en entidad Company
+                        "telefono" =>  $company->getPhone(),
                         "rfc" => $company->getRfc()
                     ],
                     "transaccion" => [

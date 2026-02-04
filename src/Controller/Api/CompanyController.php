@@ -29,6 +29,7 @@ final class CompanyController extends BaseController
             'u.description',
             'u.isActive',
             'u.acronym',
+            'u.phone',
             'u.legalName',
             'u.rfc',
             'u.taxAddress',

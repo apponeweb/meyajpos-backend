@@ -24,6 +24,8 @@ class Company extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 200, nullable: true)]
     private string $legalName;
 
+    #[ORM\Column(type: Types::STRING, length: 50, nullable: true)]
+    private string $phone;
 
     #[ORM\Column(type: Types::STRING, length: 20, nullable: true)]
     private string $rfc;
@@ -70,6 +72,16 @@ class Company extends BaseEntity
     public function setTaxAddress(string $taxAddress): void
     {
         $this->taxAddress = $taxAddress;
+    }
+
+    public function getPhone(): string
+    {
+        return $this->phone;
+    }
+
+    public function setPhone(string $phone): void
+    {
+        $this->phone = $phone;
     }
 
 

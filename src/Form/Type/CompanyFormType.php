@@ -19,6 +19,7 @@ class CompanyFormType extends BaseFormType
         $builder->add('legalName');
         $builder->add('rfc');
         $builder->add('taxAddress');
+        $builder->add('phone');
     }
 
     public function configureOptions(OptionsResolver $resolver): void
