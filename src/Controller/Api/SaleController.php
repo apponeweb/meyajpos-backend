@@ -265,11 +265,20 @@ final class SaleController extends BaseController
             elseif (str_contains(strtolower($typeName), 'transferencia')) $pagosMap["Transferencia"] += $amount;
         }
 
-        // 4. Formatear Dirección JSON a Texto Lógico
-        $rawAddress = $company->getTaxAddress();
-        $formattedAddress = $rawAddress; // fallback
 
-        $addressData = json_decode($rawAddress, true);
+        $rawAddress = '';
+        try {
+            // Usamos un getter seguro o verificamos la inicialización
+            $rawAddress = $company->getTaxAddress() ?? '';
+        } catch (\Error $e) {
+            // Si falla por no estar inicializada, queda como string vacío
+            $rawAddress = '';
+        }
+        $formattedAddress = $rawAddress; // fallback
+        if (!empty($rawAddress)) {
+            $addressData = json_decode($rawAddress, true);
+        }
+
         if (json_last_error() === JSON_ERROR_NONE && is_array($addressData)) {
             $formattedAddress = sprintf(
                 "%s %s, Col. %s, %s, %s. CP: %s",

@@ -31,7 +31,7 @@ class Company extends BaseEntity
     private string $rfc;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private string $taxAddress;
+    private ?string $taxAddress = null;
 
     public function getAcronym(): string
     {
