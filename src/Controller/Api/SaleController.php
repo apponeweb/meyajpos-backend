@@ -275,6 +275,7 @@ final class SaleController extends BaseController
             $rawAddress = '';
         }
         $formattedAddress = $rawAddress; // fallback
+        $addressData = null;
         if (!empty($rawAddress)) {
             $addressData = json_decode($rawAddress, true);
         }
@@ -300,7 +301,7 @@ final class SaleController extends BaseController
                         "nombreComercial" => $company->getName(),
                         "razonSocial" => $company->getLegalName(),
                         "direccion" => $formattedAddress,
-                        "telefono" =>  $company->getPhone(),
+                        "telefono" => $company->getPhone(),
                         "rfc" => $company->getRfc()
                     ],
                     "transaccion" => [
