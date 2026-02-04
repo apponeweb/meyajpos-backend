@@ -24,10 +24,6 @@ class SaleDetailFormType extends AbstractType
                 'label' => 'Renglón',
                 'mapped' => false
             ])
-            ->add('tip', TextType::class, [
-                'label' => 'tip',
-                'mapped' => false
-            ])
             ->add('product', EntityType::class, [
                 'class' => MasterProduct::class,
                 'choice_label' => 'name',
