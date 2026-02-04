@@ -107,6 +107,7 @@ class ZReportController extends AbstractController
         // 3. CERRAR SESIÓN (Cambio de estado)
         $session->setStatus(CashBoxSessionStatus::CLOSED);
         $session->setClosingDate(new \DateTime());
+        $session->setClosingUser($user);
 
         $em->persist($zReport);
         $em->flush();

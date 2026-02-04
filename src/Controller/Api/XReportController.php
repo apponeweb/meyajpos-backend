@@ -6,9 +6,11 @@ use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
 use App\Entity\PaymentType;
 use App\Entity\Sale;
+use App\Entity\Tip;
 use App\Entity\XReport;
 use App\Entity\XReportDetail;
 use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementType;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\CashBoxMovementRepository;
 use App\Repository\XReportRepository;
@@ -78,6 +80,13 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
+//        $report = $reportRepo->find(24);
+//        $session = $cashBoxSessionRepository->find(13);
+//        $ticket = $this->generateXTicketData($report, $session, $user, $em);
+//
+//        echo '<pre>';
+//        print_r($ticket);
+//        die;
         // El JSON llega como {"3":"20", "2":"60.00", ...}
         $data = json_decode($request->getContent(), true);
 
@@ -134,7 +143,7 @@ class XReportController extends AbstractController
                 'difference' => $detail->getDifference()
             ];
         }
-
+        $ticket = $this->generateXTicketData($report, $session, $user, $em);
         return $this->json([
             'status' => 'success',
             'data' => [
@@ -146,7 +155,7 @@ class XReportController extends AbstractController
                     'difference' => $report->getDifference()
                 ],
                 'details' => $detailsResponse,
-                'ticket' => null
+                'ticket' => $ticket
             ]
         ], 201);
     }
@@ -168,5 +177,152 @@ class XReportController extends AbstractController
         }
 
         return $amount;
+    }
+
+    private function generateXTicketData(XReport $report, CashBoxSession $session, UserInterface $user, EntityManagerInterface $em)
+    {
+        $cashBox = $session->getCashBox();
+        $company = $cashBox->getBranch()->getCompany();
+        $movementRepo = $em->getRepository(CashBoxMovement::class);
+        $tipRepo = $em->getRepository(Tip::class);
+        $saleRepo = $em->getRepository(Sale::class);
+        $now = new \DateTime();
+
+        // 1. Clasificar Movimientos (Ingresos y Retiros)
+        $movements = $movementRepo->findBy(['cashBoxSession' => $session]);
+        $ingresos = [];
+        $retiros = [];
+
+        foreach ($movements as $m) {
+            $item = [
+                "hora" => $m->getCreatedAt()->format('H:i'),
+                "monto" => number_format((float)$m->getAmount(), 2, '.', ''),
+                "motivo" => $m->getDescription(),
+                "usuario" => trim($user->getName() . ' ' . $user->getLastName())
+            ];
+
+            if ($m->getType()->value === CashMovementType::INCOME->value) {
+                $ingresos[] = $item;
+            } else {
+                $retiros[] = $item;
+            }
+        }
+
+        // 2. Clasificar Ventas por Tipo de Pago (Desde el reporte X)
+        $ventasEfectivo = 0.00;
+        $ventasTarjeta = 0.00;
+        $ventasTransferencia = 0.00;
+
+        foreach ($report->getDetails() as $detail) {
+            $name = strtolower($detail->getPaymentType()->getName());
+            $amount = (float)$detail->getSystemAmount();
+
+            if (str_contains($name, 'efectivo')) $ventasEfectivo += $amount;
+            elseif (str_contains($name, 'tarjeta')) $ventasTarjeta += $amount;
+            elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
+        }
+
+        // 3. Lógica de Propinas (Tips) - Navegando por Ventas de la Sesión
+        $propinaEfectivo = 0.00;
+        $propinaTarjeta = 0.00;
+
+        // Buscamos todas las ventas asociadas a la sesión
+        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox()]);
+
+        foreach ($sales as $sale) {
+            // 1. Recorremos los pagos de la venta para buscar propinas
+            foreach ($sale->getPayments() as $payment) {
+
+                // Buscamos las propinas asociadas a este pago específico
+                $tips = $tipRepo->findBy(['salePayment' => $payment->getId()]);
+
+                foreach ($tips as $tip) {
+                    $tipAmount = (float)$tip->getAmount();
+
+                    /**
+                     * REGLA DE NEGOCIO:
+                     * Aunque la propina esté vinculada a este $payment, el "tipo" de la propina
+                     * debe determinarse inspeccionando TODOS los pagos de la venta ($sale).
+                     */
+                    $finalType = null;
+
+                    foreach ($sale->getPayments() as $sPayment) {
+                        $name = strtolower($sPayment->getPaymentType()->getName());
+
+                        if (str_contains($name, 'efectivo')) {
+                            $finalType = 'efectivo';
+                            break; // Prioridad total: si hubo efectivo en la venta, la propina va a efectivo
+                        }
+
+                        if (str_contains($name, 'tarjeta')) {
+                            $finalType = 'tarjeta';
+                        }
+                    }
+
+                    // 2. Sumamos según el tipo encontrado en la venta
+                    if ($finalType === 'efectivo') {
+                        $propinaEfectivo += $tipAmount;
+                    } elseif ($finalType === 'tarjeta') {
+                        $propinaTarjeta += $tipAmount;
+                    }
+                }
+            }
+        }
+
+        // 4. Determinar Estatus
+        $diff = (float)$report->getDifference();
+        $estatus = "CUADRADO";
+        if ($diff > 0.01) $estatus = "SOBRANTE";
+        if ($diff < -0.01) $estatus = "FALTANTE";
+
+        $response = [
+            [
+                "templateId" => 20,
+                "printerName" => $cashBox->getName(),
+                "data" => [
+                    "negocio" => [
+                        "nombreComercial" => $company->getName()
+                    ],
+                    "corte" => [
+                        "caja" => $cashBox->getName(),
+                        "cajero" => trim($user->getName() . ' ' . $user->getLastName()),
+                        "periodo" => [
+                            "inicio" => $session->getOpeningDate()->format('H:i'),
+                            "fin" => $now->format('H:i')
+                        ],
+                        "fondoInicial" => number_format((float)$session->getInitialAmount(), 2, '.', ''),
+                        "ventas" => [
+                            "efectivo" => number_format($ventasEfectivo, 2, '.', ''),
+                            "tarjeta" => number_format($ventasTarjeta, 2, '.', ''),
+                            "transferencias" => number_format($ventasTransferencia, 2, '.', ''),
+                            "cortesias" => "0.00"
+                        ],
+                        "ingresos" => $ingresos,
+                        "retiros" => $retiros,
+                        "efectivo" => [
+                            "declarado" => number_format((float)$report->getDeclaredTotal(), 2, '.', '')
+                        ],
+                        "propinas" => [
+                            "efectivo" => number_format($propinaEfectivo, 2, '.', ''),
+                            "tarjeta" => number_format($propinaTarjeta, 2, '.', '')
+                        ],
+                        "estatus" => $estatus,
+                        "impresoAt" => $now->format('d/m/Y H:i:s'),
+                        "firmas" => [
+                            "cajero" => [
+                                "nombre" => trim($user->getName() . ' ' . $user->getLastName()),
+                                "fecha" => $now->format('d/m/Y')
+                            ],
+                            "supervisor" => [
+                                "nombre" => trim($user->getName() . ' ' . $user->getLastName()),
+                                "fecha" => $now->format('d/m/Y')
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        return json_encode($response);
     }
 }
