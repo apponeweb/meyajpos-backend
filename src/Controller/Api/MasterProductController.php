@@ -61,6 +61,7 @@ final class MasterProductController extends BaseController
             'u.description',
             'u.isActive',
             'u.sku',
+            'u.vatRate',
             'u.barcode',
             'u.price',
             'u.uom',

@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'tbd_master_product')]
 #[UniqueEntity(fields: ['name'], message: 'Ya existe un producto maestro con este nombre.')]
 #[UniqueEntity(fields: ['sku'], message: 'Ya existe un sku con este nombre.')]
-#[UniqueEntity(fields: ['barcode'], message: 'Ya existe un sku con este nombre.')]
+#[UniqueEntity(fields: ['barcode'], message: 'Ya existe un barcode con este nombre.')]
 #[ORM\HasLifecycleCallbacks]
 class MasterProduct extends BaseEntity
 {
@@ -28,6 +28,9 @@ class MasterProduct extends BaseEntity
 
     #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 2, nullable: true)]
     private string $price;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 12, scale: 2, options: ["default" => "0.00"])]
+    private string $vatRate = '0.00'; // este seria el iva
 
     #[ORM\Column(type: Types::BOOLEAN, nullable: true, options: ["default" => true])]
     private bool $isInventoriable = true;
@@ -97,5 +100,15 @@ class MasterProduct extends BaseEntity
     public function setServiceType(?ServiceType $serviceType): void
     {
         $this->serviceType = $serviceType;
+    }
+
+    public function getVatRate(): string
+    {
+        return $this->vatRate;
+    }
+
+    public function setVatRate(string $vatRate): void
+    {
+        $this->vatRate = $vatRate;
     }
 }
