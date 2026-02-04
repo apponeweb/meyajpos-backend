@@ -66,7 +66,7 @@ class Company extends BaseEntity
 
     public function getTaxAddress(): string
     {
-        return $this->taxAddress;
+        return $this->taxAddress ?? '';
     }
 
     public function setTaxAddress(string $taxAddress): void
