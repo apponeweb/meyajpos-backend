@@ -137,10 +137,10 @@ class SalesReportController extends AbstractController
                     $sale['cashier'],
                     $sale['cashbox'],
                     $statusEnum->getLabel(),
-                    number_format((float)$sale['subtotal'], 2, '.', ''),
-                    number_format((float)$sale['totalTax'], 2, '.', ''),
-                    number_format((float)$sale['total'], 2, '.', ''),
-                    number_format((float)($sale['change'] ?? 0), 2, '.', ''),
+                    number_format((float)$sale['subtotal'], 2, '.', ','),
+                    number_format((float)$sale['totalTax'], 2, '.', ','),
+                    number_format((float)$sale['total'], 2, '.', ','),
+                    number_format((float)($sale['change'] ?? 0), 2, '.', ','),
                 ], ';');
             }
 
