@@ -43,8 +43,6 @@ class CommissionReportController extends AbstractController
             // Pasamos FALSE como segundo parámetro para indicar que no es una consulta de entidades
             $paginator = new Paginator($query, false);
 
-            // IMPORTANTE: Para Scalar Results en Doctrine 3+ o Symfony 5/6+
-            // a veces es necesario obtener el array directamente:
             $resultsRaw = iterator_to_array($paginator->getIterator());
 
             $results = array_map(function ($row) {
