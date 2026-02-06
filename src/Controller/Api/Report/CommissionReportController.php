@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Doctrine\ORM\Tools\Pagination\Paginator;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Route('/reports')]
 class CommissionReportController extends AbstractController
@@ -83,5 +84,48 @@ class CommissionReportController extends AbstractController
                 'status' => 500
             ], 500);
         }
+    }
+
+    #[Route('/commissions/export', name: 'api_commissions_export', methods: ['GET'])]
+    public function exportCommissionsCsv(Request $request): StreamedResponse
+    {
+        $filters = [
+            'startDate' => $request->query->get('startDate'),
+            'endDate' => $request->query->get('endDate'),
+            'search' => $request->query->get('search'),
+        ];
+
+        // Obtenemos todos los datos sin paginar
+        $data = $this->repository->getExportData($filters);
+
+        $response = new StreamedResponse(function () use ($data) {
+            $handle = fopen('php://output', 'w+');
+
+            // Añadir BOM para que Excel reconozca tildes y caracteres especiales (UTF-8)
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // Cabeceras del CSV
+            fputcsv($handle, ['SERVICIO/PR', 'BARBERO', 'CANTIDAD', 'MONTO CMISION', 'FECHA'], ';');
+
+            foreach ($data as $row) {
+                $date = new \DateTime($row['date']);
+
+                fputcsv($handle, [
+                    $row['service'],
+                    $row['barber'],
+                    $row['quantity'],
+                    number_format((float)$row['totalCommission'], 2, '.', ''),
+                    $date->format('d/m/Y H:i')
+                ], ';');
+            }
+
+            fclose($handle);
+        });
+
+        $fileName = 'reporte_comisiones_' . date('Ymd_His') . '.csv';
+        $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
+        $response->headers->set('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+
+        return $response;
     }
 }

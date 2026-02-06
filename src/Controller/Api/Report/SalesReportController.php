@@ -8,6 +8,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 
@@ -89,5 +90,68 @@ class SalesReportController extends AbstractController
                 'status' => Response::HTTP_INTERNAL_SERVER_ERROR
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    #[Route('/sales/export', name: 'api_sales_report_export', methods: ['GET'])]
+    public function exportSalesReportCsv(Request $request): StreamedResponse
+    {
+        $filters = [
+            'startDate' => $request->query->get('startDate'),
+            'endDate' => $request->query->get('endDate'),
+            'search' => $request->query->get('search'),
+        ];
+
+        // Obtenemos los datos sin límites de paginación
+        $sales = $this->saleRepository->getExportData($filters);
+
+        $response = new StreamedResponse(function () use ($sales) {
+            $handle = fopen('php://output', 'w+');
+
+            // Añadir BOM para compatibilidad con Excel (UTF-8)
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            // Cabeceras del archivo
+            fputcsv($handle, [
+                'FOLIO',
+                'FECHA',
+                'CAJERO',
+                'CAJA',
+                'ESTADO',
+                'SUBTOTAL',
+                'IMPUESTOS',
+                'TOTAL',
+                'CAMBIO'
+            ], ';');
+
+            foreach ($sales as $sale) {
+                // Formatear el estado usando tu Enum (basado en tu lógica del controlador)
+                $statusRawValue = (int)$sale['status'];
+                $statusEnum = SaleStatus::tryFrom($statusRawValue) ?? SaleStatus::IN_PROGRESS;
+
+                // Formatear fecha
+                $date = new \DateTime($sale['saleDate']);
+
+                fputcsv($handle, [
+                    $sale['folio'],
+                    $date->format('d/m/Y H:i:s'),
+                    $sale['cashier'],
+                    $sale['cashbox'],
+                    $statusEnum->getLabel(),
+                    number_format((float)$sale['subtotal'], 2, '.', ''),
+                    number_format((float)$sale['totalTax'], 2, '.', ''),
+                    number_format((float)$sale['total'], 2, '.', ''),
+                    number_format((float)($sale['change'] ?? 0), 2, '.', ''),
+                ], ';');
+            }
+
+            fclose($handle);
+        });
+
+        // Configuración de cabeceras HTTP
+        $fileName = 'reporte_ventas_' . date('Ymd_His') . '.csv';
+        $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
+        $response->headers->set('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+
+        return $response;
     }
 }

@@ -55,7 +55,14 @@ class SaleRepository extends BaseRepository
 
         return $qb->getQuery();
     }
+    public function getExportData(array $filters): array
+    {
+        // Reutilizamos la consulta base
+        $query = $this->getReportQuery($filters);
 
+        // Obtenemos los resultados como un array escalar para procesar más rápido
+        return $query->getScalarResult();
+    }
     public function getTotalAccumulated(array $filters): array
     {
         $qb = $this->createQueryBuilder('s')

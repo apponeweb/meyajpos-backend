@@ -81,4 +81,37 @@ class CommissionGeneratedRepository extends BaseRepository
         return $qb->getQuery()->getSingleResult();
     }
 
+    public function getExportData(array $filters): array
+    {
+        $qb = $this->createQueryBuilder('cg')
+            ->select(
+                'mp.name as service',
+                'u.name as barber',
+                'COUNT(cg.id) as quantity',
+                'SUM(cg.commissionAmount) as totalCommission',
+                'MAX(cg.createdAt) as date'
+            )
+            ->join('cg.saleDetail', 'sd')
+            ->join('sd.product', 'mp')
+            ->join('cg.user', 'u')
+            ->groupBy('service', 'barber', 'serviceDate')
+            ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
+            ->orderBy('date', 'DESC');
+
+        // Aplicar los mismos filtros que el reporte normal
+        if (!empty($filters['startDate'])) {
+            $qb->andWhere('cg.createdAt >= :startDate')
+                ->setParameter('startDate', $filters['startDate'] . ' 00:00:00');
+        }
+        if (!empty($filters['endDate'])) {
+            $qb->andWhere('cg.createdAt <= :endDate')
+                ->setParameter('endDate', $filters['endDate'] . ' 23:59:59');
+        }
+        if (!empty($filters['search'])) {
+            $qb->andWhere('mp.name LIKE :search OR u.name LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+
+        return $qb->getQuery()->getScalarResult();
+    }
 }
