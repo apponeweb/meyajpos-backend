@@ -31,6 +31,7 @@ class CashBox extends BaseEntity
     {
         $this->currentFolio = 0;
     }
+
     public function getBranch(): ?Branch
     {
         return $this->branch;
@@ -41,12 +42,12 @@ class CashBox extends BaseEntity
         $this->branch = $branch;
     }
 
-    public function getTicketSerie(): string
+    public function getTicketSerie()
     {
         return $this->ticketSerie;
     }
 
-    public function setTicketSerie(string $ticketSerie): void
+    public function setTicketSerie($ticketSerie): void
     {
         $this->ticketSerie = $ticketSerie;
     }
