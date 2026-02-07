@@ -146,6 +146,12 @@ final class MasterProductController extends BaseController
                 'data' => null
             ], JsonResponse::HTTP_NOT_FOUND);
         }
+        // --- FORMATEO DEL PRECIO ---
+        if (isset($product['price'])) {
+            // Formato: $1,000.00
+            $product['price'] = '$' . number_format((float)$product['price'], 2, '.', ',');
+        }
+
         return $this->json([
             'message' => 'Producto recuperado con éxito',
             'data' => $product
