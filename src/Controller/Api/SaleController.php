@@ -404,7 +404,7 @@ final class SaleController extends BaseController
                 $item['subtotal'] = $this->moneyFormat($item['subtotal'] ?? 0);
                 $item['tax'] = $this->moneyFormat($item['tax'] ?? 0);
                 $item['total'] = $this->moneyFormat($item['total'] ?? 0);
-                $item['tip'] = $this->moneyFormat($item['total'] - $item['unitPrice'] ?? 0);
+                $item['tip'] = $this->moneyFormat(($item['total'] ?? 0) - ($item['unitPrice'] ?? 0));
             }
         }
 
