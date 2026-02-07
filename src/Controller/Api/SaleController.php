@@ -400,11 +400,11 @@ final class SaleController extends BaseController
         // Detalles de la venta
         if (isset($data['details'])) {
             foreach ($data['details'] as &$item) {
-                $item['unitPrice'] = $this->moneyFormat($item['unitPrice'] ?? 0);
                 $item['subtotal'] = $this->moneyFormat($item['subtotal'] ?? 0);
                 $item['tax'] = $this->moneyFormat($item['tax'] ?? 0);
-                $item['total'] = $this->moneyFormat($item['total'] ?? 0);
                 $item['tip'] = $this->moneyFormat(($item['total'] ?? 0) - ($item['unitPrice'] ?? 0));
+                $item['unitPrice'] = $this->moneyFormat($item['unitPrice'] ?? 0);
+                $item['total'] = $this->moneyFormat($item['total'] ?? 0);
             }
         }
 
