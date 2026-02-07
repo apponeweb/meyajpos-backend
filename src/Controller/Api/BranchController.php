@@ -3,12 +3,15 @@
 namespace App\Controller\Api;
 
 use App\Entity\Branch;
+use App\Entity\CashBox;
+use App\Entity\Sale;
 use App\Form\Type\BranchFormType;
 use App\Repository\BranchRepository;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class BranchController extends BaseController
 {
@@ -80,6 +83,18 @@ final class BranchController extends BaseController
     #[Rest\Delete('/branch/{id}')]
     public function remove(Branch $id): mixed
     {
+        $cashbox = $this->entityManager->getRepository(CashBox::class)->findBy(['branch' => $id]);
+        if ($cashbox) {
+            foreach ($cashbox as $box) {
+                $sales = $this->entityManager->getRepository(Sale::class)->count(['cashBox' => $box->getId()]);
+                if ($sales > 0) {
+                    return $this->json([
+                        'message' => "No se puede eliminar la sucursal, porque tiene al menos una caja con ventas asociadas",
+                    ], Response::HTTP_BAD_REQUEST);
+                }
+            }
+        }
+
         return $this->delete($id);
     }
 

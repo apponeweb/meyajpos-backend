@@ -16,7 +16,8 @@ use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 // Opcional: Validador de Symfony para lanzar errores controlados
 #[UniqueEntity(
     fields: ['commission', 'serviceType'],
-    message: 'Ya existe una configuración de comisión para este tipo de servicio.'
+    message: 'Ya existe una configuración de comisión para este tipo de servicio.',
+    errorPath: 'serviceType'
 )]
 #[ORM\HasLifecycleCallbacks]
 class CommissionDetail extends BaseEntity

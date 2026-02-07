@@ -3,11 +3,13 @@
 namespace App\Controller\Api;
 
 use App\Entity\Commission;
+use App\Entity\Sale;
 use App\Form\Type\CommissionFormType;
 use App\Repository\CommissionRepository;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class CommissionController extends BaseController
 {
@@ -60,6 +62,12 @@ final class CommissionController extends BaseController
     #[Rest\Delete('/commission/{id}')]
     public function remove(Commission $id): mixed
     {
+        $sales = $this->entityManager->getRepository(Sale::class)->count(['cashBox' => $id]);
+        if ($sales > 0) {
+            return $this->json([
+                'message' => "No se puede eliminar la caja porque tiene ventas asociadas",
+            ], Response::HTTP_BAD_REQUEST);
+        }
         return $this->delete($id);
     }
 

@@ -3,15 +3,30 @@
 namespace App\Controller\Api;
 
 use App\Entity\CashBox;
+use App\Entity\CashBoxSession;
+use App\Entity\Sale;
+use App\Enum\CashBoxSessionStatus;
 use App\Form\Type\CashBoxFormType;
 use App\Repository\CashBoxRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class CashBoxController extends BaseController
 {
+    public function __construct(
+        protected EntityManagerInterface $entityManager,
+        protected Security               $security
+    )
+    {
+        // Llama al constructor del BaseController
+        parent::__construct($entityManager, $security);
+    }
+
     protected function getEntityClass(): string
     {
         return CashBox::class;
@@ -85,6 +100,19 @@ final class CashBoxController extends BaseController
     #[Rest\Delete('/cash_box/{id}')]
     public function remove(CashBox $id): mixed
     {
+        $sales = $this->entityManager->getRepository(Sale::class)->count(['cashBox' => $id]);
+        if ($sales > 0) {
+            return $this->json([
+                'message' => "No se puede eliminar la caja porque tiene ventas asociadas",
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $cashboxSessions = $this->entityManager->getRepository(CashBoxSession::class)->count(['cashBox' => $id, 'status' => CashBoxSessionStatus::OPEN]);
+        if ($cashboxSessions > 0) {
+            return $this->json([
+                'message' => "No se puede eliminar la caja porque tiene sesiones de caja asociadas",
+            ], Response::HTTP_BAD_REQUEST);
+        }
         return $this->delete($id);
     }
 
