@@ -161,9 +161,9 @@ class XReportController extends AbstractController
                 'id' => $report->getId(),
                 'report_number' => $report->getReportNumber(),
                 'totals' => [
-                    'system_total' => $report->getSystemTotal(),
-                    'declared_total' => $report->getDeclaredTotal(),
-                    'difference' => $report->getDifference()
+                    'system_total' => number_format((float)$report->getSystemTotal(), 2, '.', ','),
+                    'declared_total' => number_format((float)$report->getDeclaredTotal(), 2, '.', ','),
+                    'difference' => number_format((float)$report->getDifference(), 2, '.', ','),
                 ],
                 'details' => $detailsResponse,
                 'ticket' => $ticket
