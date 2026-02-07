@@ -149,7 +149,7 @@ final class MasterProductController extends BaseController
         // --- FORMATEO DEL PRECIO ---
         if (isset($product['price'])) {
             // Formato: $1,000.00
-            $product['price'] = '$' . number_format((float)$product['price'], 2, '.', ',');
+            $product['price'] = number_format((float)$product['price'], 2, '.', ',');
         }
 
         return $this->json([
