@@ -4,6 +4,7 @@ namespace App\Controller\Api;
 
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
+use App\Entity\CommissionDetail;
 use App\Entity\PaymentType;
 use App\Entity\Sale;
 use App\Entity\Tip;
@@ -13,12 +14,14 @@ use App\Enum\CashBoxSessionStatus;
 use App\Enum\CashMovementType;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\CashBoxMovementRepository;
+use App\Repository\SaleRepository;
 use App\Repository\XReportRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use phpDocumentor\Reflection\Types\This;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\User\UserInterface;
 
@@ -30,13 +33,21 @@ class XReportController extends AbstractController
         CashBoxSessionRepository  $cashBoxSessionRepository,
         EntityManagerInterface    $em,
         UserInterface             $user,
-        CashBoxMovementRepository $movementRepo
+        CashBoxMovementRepository $movementRepo,
+        SaleRepository            $saleRepository
     ): JsonResponse
     {
         $session = $cashBoxSessionRepository->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
 
         if (!$session) {
             return $this->json(['error' => 'No tiene una sesión de la caja activa'], 404);
+        }
+
+        $sales = $saleRepository->count(['cashBox' => $session->getCashBox()]);
+        if ($sales == 0) {
+            return $this->json([
+                'message' => "No se puede generar un corte X por no hacer ventas realizadas en esta sesión.",
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $paymentTypeRepo = $em->getRepository(PaymentType::class);

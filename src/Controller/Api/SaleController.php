@@ -313,12 +313,13 @@ final class SaleController extends BaseController
                         "items" => $items
                     ],
                     "totales" => [
-                        "subtotal" => number_format((float)$sale->getTotal(), 2, '.', ''),
+                        "subtotal" => number_format((float)$sale->getSubtotal(), 2, '.', ''),
                         "iva" => number_format($totalVat, 2, '.', ''),
-                        "total" => number_format((float)$sale->getTotal(), 2, '.', ''),
+                        "total" => number_format((float)$sale->getSubtotal(), 2, '.', ''),
                         "Tarjeta" => number_format($pagosMap["Tarjeta"], 2, '.', ''),
                         "Efectivo" => number_format($pagosMap["Efectivo"], 2, '.', ''),
-                        "Transferencia" => number_format($pagosMap["Transferencia"], 2, '.', '')
+                        "Transferencia" => number_format($pagosMap["Transferencia"], 2, '.', ''),
+                        "Propina" => ($sale->getTotal() - $sale->getSubtotal())
                     ],
                     "adicional" => [
                         "politicas" => "Cancelaciones con 2 horas de anticipación. Reagendos sujetos a disponibilidad.",

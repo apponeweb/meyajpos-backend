@@ -2,6 +2,8 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\CommissionDetail;
+use App\Entity\Sale;
 use App\Entity\ServiceType;
 use App\Form\Type\ServiceTypeFormType;
 use App\Repository\ServiceTypeRepository;
@@ -9,6 +11,7 @@ use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class ServiceTypeController extends BaseController
 {
@@ -61,6 +64,12 @@ final class ServiceTypeController extends BaseController
     #[Rest\Delete('/service_type/{id}')]
     public function remove(ServiceType $id): mixed
     {
+        $sales = $this->entityManager->getRepository(CommissionDetail::class)->count(['serviceType' => $id]);
+        if ($sales > 0) {
+            return $this->json([
+                'message' => "No se puede eliminar el tipo de servicio porque tiene asociado comisiones",
+            ], Response::HTTP_BAD_REQUEST);
+        }
         return $this->delete($id);
     }
 
