@@ -63,7 +63,7 @@ class XReportController extends AbstractController
                 'payment_type_id' => $paymentType->getId(),
                 'payment_type_name' => $paymentType->getName(),
                 'is_cash' => $paymentType->isCash(),
-                'system_amount' => number_format($amount, 2, '.', ','),
+                'system_amount' => $amount,
             ];
 
             $totalSystem = bcadd($totalSystem, $amount, 2);
@@ -199,27 +199,36 @@ class XReportController extends AbstractController
         $saleRepo = $em->getRepository(Sale::class);
         $now = new \DateTime();
 
+        // Función auxiliar para formatear moneda localmente
+        $fmt = fn($n) => '$' . number_format((float)$n, 2, '.', ',');
+
         // 1. Clasificar Movimientos (Ingresos y Retiros)
         $movements = $movementRepo->findBy(['cashBoxSession' => $session]);
-        $ingresos = [];
-        $retiros = [];
+        $ingresosItems = [];
+        $retirosItems = [];
+        $totalIngresosVal = 0;
+        $totalRetirosVal = 0;
 
         foreach ($movements as $m) {
+            $amount = (float)$m->getAmount();
             $item = [
                 "hora" => $m->getCreatedAt()->format('H:i'),
-                "monto" => number_format((float)$m->getAmount(), 2, '.', ''),
+                "monto" => $fmt($amount),
+                "usuario" => trim($user->getName()),
                 "motivo" => $m->getDescription(),
-                "usuario" => trim($user->getName() . ' ' . $user->getLastName())
+                "ref" => "" // Puedes mapear una referencia si existe en tu entidad
             ];
 
             if ($m->getType()->value === CashMovementType::INCOME->value) {
-                $ingresos[] = $item;
+                $ingresosItems[] = $item;
+                $totalIngresosVal += $amount;
             } else {
-                $retiros[] = $item;
+                $retirosItems[] = $item;
+                $totalRetirosVal += $amount;
             }
         }
 
-        // 2. Clasificar Ventas por Tipo de Pago (Desde el reporte X)
+        // 2. Clasificar Ventas por Tipo de Pago
         $ventasEfectivo = 0.00;
         $ventasTarjeta = 0.00;
         $ventasTransferencia = 0.00;
@@ -233,101 +242,95 @@ class XReportController extends AbstractController
             elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
         }
 
-        // 3. Lógica de Propinas (Tips) - Navegando por Ventas de la Sesión
+        // 3. Lógica de Propinas (Tips)
         $propinaEfectivo = 0.00;
         $propinaTarjeta = 0.00;
-
-        // Buscamos todas las ventas asociadas a la sesión
         $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox()]);
 
         foreach ($sales as $sale) {
-            // 1. Recorremos los pagos de la venta para buscar propinas
             foreach ($sale->getPayments() as $payment) {
-
-                // Buscamos las propinas asociadas a este pago específico
                 $tips = $tipRepo->findBy(['salePayment' => $payment->getId()]);
-
                 foreach ($tips as $tip) {
                     $tipAmount = (float)$tip->getAmount();
-
-                    /**
-                     * REGLA DE NEGOCIO:
-                     * Aunque la propina esté vinculada a este $payment, el "tipo" de la propina
-                     * debe determinarse inspeccionando TODOS los pagos de la venta ($sale).
-                     */
                     $finalType = null;
-
                     foreach ($sale->getPayments() as $sPayment) {
                         $name = strtolower($sPayment->getPaymentType()->getName());
-
                         if (str_contains($name, 'efectivo')) {
                             $finalType = 'efectivo';
-                            break; // Prioridad total: si hubo efectivo en la venta, la propina va a efectivo
+                            break;
                         }
-
                         if (str_contains($name, 'tarjeta')) {
                             $finalType = 'tarjeta';
                         }
                     }
-
-                    // 2. Sumamos según el tipo encontrado en la venta
-                    if ($finalType === 'efectivo') {
-                        $propinaEfectivo += $tipAmount;
-                    } elseif ($finalType === 'tarjeta') {
-                        $propinaTarjeta += $tipAmount;
-                    }
+                    if ($finalType === 'efectivo') $propinaEfectivo += $tipAmount;
+                    elseif ($finalType === 'tarjeta') $propinaTarjeta += $tipAmount;
                 }
             }
         }
 
-        // 4. Determinar Estatus
-        $diff = (float)$report->getDifference();
+        // 4. Lógica de Efectivo en Caja
+        // Efectivo Esperado = Fondo Inicial + Ventas Efectivo + Ingresos - Retiros
+        $efectivoEsperado = (float)$session->getInitialAmount() + $ventasEfectivo + $totalIngresosVal - $totalRetirosVal;
+        $efectivoDeclarado = (float)$report->getDeclaredTotal();
+        $diferencia = $efectivoDeclarado - $efectivoEsperado;
+
+        // 5. Determinar Estatus
         $estatus = "CUADRADO";
-        if ($diff > 0.01) $estatus = "SOBRANTE";
-        if ($diff < -0.01) $estatus = "FALTANTE";
+        if ($diferencia > 0.01) $estatus = "SOBRANTE";
+        if ($diferencia < -0.01) $estatus = "FALTANTE";
 
         $response = [
-            [
-                "templateId" => 20,
-                "printerName" => $cashBox->getName(),
-                "data" => [
-                    "negocio" => [
-                        "nombreComercial" => $company->getName()
+            "templateId" => 20,
+            "printerName" => $cashBox->getName() . " - " . $cashBox->getBranch()->getName(),
+            "data" => [
+                "negocio" => [
+                    "nombreComercial" => $company->getName()
+                ],
+                "corte" => [
+                    "caja" => $cashBox->getName() . " - " . $cashBox->getBranch()->getName(),
+                    "cajero" => trim($user->getName()),
+                    "periodo" => [
+                        "inicio" => $session->getOpeningDate()->format('H:i'),
+                        "fin" => $now->format('H:i')
                     ],
-                    "corte" => [
-                        "caja" => $cashBox->getName(),
-                        "cajero" => trim($user->getName() . ' ' . $user->getLastName()),
-                        "periodo" => [
-                            "inicio" => $session->getOpeningDate()->format('H:i'),
-                            "fin" => $now->format('H:i')
+                    "fondoInicial" => $fmt($session->getInitialAmount()),
+                    "ventasPorFormaPago" => [
+                        "efectivo" => $fmt($ventasEfectivo),
+                        "tarjeta" => $fmt($ventasTarjeta),
+                        "transferencias" => $fmt($ventasTransferencia),
+                        "cortesias" => "$0.00",
+                        "totalVentas" => $fmt($report->getSystemTotal())
+                    ],
+                    "ingresosCaja" => [
+                        "movimientos" => $ingresosItems,
+                        "totalIngresos" => $fmt($totalIngresosVal)
+                    ],
+                    "retirosCaja" => [
+                        "movimientos" => $retirosItems,
+                        "totalRetiros" => $fmt($totalRetirosVal)
+                    ],
+                    "efectivoEnCaja" => [
+                        "efectivoEnCaja" => $fmt($efectivoEsperado), // Valor calculado en sistema
+                        "efectivoEsperado" => $fmt($efectivoEsperado),
+                        "efectivoDeclarado" => $fmt($efectivoDeclarado),
+                        "diferencia" => ($diferencia >= 0 ? '' : '-') . $fmt(abs($diferencia))
+                    ],
+                    "propinas" => [
+                        "efectivo" => $fmt($propinaEfectivo),
+                        "tarjeta" => $fmt($propinaTarjeta),
+                        "totalPropinas" => $fmt($propinaEfectivo + $propinaTarjeta)
+                    ],
+                    "estatus" => $estatus,
+                    "impresoAt" => $now->format('Y-m-d H:i'),
+                    "firmas" => [
+                        "cajero" => [
+                            "nombre" => trim($user->getName()),
+                            "fecha" => $now->format('Y-m-d')
                         ],
-                        "fondoInicial" => number_format((float)$session->getInitialAmount(), 2, '.', ''),
-                        "ventas" => [
-                            "efectivo" => number_format($ventasEfectivo, 2, '.', ''),
-                            "tarjeta" => number_format($ventasTarjeta, 2, '.', ''),
-                            "transferencias" => number_format($ventasTransferencia, 2, '.', ''),
-                            "cortesias" => "0.00"
-                        ],
-                        "ingresos" => $ingresos,
-                        "retiros" => $retiros,
-                        "efectivo" => [
-                            "declarado" => number_format((float)$report->getDeclaredTotal(), 2, '.', '')
-                        ],
-                        "propinas" => [
-                            "efectivo" => number_format($propinaEfectivo, 2, '.', ''),
-                            "tarjeta" => number_format($propinaTarjeta, 2, '.', '')
-                        ],
-                        "estatus" => $estatus,
-                        "impresoAt" => $now->format('d/m/Y H:i:s'),
-                        "firmas" => [
-                            "cajero" => [
-                                "nombre" => trim($user->getName() . ' ' . $user->getLastName()),
-                                "fecha" => $now->format('d/m/Y')
-                            ],
-                            "supervisor" => [
-                                "nombre" => trim($user->getName() . ' ' . $user->getLastName()),
-                                "fecha" => $now->format('d/m/Y')
-                            ]
+                        "supervisor" => [
+                            "nombre" => "Supervisor", // Puedes ajustar según lógica de quién autoriza
+                            "fecha" => $now->format('Y-m-d')
                         ]
                     ]
                 ]
