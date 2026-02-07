@@ -60,10 +60,10 @@ class SalesReportController extends AbstractController
                     'cashier' => $sale['cashier'],
                     'cashbox' => $sale['cashbox'],
                     'status' => $statusEnum->getLabel(),
-                    'subtotal' => (float)$sale['subtotal'],
-                    'tax' => (float)$sale['totalTax'],
-                    'total' => (float)$sale['total'],
-                    'change' => (float)($sale['change'] ?? 0),
+                    'subtotal' => number_format((float)$sale['subtotal'], 2, '.', ','),
+                    'tax' => number_format((float)$sale['totalTax'], 2, '.', ','),
+                    'total' => number_format((float)$sale['total'], 2, '.', ','),
+                    'change' => number_format((float)($sale['change'] ?? 0), 2, '.', ',')
                 ];
             }, $paginator->getIterator()->getArrayCopy());
 

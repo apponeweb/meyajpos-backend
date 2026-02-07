@@ -54,7 +54,7 @@ class CommissionReportController extends AbstractController
                     'service' => $row['service'],
                     'barber' => $row['barber'],
                     'quantity' => (int)$row['quantity'],
-                    'commission' => (float)$row['totalCommission'],
+                    'commission' => number_format((float)$row['totalCommission'], 2, '.', ','),
                     'date' => $dateObj instanceof \DateTimeInterface
                         ? $dateObj->format('d/m/Y H:i')
                         : $dateObj,
@@ -69,7 +69,7 @@ class CommissionReportController extends AbstractController
                 'current' => $current,
                 'pageSize' => $pageSize,
                 'summary' => [
-                    'totalCommission' => (float)($summary['totalAmount'] ?? 0),
+                    'totalCommission' =>number_format( (float)($summary['totalAmount'] ?? 0), 2, '.', ','),
                     'totalServices' => (int)($summary['totalCount'] ?? 0)
                 ],
                 'status' => Response::HTTP_OK

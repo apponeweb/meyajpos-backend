@@ -23,6 +23,7 @@ use FOS\RestBundle\Controller\Annotations as Rest;
 use phpDocumentor\Reflection\Types\This;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class SaleController extends BaseController
 {
@@ -380,6 +381,49 @@ final class SaleController extends BaseController
     #[Rest\Get('/sale/{id}')]
     public function get(Sale $id): JsonResponse
     {
-        return $this->getDetails($id);
+        // 1. Llamamos a la validación genérica del padre (check de eliminado/inactivo)
+        $response = $this->getDetails($id);
+
+        // 2. Si el padre devolvió un error (404 o 500), lo retornamos tal cual
+        if ($response->getStatusCode() !== Response::HTTP_OK) {
+            return $response;
+        }
+
+        $data = json_decode($response->getContent(), true);
+
+        // Campos raíz
+        $data['subtotal'] = $this->moneyFormat($data['subtotal'] ?? 0);
+        $data['totalTax'] = $this->moneyFormat($data['totalTax'] ?? 0);
+        $data['total'] = $this->moneyFormat($data['total'] ?? 0);
+        $data['change'] = $this->moneyFormat($data['change'] ?? 0);
+
+        // Detalles de la venta
+        if (isset($data['details'])) {
+            foreach ($data['details'] as &$item) {
+                $item['unitPrice'] = $this->moneyFormat($item['unitPrice'] ?? 0);
+                $item['subtotal'] = $this->moneyFormat($item['subtotal'] ?? 0);
+                $item['tax'] = $this->moneyFormat($item['tax'] ?? 0);
+                $item['total'] = $this->moneyFormat($item['total'] ?? 0);
+            }
+        }
+
+        // Pagos
+        if (isset($data['payments'])) {
+            foreach ($data['payments'] as &$pay) {
+                $pay['amountReceived'] = $this->moneyFormat($pay['amountReceived'] ?? 0);
+                $pay['amountLocalCurrency'] = $this->moneyFormat($pay['amountLocalCurrency'] ?? 0);
+                $pay['exchangeRateUsed'] = number_format((float)($pay['exchangeRateUsed'] ?? 1), 2, '.', ',');
+            }
+        }
+
+        return $this->json($data, Response::HTTP_OK);
+    }
+
+    /**
+     * Función privada para no repetir código
+     */
+    private function moneyFormat($value): string
+    {
+        return  number_format((float)$value, 2, '.', ',');
     }
 }
