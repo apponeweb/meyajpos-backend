@@ -11,6 +11,7 @@ use App\Entity\Tip;
 use App\Entity\XReport;
 use App\Entity\XReportDetail;
 use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\CashBoxMovementRepository;
@@ -91,12 +92,12 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-//        $report = $reportRepo->find(24);
-//        $session = $cashBoxSessionRepository->find(13);
+//        $report = $reportRepo->find(6);
+//        $session = $cashBoxSessionRepository->find(1);
 //        $ticket = $this->generateXTicketData($report, $session, $user, $em);
 //
 //        echo '<pre>';
-//        print_r($ticket);
+//        print_r(json_decode($ticket, true));
 //        die;
         // El JSON llega como {"3":"20", "2":"60.00", ...}
         $data = json_decode($request->getContent(), true);
@@ -216,12 +217,14 @@ class XReportController extends AbstractController
                 "monto" => $fmt($amount),
                 "usuario" => trim($user->getName()),
                 "motivo" => $m->getDescription(),
-                "ref" => "" // Puedes mapear una referencia si existe en tu entidad
+                "ref" => null,
             ];
 
             if ($m->getType()->value === CashMovementType::INCOME->value) {
-                $ingresosItems[] = $item;
-                $totalIngresosVal += $amount;
+                if ($m->getConcept()->value !== CashMovementConcept::SALE->value && $m->getConcept()->value !== CashMovementConcept::OPEN_CASH_BOX->value) {
+                    $ingresosItems[] = $item;
+                    $totalIngresosVal += $amount;
+                }
             } else {
                 $retirosItems[] = $item;
                 $totalRetirosVal += $amount;
@@ -242,10 +245,15 @@ class XReportController extends AbstractController
             elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
         }
 
+
         // 3. Lógica de Propinas (Tips)
         $propinaEfectivo = 0.00;
         $propinaTarjeta = 0.00;
         $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox()]);
+
+        $ventasEfectivoV2 = 0.00; // sumar todo lo pagado en las ventas que sea efectivo
+        $ventasTarjetaV2 = 0.00;
+        $ventasTransferenciaV2 = 0.00;
 
         foreach ($sales as $sale) {
             foreach ($sale->getPayments() as $payment) {
@@ -266,12 +274,22 @@ class XReportController extends AbstractController
                     if ($finalType === 'efectivo') $propinaEfectivo += $tipAmount;
                     elseif ($finalType === 'tarjeta') $propinaTarjeta += $tipAmount;
                 }
+
+
+                $name = strtolower($sPayment->getPaymentType()->getName());
+                $amount = (float)$sPayment->getAmountReceived();
+                if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
+                elseif (str_contains($name, 'tarjeta')) $ventasTarjetaV2 += $amount;
+                elseif (str_contains($name, 'transferencia')) $ventasTransferenciaV2 += $amount;
+
+                $ventasEfectivoV2 -= $propinaEfectivo;
+                $ventasTarjetaV2 -= $propinaTarjeta;
             }
         }
 
         // 4. Lógica de Efectivo en Caja
         // Efectivo Esperado = Fondo Inicial + Ventas Efectivo + Ingresos - Retiros
-        $efectivoEsperado = (float)$session->getInitialAmount() + $ventasEfectivo + $totalIngresosVal - $totalRetirosVal;
+        $efectivoEsperado = (float)$session->getInitialAmount() + $ventasEfectivoV2 + $totalIngresosVal - $totalRetirosVal + $propinaEfectivo;
         $efectivoDeclarado = (float)$report->getDeclaredTotal();
         $diferencia = $efectivoDeclarado - $efectivoEsperado;
 
@@ -296,11 +314,11 @@ class XReportController extends AbstractController
                     ],
                     "fondoInicial" => $fmt($session->getInitialAmount()),
                     "ventasPorFormaPago" => [
-                        "efectivo" => $fmt($ventasEfectivo),
-                        "tarjeta" => $fmt($ventasTarjeta),
+                        "efectivo" => $fmt($ventasEfectivo - $propinaEfectivo),
+                        "tarjeta" => $fmt($ventasTarjeta - $propinaTarjeta),
                         "transferencias" => $fmt($ventasTransferencia),
                         "cortesias" => "$0.00",
-                        "totalVentas" => $fmt($report->getSystemTotal())
+                        "totalVentas" => $fmt($report->getSystemTotal() - $propinaEfectivo)
                     ],
                     "ingresosCaja" => [
                         "movimientos" => $ingresosItems,

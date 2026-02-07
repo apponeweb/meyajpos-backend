@@ -145,7 +145,7 @@ final class SaleController extends BaseController
                     $commisionDetail = $this->entityManager->getRepository(CommissionDetail::class)->findOneBy(['commission' => $commision, 'serviceType' => $productType]);
                     if ($commisionDetail) {
                         $percentage = $commisionDetail->getPercentage();
-                        $commissionAmount = ($detail->getSubtotal() * $percentage) / 100;
+                        $commissionAmount = ($detail->getUnitPrice() * $percentage) / 100;
 
                         $commisionGenerated = new CommissionGenerated();
                         $commisionGenerated->setUser($detail->getServiceProvider());
