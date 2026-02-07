@@ -64,7 +64,28 @@ final class CommissionDetailController extends BaseController
     #[Rest\Get('/commission/{commissionId}/details')]
     public function indexDetails(Request $request, CommissionDetailsRepository $repository): JsonResponse
     {
-        return $this->list($request, $repository);
+        // 1. Obtenemos la respuesta original del BaseController
+        $response = $this->list($request, $repository);
+
+        // 2. Decodificamos los datos
+        $data = json_decode($response->getContent(), true);
+
+        // 3. Formateamos el campo percentage en cada registro
+        if (isset($data['results'])) {
+            $data['results'] = array_map(function ($item) {
+                if (isset($item['percentage'])) {
+                    // Formato: 10.00
+                    $item['percentage'] = number_format((float)$item['percentage'], 2, '.', ',');
+
+                    // Opcional: Si quieres añadir el símbolo % directamente
+                    // $item['percentage'] = number_format((float)$item['percentage'], 2, '.', ',') . '%';
+                }
+                return $item;
+            }, $data['results']);
+        }
+
+        // 4. Retornamos la respuesta procesada
+        return $this->json($data, $response->getStatusCode());
     }
 
     /**
