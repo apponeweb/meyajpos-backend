@@ -71,6 +71,32 @@ final class MasterProductController extends BaseController
         ];
     }
 
+    public function list(Request $request, $repository): JsonResponse
+    {
+        // 1. Llamamos al método list del padre para obtener la respuesta original
+        $response = parent::list($request, $repository);
+
+        // 2. Decodificamos el contenido para manipular los datos
+        $data = json_decode($response->getContent(), true);
+
+        // 3. Formateamos el precio en los resultados
+        if (isset($data['results'])) {
+            $data['results'] = array_map(function ($item) {
+                if (isset($item['price'])) {
+                    // Aplicamos el formato: 1,000.00
+                    $item['price'] = number_format((float)$item['price'], 2, '.', ',');
+
+                    // Si prefieres reemplazar el valor original en lugar de crear uno nuevo:
+                    // $item['price'] = number_format((float)$item['price'], 2, '.', ',');
+                }
+                return $item;
+            }, $data['results']);
+        }
+
+        // 4. Retornamos la nueva respuesta con los datos formateados
+        return new JsonResponse($data, $response->getStatusCode());
+    }
+
     #[Rest\Get('/master_product')]
     public function index(Request $request, MasterProductRepository $repository): JsonResponse
     {

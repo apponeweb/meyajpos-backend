@@ -63,7 +63,7 @@ class XReportController extends AbstractController
                 'payment_type_id' => $paymentType->getId(),
                 'payment_type_name' => $paymentType->getName(),
                 'is_cash' => $paymentType->isCash(),
-                'system_amount' => $amount
+                'system_amount' => number_format($amount, 2, '.', ','),
             ];
 
             $totalSystem = bcadd($totalSystem, $amount, 2);
@@ -73,10 +73,10 @@ class XReportController extends AbstractController
             'status' => 'success',
             'data' => [
                 'session_id' => $session->getId(),
-                'initial_amount' => $session->getInitialAmount(),
-                'system_total' => $totalSystem,
-                'total_deposits' => $movementRepo->getTotalDeposits($session),
-                'total_extractions' => $movementRepo->getTotalWithdrawals($session),
+                'initial_amount' => number_format($session->getInitialAmount(), 2, '.', ','),
+                'system_total' => number_format($totalSystem, 2, '.', ','),
+                'total_deposits' => number_format($movementRepo->getTotalDeposits($session), 2, '.', ','),
+                'total_extractions' => number_format($movementRepo->getTotalWithdrawals($session), 2, '.', ','),
                 'details' => $previewDetails
             ]
         ]);
