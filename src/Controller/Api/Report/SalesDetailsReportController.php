@@ -48,13 +48,14 @@ class SalesDetailsReportController extends AbstractController
                 /** @var \App\Entity\SaleDetail $sd */
                 $product = $sd->getProduct();
                 $barber = $sd->getServiceProvider();
-                $serviceType = $product ? $product->getServiceType() : null;
+                $serviceType = $product?->getServiceType();
 
                 $unitPrice = (float)$sd->getUnitPrice();
                 $totalPrice = (float)$sd->getTotal();
                 $tip = $totalPrice - $unitPrice;
 
                 return [
+                    'id'=> $sd->getId(),
                     'ticket' => $sd->getSale()->getFolio(),
                     'servProd' => $product ? $product->getName() : 'N/A',
                     'serviceType' => $serviceType ? $serviceType->getName() : 'N/A',
