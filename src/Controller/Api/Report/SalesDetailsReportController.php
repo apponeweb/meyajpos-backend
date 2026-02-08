@@ -79,7 +79,7 @@ class SalesDetailsReportController extends AbstractController
                     'totalQuantity' => number_format((float)($totals['sumQuantity'] ?? 0)),
                     'totalTips' => number_format((float)($totals['sumTips'] ?? 0), 2, '.', ','),
                     'totalAmount' => number_format((float)($totals['sumTotal'] ?? 0), 2, '.', ','),
-                    'count' => count($paginator)
+                    'totalUnitPrice' => number_format((float)($totals['sumUnitPrice'] ?? 0)),
                 ],
                 'status' => Response::HTTP_OK
             ], Response::HTTP_OK);

@@ -42,6 +42,7 @@ class SaleDetailRepository extends ServiceEntityRepository
             ->select(
                 'SUM(sd.quantity) as sumQuantity',
                 'SUM(sd.total) as sumTotal',
+                'SUM(sd.unitPrice) as sumUnitPrice',
                 'SUM(sd.total - sd.unitPrice) as sumTips'
             )
             ->innerJoin('sd.sale', 's')
