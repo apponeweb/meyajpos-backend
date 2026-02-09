@@ -355,6 +355,6 @@ class XReportController extends AbstractController
             ]
         ];
 
-        return $response;
+        return json_encode([$response]);
     }
 }
