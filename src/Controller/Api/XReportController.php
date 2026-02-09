@@ -273,17 +273,15 @@ class XReportController extends AbstractController
                     }
                     if ($finalType === 'efectivo') $propinaEfectivo += $tipAmount;
                     elseif ($finalType === 'tarjeta') $propinaTarjeta += $tipAmount;
+
+                    $amount = (float)$sPayment->getAmountReceived();
+                    if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
+                    elseif (str_contains($name, 'tarjeta')) $ventasTarjetaV2 += $amount;
+                    elseif (str_contains($name, 'transferencia')) $ventasTransferenciaV2 += $amount;
+
+                    $ventasEfectivoV2 -= $propinaEfectivo;
+                    $ventasTarjetaV2 -= $propinaTarjeta;
                 }
-
-
-                $name = strtolower($sPayment->getPaymentType()->getName());
-                $amount = (float)$sPayment->getAmountReceived();
-                if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
-                elseif (str_contains($name, 'tarjeta')) $ventasTarjetaV2 += $amount;
-                elseif (str_contains($name, 'transferencia')) $ventasTransferenciaV2 += $amount;
-
-                $ventasEfectivoV2 -= $propinaEfectivo;
-                $ventasTarjetaV2 -= $propinaTarjeta;
             }
         }
 
