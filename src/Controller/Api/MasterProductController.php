@@ -149,6 +149,12 @@ final class MasterProductController extends BaseController
             unset($data['active']);
         }
 
+        // 5. Ajuste para 'isInventoriable'
+        if (isset($data['inventoriable']) && !isset($data['isInventoriable'])) {
+            $data['isInventoriable'] = $data['inventoriable'];
+            unset($data['inventoriable']);
+        }
+
         // 5. Aprovechamos para formatear el precio como en el método list
         if (isset($data['price'])) {
             $data['price'] = number_format((float)$data['price'], 2, '.', ',');
