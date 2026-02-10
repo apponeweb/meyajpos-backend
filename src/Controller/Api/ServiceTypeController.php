@@ -94,10 +94,6 @@ final class ServiceTypeController extends BaseController
         }
 
 
-        // 5. Aprovechamos para formatear el precio como en el método list
-        if (isset($data['price'])) {
-            $data['price'] = number_format((float)$data['price'], 2, '.', ',');
-        }
 
         // 6. Retornamos la respuesta ya corregida
         return new JsonResponse($data, $response->getStatusCode());
