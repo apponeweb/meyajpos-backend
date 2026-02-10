@@ -49,7 +49,12 @@ security:
     # Note: Only the *first* access control that matches will be used
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
-        - { path: ^/api,       roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/cash_box/all, roles: [ROLE_CASHIER] }
+        - { path: ^/api/cash_box, roles: [ROLE_ADMIN] }
+        - { path: ^/api/user/list/barbers, roles: [ROLE_CASHIER] }
+        - { path: ^/api/user/information, roles: [ROLE_CASHIER] }
+        - { path: ^/api/user, roles: [ROLE_ADMIN] }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:
     security:
