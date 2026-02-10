@@ -74,12 +74,12 @@ class Company extends BaseEntity
         $this->taxAddress = $taxAddress;
     }
 
-    public function getPhone(): string
+    public function getPhone()
     {
         return $this->phone ?? '';
     }
 
-    public function setPhone(string $phone): void
+    public function setPhone($phone): void
     {
         $this->phone = $phone;
     }
