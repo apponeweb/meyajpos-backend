@@ -76,6 +76,30 @@ final class ServiceTypeController extends BaseController
     #[Rest\Get('/service_type/{id}')]
     public function get(ServiceType $id): mixed
     {
-        return $this->getDetails($id);
+        // 1. Llamamos al método base para obtener la respuesta original
+        $response = $this->getDetails($id);
+
+        // 2. Si la respuesta no es un éxito (ej. 404 o 500), la retornamos tal cual
+        if ($response->getStatusCode() !== JsonResponse::HTTP_OK) {
+            return $response;
+        }
+
+        // 3. Decodificamos el contenido para manipularlo
+        $data = json_decode($response->getContent(), true);
+
+        // 4. Ajuste puntual: renombramos 'active' a 'isActive' si existe
+        if (isset($data['active']) && !isset($data['isActive'])) {
+            $data['isActive'] = $data['active'];
+            unset($data['active']);
+        }
+
+
+        // 5. Aprovechamos para formatear el precio como en el método list
+        if (isset($data['price'])) {
+            $data['price'] = number_format((float)$data['price'], 2, '.', ',');
+        }
+
+        // 6. Retornamos la respuesta ya corregida
+        return new JsonResponse($data, $response->getStatusCode());
     }
 }
