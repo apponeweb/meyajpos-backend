@@ -47,7 +47,7 @@ class XReportController extends AbstractController
         $sales = $saleRepository->count(['cashBox' => $session->getCashBox()]);
         if ($sales == 0) {
             return $this->json([
-                'message' => "No se puede generar un corte X por no hacer ventas realizadas en esta sesión.",
+                'message' => "No se puede generar un corte X por no haber ventas realizadas en esta sesión.",
             ], Response::HTTP_BAD_REQUEST);
         }
 
