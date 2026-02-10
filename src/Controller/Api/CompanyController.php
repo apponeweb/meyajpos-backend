@@ -35,6 +35,7 @@ final class CompanyController extends BaseController
             'u.taxAddress',
         ];
     }
+
     #[Rest\Get('/company/all')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function all(CompanyRepository $companyRepository)
@@ -71,7 +72,25 @@ final class CompanyController extends BaseController
     #[Rest\Get('/company/{id}')]
     public function get(Company $id): mixed
     {
-        return $this->getDetails($id);
+        // 1. Llamamos al método base para obtener la respuesta original
+        $response = $this->getDetails($id);
+
+        // 2. Si la respuesta no es un éxito (ej. 404 o 500), la retornamos tal cual
+        if ($response->getStatusCode() !== JsonResponse::HTTP_OK) {
+            return $response;
+        }
+
+        // 3. Decodificamos el contenido para manipularlo
+        $data = json_decode($response->getContent(), true);
+
+        // 4. Ajuste puntual: renombramos 'active' a 'isActive' si existe
+        if (isset($data['active']) && !isset($data['isActive'])) {
+            $data['isActive'] = $data['active'];
+            unset($data['active']);
+        }
+
+        // 6. Retornamos la respuesta ya corregida
+        return new JsonResponse($data, $response->getStatusCode());
     }
 
 }
