@@ -93,8 +93,6 @@ final class ServiceTypeController extends BaseController
             unset($data['active']);
         }
 
-
-
         // 6. Retornamos la respuesta ya corregida
         return new JsonResponse($data, $response->getStatusCode());
     }
