@@ -99,7 +99,7 @@ class XReportController extends AbstractController
 //        echo '<pre>';
 //        print_r(json_decode($ticket, true));
 //        die;
-        // El JSON llega como {"3":"20", "2":"60.00", ...}
+
         $data = json_decode($request->getContent(), true);
 
         $session = $cashBoxSessionRepository->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
