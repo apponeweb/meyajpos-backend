@@ -30,6 +30,4 @@ class ServiceType extends BaseEntity
     {
         $this->isCourtesy = $isCourtesy;
     }
-
-
 }
