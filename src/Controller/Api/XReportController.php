@@ -92,13 +92,13 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-        $report = $reportRepo->find(39);
-        $session = $cashBoxSessionRepository->find(4);
-        $ticket = $this->generateXTicketData($report, $session, $user, $em);
-//
-        echo '<pre>';
-        print_r(json_decode($ticket, true));
-        die;
+//        $report = $reportRepo->find(39);
+//        $session = $cashBoxSessionRepository->find(4);
+//        $ticket = $this->generateXTicketData($report, $session, $user, $em);
+////
+//        echo '<pre>';
+//        print_r(json_decode($ticket, true));
+//        die;
 
         $data = json_decode($request->getContent(), true);
 
