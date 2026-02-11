@@ -60,6 +60,8 @@ class SaleDetail extends Base
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
     private ?string $observations = null;
 
+    #[ORM\Column(type: Types::BOOLEAN, options: ["default" => false])]
+    private bool $isCourtesy = false;
 
     public function __construct()
     {
@@ -187,6 +189,16 @@ class SaleDetail extends Base
     public function setObservations(?string $observations): void
     {
         $this->observations = $observations;
+    }
+
+    public function isCourtesy(): bool
+    {
+        return $this->isCourtesy;
+    }
+
+    public function setIsCourtesy(bool $isCourtesy): void
+    {
+        $this->isCourtesy = $isCourtesy;
     }
 
 

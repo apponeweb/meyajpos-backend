@@ -18,5 +18,18 @@ class ServiceType extends BaseEntity
     use NomenclatorTrait;
 
 
+    #[ORM\Column(type: Types::BOOLEAN, options: ["default" => false])]
+    private bool $isCourtesy = false;
+
+    public function isCourtesy(): bool
+    {
+        return $this->isCourtesy;
+    }
+
+    public function setIsCourtesy(bool $isCourtesy): void
+    {
+        $this->isCourtesy = $isCourtesy;
+    }
+
 
 }

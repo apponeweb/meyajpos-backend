@@ -8,6 +8,7 @@ use App\Entity\MasterProduct;
 use App\Entity\User;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -70,7 +71,8 @@ class SaleDetailFormType extends AbstractType
             ])
             ->add('observations', TextType::class, [
                 'required' => false,
-            ]);
+            ])
+            ->add('isCourtesy', CheckboxType::class, ['required' => false]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void

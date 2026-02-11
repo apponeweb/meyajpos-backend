@@ -19,7 +19,8 @@ class MasterProductRepository extends BaseRepository
     public function findDetailsByBarcode(string $barcode): ?array
     {
         return $this->createQueryBuilder('m')
-            ->select('m.id', 'm.name', 'm.price')
+            ->select('m.id', 'm.name', 'm.price', 'st.isCourtesy')
+            ->join('m.serviceType', 'st')
             ->where('m.barcode = :barcode')
             ->andWhere('m.isActive = :active')
             ->andWhere('m.deletedAt IS NULL')
