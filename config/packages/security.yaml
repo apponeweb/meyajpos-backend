@@ -11,8 +11,8 @@ security:
                 property: email
 
     role_hierarchy:
-        ROLE_CASHIER: [ROLE_USER]
-        ROLE_ADMIN: [ROLE_CASHIER]
+        ROLE_CASHIER: [ ROLE_USER ]
+        ROLE_ADMIN: [ ROLE_CASHIER ]
 
     firewalls:
         dev:
@@ -49,13 +49,20 @@ security:
     # Note: Only the *first* access control that matches will be used
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
-        - { path: ^/api/company/all, roles: [ROLE_CASHIER] }
-        - { path: ^/api/company, roles: [ROLE_ADMIN] }
-        - { path: ^/api/cash_box/all, roles: [ROLE_CASHIER] }
-        - { path: ^/api/cash_box, roles: [ROLE_ADMIN] }
-        - { path: ^/api/user/list/barbers, roles: [ROLE_CASHIER] }
-        - { path: ^/api/user/information, roles: [ROLE_CASHIER] }
-        - { path: ^/api/user, roles: [ROLE_ADMIN] }
+        - { path: ^/api/reports/sales-details, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/company/all, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/company, roles: [ ROLE_ADMIN ] }
+        - { path: ^/api/service_type/all, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/service_type, roles: [ ROLE_ADMIN ] }
+        - { path: ^/api/commission/all, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/commission, roles: [ ROLE_ADMIN ] }
+        - { path: ^/api/branch/all, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/branch, roles: [ ROLE_ADMIN ] }
+        - { path: ^/api/cash_box/all, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/cash_box, roles: [ ROLE_ADMIN ] }
+        - { path: ^/api/user/list/barbers, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/user/information, roles: [ ROLE_CASHIER ] }
+        - { path: ^/api/user, roles: [ ROLE_ADMIN ] }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

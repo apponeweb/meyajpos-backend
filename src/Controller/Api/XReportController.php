@@ -7,6 +7,7 @@ use App\Entity\CashBoxSession;
 use App\Entity\CommissionDetail;
 use App\Entity\PaymentType;
 use App\Entity\Sale;
+use App\Entity\SaleDetail;
 use App\Entity\Tip;
 use App\Entity\XReport;
 use App\Entity\XReportDetail;
@@ -254,6 +255,7 @@ class XReportController extends AbstractController
         $ventasEfectivoV2 = 0.00; // sumar todo lo pagado en las ventas que sea efectivo
         $ventasTarjetaV2 = 0.00;
         $ventasTransferenciaV2 = 0.00;
+        $courtesy = 0.00;
 
         foreach ($sales as $sale) {
             foreach ($sale->getPayments() as $payment) {
@@ -279,6 +281,12 @@ class XReportController extends AbstractController
                 if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
                 elseif (str_contains($name, 'tarjeta')) $ventasTarjetaV2 += $amount;
                 elseif (str_contains($name, 'transferencia')) $ventasTransferenciaV2 += $amount;
+            }
+            /** @var SaleDetail $detail */
+            foreach ($sale->getDetails() as $detail) {
+                if ($detail->getProduct()->getServiceType()->isCourtesy()) {
+                    $courtesy += $detail->getProduct()->getPrice();
+                }
             }
         }
         $ventasEfectivoV2 -= $propinaEfectivo;
@@ -314,8 +322,8 @@ class XReportController extends AbstractController
                         "efectivo" => $fmt($ventasEfectivo - $propinaEfectivo),
                         "tarjeta" => $fmt($ventasTarjeta - $propinaTarjeta),
                         "transferencias" => $fmt($ventasTransferencia),
-                        "cortesias" => "$0.00",//es la suma del precio de todos los prod que si tipo de servicio tenga cortesia en true
-                        "totalVentas" => $fmt($report->getSystemTotal() - $propinaEfectivo-$propinaTarjeta)
+                        "cortesias" => $courtesy,
+                        "totalVentas" => $fmt($report->getSystemTotal() - $propinaEfectivo - $propinaTarjeta)
                     ],
                     "ingresosCaja" => [
                         "movimientos" => $ingresosItems,
