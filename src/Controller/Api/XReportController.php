@@ -93,7 +93,7 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-//        $report = $reportRepo->find(45);
+//        $report = $reportRepo->find(46);
 //        $session = $cashBoxSessionRepository->find(5);
 //        $ticket = $this->generateXTicketData($report, $session, $user, $em);
 ////
@@ -299,7 +299,13 @@ class XReportController extends AbstractController
         // 4. Lógica de Efectivo en Caja
         // Efectivo Esperado = Fondo Inicial + Ventas Efectivo + Ingresos - Retiros
         $efectivoEsperado = (float)$session->getInitialAmount() + $ventasEfectivoV2 + $totalIngresosVal - $totalRetirosVal + $propinaEfectivo;
-        $efectivoDeclarado = (float)$report->getDeclaredTotal();
+        $efectivoDeclarado = 0.00;
+        foreach ($report->getDetails() as $detail) {
+            if ($detail->getPaymentType()->isCash()) {
+                $efectivoDeclarado = (float)$detail->getDeclaredAmount();
+                break;
+            }
+        }
         $diferencia = $efectivoDeclarado - $efectivoEsperado;
 
         // 5. Determinar Estatus
@@ -326,7 +332,7 @@ class XReportController extends AbstractController
                         "efectivo" => $fmt($ventasEfectivo),
                         "tarjeta" => $fmt($ventasTarjeta),
                         "transferencias" => $fmt($ventasTransferencia),
-                        "cortesias" =>  $fmt($courtesy),
+                        "cortesias" => $fmt($courtesy),
                         "totalVentas" => $fmt($ventasEfectivo + $ventasTarjeta + $ventasTransferencia + $courtesy)
                     ],
                     "ingresosCaja" => [
