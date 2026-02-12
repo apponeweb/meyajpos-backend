@@ -30,7 +30,7 @@ class Sale extends BaseEntity
     private ?CashBox $cashBox = null;
 
     #[ORM\ManyToOne(targetEntity: CashBoxSession::class)]
-    #[ORM\JoinColumn(name: 'cash_box_session_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'cash_box_session_id', referencedColumnName: 'id', nullable: true)]
     private ?CashBoxSession $cashBoxSession = null;
 
     #[ORM\Column(type: Types::STRING, length: 30, unique: true)]
