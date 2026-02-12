@@ -93,8 +93,8 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-//        $report = $reportRepo->find(39);
-//        $session = $cashBoxSessionRepository->find(4);
+//        $report = $reportRepo->find(45);
+//        $session = $cashBoxSessionRepository->find(5);
 //        $ticket = $this->generateXTicketData($report, $session, $user, $em);
 ////
 //        echo '<pre>';
@@ -237,20 +237,23 @@ class XReportController extends AbstractController
         $ventasTarjeta = 0.00;
         $ventasTransferencia = 0.00;
 
-        foreach ($report->getDetails() as $detail) {
-            $name = strtolower($detail->getPaymentType()->getName());
-            $amount = (float)$detail->getSystemAmount();
+        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox(), 'createdBy' => $user->getId()]);
+        foreach ($sales as $sale) {
+            foreach ($sale->getPayments() as $payment) {
+                $name = strtolower($payment->getPaymentType()->getName());
 
-            if (str_contains($name, 'efectivo')) $ventasEfectivo += $amount;
-            elseif (str_contains($name, 'tarjeta')) $ventasTarjeta += $amount;
-            elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
+                $amount = (float)$payment->getAmountReceived();
+                if (str_contains($name, 'efectivo')) $ventasEfectivo += $amount;
+                elseif (str_contains($name, 'tarjeta')) $ventasTarjeta += $amount;
+                elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
+            }
         }
 
 
         // 3. Lógica de Propinas (Tips)
         $propinaEfectivo = 0.00;
         $propinaTarjeta = 0.00;
-        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox()]);
+
 
         $ventasEfectivoV2 = 0.00; // sumar todo lo pagado en las ventas que sea efectivo
         $ventasTarjetaV2 = 0.00;
@@ -290,7 +293,8 @@ class XReportController extends AbstractController
             }
         }
         $ventasEfectivoV2 -= $propinaEfectivo;
-//        $ventasTarjetaV2 -= $propinaTarjeta;
+        $ventasTarjetaV2 -= $propinaTarjeta;
+
 
         // 4. Lógica de Efectivo en Caja
         // Efectivo Esperado = Fondo Inicial + Ventas Efectivo + Ingresos - Retiros
@@ -319,11 +323,11 @@ class XReportController extends AbstractController
                     ],
                     "fondoInicial" => $fmt($session->getInitialAmount()),
                     "ventasPorFormaPago" => [
-                        "efectivo" => $fmt($ventasEfectivo - $propinaEfectivo),
-                        "tarjeta" => $fmt($ventasTarjeta - $propinaTarjeta),
+                        "efectivo" => $fmt($ventasEfectivo),
+                        "tarjeta" => $fmt($ventasTarjeta),
                         "transferencias" => $fmt($ventasTransferencia),
-                        "cortesias" => $courtesy,
-                        "totalVentas" => $fmt($report->getSystemTotal() - $propinaEfectivo - $propinaTarjeta)
+                        "cortesias" =>  $fmt($courtesy),
+                        "totalVentas" => $fmt($ventasEfectivo + $ventasTarjeta + $ventasTransferencia + $courtesy)
                     ],
                     "ingresosCaja" => [
                         "movimientos" => $ingresosItems,
