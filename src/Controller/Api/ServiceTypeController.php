@@ -32,7 +32,8 @@ final class ServiceTypeController extends BaseController
             'u.id',
             'u.name',
             'u.description',
-            'u.isActive'
+            'u.isActive',
+            'u.isCourtesy'
         ];
     }
 
