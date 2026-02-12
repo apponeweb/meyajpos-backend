@@ -122,6 +122,7 @@ final class SaleController extends BaseController
         // Asignamos datos automáticos antes de procesar el formulario
         $sale->setUser($user);
         $sale->setCashBox($activeSession->getCashBox());
+        $sale->setCashBoxSession($activeSession);
         $sale->setSaleDate($now);
         $newFolio = $this->generateDailyFolio($now);
         $sale->setFolio($newFolio);

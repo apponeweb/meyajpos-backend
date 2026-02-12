@@ -93,7 +93,7 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-//        $report = $reportRepo->find(46);
+//        $report = $reportRepo->find(51);
 //        $session = $cashBoxSessionRepository->find(5);
 //        $ticket = $this->generateXTicketData($report, $session, $user, $em);
 ////
@@ -237,7 +237,7 @@ class XReportController extends AbstractController
         $ventasTarjeta = 0.00;
         $ventasTransferencia = 0.00;
 
-        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox(), 'createdBy' => $user->getId()]);
+        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox(), 'cashBoxSession' => $session->getId()]);
         foreach ($sales as $sale) {
             foreach ($sale->getPayments() as $payment) {
                 $name = strtolower($payment->getPaymentType()->getName());
@@ -253,6 +253,7 @@ class XReportController extends AbstractController
         // 3. Lógica de Propinas (Tips)
         $propinaEfectivo = 0.00;
         $propinaTarjeta = 0.00;
+        $propinaTransferencia = 0.00;
 
 
         $ventasEfectivoV2 = 0.00; // sumar todo lo pagado en las ventas que sea efectivo
@@ -279,6 +280,7 @@ class XReportController extends AbstractController
                     }
                     if ($finalType === 'efectivo') $propinaEfectivo += $tipAmount;
                     elseif ($finalType === 'tarjeta') $propinaTarjeta += $tipAmount;
+                    elseif ($finalType === 'transferencia') $propinaTransferencia += $tipAmount;
                 }
                 $amount = (float)$payment->getAmountReceived();
                 if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
@@ -329,11 +331,11 @@ class XReportController extends AbstractController
                     ],
                     "fondoInicial" => $fmt($session->getInitialAmount()),
                     "ventasPorFormaPago" => [
-                        "efectivo" => $fmt($ventasEfectivo),
-                        "tarjeta" => $fmt($ventasTarjeta),
-                        "transferencias" => $fmt($ventasTransferencia),
+                        "efectivo" => $fmt($ventasEfectivo - $propinaEfectivo),
+                        "tarjeta" => $fmt($ventasTarjeta - $propinaTarjeta),
+                        "transferencias" => $fmt($ventasTransferencia - $propinaTransferencia),
                         "cortesias" => $fmt($courtesy),
-                        "totalVentas" => $fmt($ventasEfectivo + $ventasTarjeta + $ventasTransferencia + $courtesy)
+                        "totalVentas" => $fmt(($ventasEfectivo - $propinaEfectivo) + ($ventasTarjeta - $propinaTarjeta) + ($ventasTransferencia - $propinaTransferencia) + $courtesy)
                     ],
                     "ingresosCaja" => [
                         "movimientos" => $ingresosItems,
@@ -352,7 +354,8 @@ class XReportController extends AbstractController
                     "propinas" => [
                         "efectivo" => $fmt($propinaEfectivo),
                         "tarjeta" => $fmt($propinaTarjeta),
-                        "totalPropinas" => $fmt($propinaEfectivo + $propinaTarjeta)
+                        "transferencia" => $fmt($propinaTransferencia),
+                        "totalPropinas" => $fmt($propinaEfectivo + $propinaTarjeta + $propinaTransferencia)
                     ],
                     "estatus" => $estatus,
                     "impresoAt" => $now->format('Y-m-d H:i'),

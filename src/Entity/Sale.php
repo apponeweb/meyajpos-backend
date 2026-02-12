@@ -29,6 +29,10 @@ class Sale extends BaseEntity
     #[ORM\JoinColumn(name: 'cash_box_id', referencedColumnName: 'id', nullable: false)]
     private ?CashBox $cashBox = null;
 
+    #[ORM\ManyToOne(targetEntity: CashBoxSession::class)]
+    #[ORM\JoinColumn(name: 'cash_box_session_id', referencedColumnName: 'id', nullable: false)]
+    private ?CashBoxSession $cashBoxSession = null;
+
     #[ORM\Column(type: Types::STRING, length: 30, unique: true)]
     private string $folio;
 
@@ -328,6 +332,16 @@ class Sale extends BaseEntity
     {
         $this->change = $change ?? "0.00";
         return $this;
+    }
+
+    public function getCashBoxSession(): ?CashBoxSession
+    {
+        return $this->cashBoxSession;
+    }
+
+    public function setCashBoxSession(?CashBoxSession $cashBoxSession): void
+    {
+        $this->cashBoxSession = $cashBoxSession;
     }
 
 
