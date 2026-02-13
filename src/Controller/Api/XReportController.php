@@ -102,7 +102,6 @@ class XReportController extends AbstractController
 //        die;
 
         $data = json_decode($request->getContent(), true);
-
         $session = $cashBoxSessionRepository->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
 
         if (!$session) {
