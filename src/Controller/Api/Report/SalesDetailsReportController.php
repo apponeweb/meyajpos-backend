@@ -2,8 +2,8 @@
 
 namespace App\Controller\Api\Report;
 
-use App\Entity\SaleDetail;
 use App\Repository\SaleDetailRepository;
+use App\Repository\SalePaymentRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,7 +16,8 @@ use Doctrine\ORM\Tools\Pagination\Paginator;
 class SalesDetailsReportController extends AbstractController
 {
     public function __construct(
-        private readonly SaleDetailRepository $detailRepository
+        private readonly SaleDetailRepository  $detailRepository,
+        private readonly SalePaymentRepository $salePaymentRepository,
     )
     {
     }
@@ -36,51 +37,65 @@ class SalesDetailsReportController extends AbstractController
             $current = $request->query->getInt('current', 1);
             $pageSize = $request->query->getInt('pageSize', 10);
 
-            // 1. Obtener la consulta y paginar
-            $query = $this->detailRepository->getDetailsReportQuery($filters);
+            // Consultamos desde el repositorio de SalePayment
+            $query = $this->salePaymentRepository->getDetailsReportQuery($filters);
             $query->setFirstResult(($current - 1) * $pageSize)
                 ->setMaxResults($pageSize);
 
+            // Ahora el Paginator no tendrá problemas con el ID porque sp.id es único
             $paginator = new Paginator($query, true);
 
-            // 2. Mapear los resultados a un array plano
-            $results = array_map(function ($sd) {
-                /** @var \App\Entity\SaleDetail $sd */
-                $product = $sd->getProduct();
-                $barber = $sd->getServiceProvider();
-                $serviceType = $product?->getServiceType();
+            $results = [];
+            foreach ($paginator as $sp) {
+                /** @var \App\Entity\SalePayment $sp */
+                $sale = $sp->getSale();
+                $paymentMethodName = $sp->getPaymentType()->getName();
 
-                $unitPrice = (float)$sd->getUnitPrice();
-                $totalPrice = (float)$sd->getTotal();
-                $tip = $totalPrice - $unitPrice;
+                $amountPaidWithThisMethod = (float)$sp->getAmountReceived();
 
-                return [
-                    'id'=> $sd->getId(),
-                    'ticket' => $sd->getSale()->getFolio(),
-                    'servProd' => $product ? $product->getName() : 'N/A',
-                    'serviceType' => $serviceType ? $serviceType->getName() : 'N/A',
-                    'barber' => $barber ? $barber->getName() : 'Sin asignar',
-                    'quantity' => (float)$sd->getQuantity(),
-                    'unitPrice' => number_format($unitPrice, 2, '.', ','),
-                    'tip' => number_format($tip, 2, '.', ','),
-                    'total' => number_format($totalPrice, 2, '.', ','),
-                    'date' => $sd->getSale()->getSaleDate()->format('d/m/Y H:i:s')
-                ];
-            }, $paginator->getIterator()->getArrayCopy());
+                // Iteramos los detalles de la venta vinculada a este pago específico
+                foreach ($sale->getDetails() as $sd) {
+                    /** @var \App\Entity\SaleDetail $sd */
+                    $product = $sd->getProduct();
+                    $barber = $sd->getServiceProvider();
 
-            // --- SOLUCIÓN AL ERROR: Definir la variable $totals ---
-            $totals = $this->detailRepository->getDetailsTotalAccumulated($filters);
+                    $unitPrice = (float)$sd->getUnitPrice();
+                    $totalLine = (float)$sd->getTotal();
+                    $quantity = (float)$sd->getQuantity();
+
+                    $results[] = [
+                        // Generamos un ID único para el frontend (PagoID-DetalleID)
+                        'id' => uniqid(),
+                        'ticket' => $sale->getFolio(),
+                        'servProd' => $product ? $product->getName() : 'N/A',
+                        'serviceType' => $product?->getServiceType()?->getName() ?? 'N/A',
+                        'barber' => $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
+                        'paymentMethod' => $paymentMethodName,
+                        'paymentAmount' => number_format($amountPaidWithThisMethod, 2, '.', ','),
+                        'quantity' => $quantity,
+                        'unitPrice' => number_format($unitPrice, 2, '.', ','),
+                        'total' => number_format($totalLine, 2, '.', ','),
+                        'date' => $sale->getSaleDate()->format('d/m/Y H:i:s')
+                    ];
+                }
+            }
+
+            // Totales: Recuerda que la función de totales también debe salir de SalePayment
+            // para que la duplicación de montos sea coherente con lo que se ve.
+            $totals = $this->salePaymentRepository->getDetailsTotalAccumulated($filters);
 
             return $this->json([
-                'total' => count($paginator),
+                'total' => count($paginator), // Esto contará los pagos únicos encontrados
                 'results' => $results,
                 'current' => $current,
                 'pageSize' => $pageSize,
                 'summary' => [
-                    'totalQuantity' => number_format((float)($totals['sumQuantity'] ?? 0)),
-                    'totalTips' => number_format((float)($totals['sumTips'] ?? 0), 2, '.', ','),
-                    'totalAmount' => number_format((float)($totals['sumTotal'] ?? 0), 2, '.', ','),
-                    'totalUnitPrice' => number_format((float)($totals['sumUnitPrice'] ?? 0)),
+                    'totalQuantity' => number_format($totals['sumQuantity'], 2),
+                    'totalAmount' => number_format($totals['sumTotal'], 2, '.', ','),
+                    'transfer' => number_format($totals['totalTransfer'], 2, '.', ','),
+                    'card' => number_format($totals['totalCard'], 2, '.', ','),
+                    'cash' => number_format($totals['totalCash'], 2, '.', ','),
+                    'totalUnitPrice' => number_format($totals['sumUnitPrice'], 2, '.', ','),
                 ],
                 'status' => Response::HTTP_OK
             ], Response::HTTP_OK);
@@ -89,8 +104,8 @@ class SalesDetailsReportController extends AbstractController
             return $this->json([
                 'message' => 'Error al generar detalle',
                 'detail' => $e->getMessage(),
-                'status' => Response::HTTP_INTERNAL_SERVER_ERROR
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                'status' => 500
+            ], 500);
         }
     }
 
@@ -105,39 +120,54 @@ class SalesDetailsReportController extends AbstractController
             'search' => $request->query->get('search'),
         ];
 
-        $data = $this->detailRepository->getDetailsExportData($filters);
+        // 1. Usamos SalePaymentRepository para obtener los objetos completos sin paginar
+        $payments = $this->salePaymentRepository->getDetailsReportQuery($filters)->getResult();
 
-        $response = new StreamedResponse(function () use ($data) {
+        $response = new StreamedResponse(function () use ($payments) {
             $handle = fopen('php://output', 'w+');
-            // BOM para UTF-8 (Excel)
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM para Excel UTF-8
 
-            // Cabeceras coincidentes con tu imagen
-            fputcsv($handle, ['TICKET', 'SERV/PROD', 'TIPO', 'BARBERO', 'CANTIDAD', 'PRECIO U.', 'PROPINA', 'TOTAL', 'FECHA'], ';');
+            // Cabeceras
+            fputcsv($handle, [
+                'TICKET',
+                'SERV/PROD',
+                'TIPO',
+                'BARBERO',
+                'METODO PAGO',
+                'CANTIDAD',
+                'PRECIO U.',
+                'TOTAL',
+                'FECHA'
+            ], ';');
 
-            foreach ($data as $row) {
-                $unitPrice = (float)$row['unitPrice'];
-                $total = (float)$row['total'];
-                $tip = $total - $unitPrice;
+            /** @var \App\Entity\SalePayment $sp */
+            foreach ($payments as $sp) {
+                $sale = $sp->getSale();
+                $paymentMethodName = $sp->getPaymentType()->getName();
+                $amountPaidWithThisMethod = (float)$sp->getAmountReceived();
+                // Desglosamos detalles por cada pago (misma lógica que el JSON)
+                foreach ($sale->getDetails() as $sd) {
+                    /** @var \App\Entity\SaleDetail $sd */
+                    $product = $sd->getProduct();
+                    $barber = $sd->getServiceProvider();
 
-                // Formatear la fecha
-                $dateStr = '';
-                if (isset($row['saleDate'])) {
-                    $date = new \DateTime($row['saleDate']);
-                    $dateStr = $date->format('d/m/Y');
+                    $unitPrice = (float)$sd->getUnitPrice();
+                    $totalLine = (float)$sd->getTotal();
+                    $quantity = (float)$sd->getQuantity();
+
+                    fputcsv($handle, [
+                        $sale->getFolio(),
+                        $product ? $product->getName() : 'N/A',
+                        $product?->getServiceType()?->getName() ?? 'N/A',
+                        $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
+                        $paymentMethodName,
+                        number_format($amountPaidWithThisMethod, 2, '.', ','),
+                        $quantity,
+                        number_format($unitPrice, 2, '.', ''),
+                        number_format($totalLine, 2, '.', ''),
+                        $sale->getSaleDate()->format('d/m/Y H:i:s')
+                    ], ';');
                 }
-
-                fputcsv($handle, [
-                    $row['saleFolio'] ?? '',
-                    $row['productName'] ?? '',
-                    $row['serviceType'] ?? 'N/A',
-                    $row['barberName'] ?? 'Sin asignar',
-                    $row['quantity'],
-                    number_format($unitPrice, 2, '.', ''),
-                    number_format($tip, 2, '.', ''),
-                    number_format($total, 2, '.', ''),
-                    $dateStr
-                ], ';');
             }
             fclose($handle);
         });
