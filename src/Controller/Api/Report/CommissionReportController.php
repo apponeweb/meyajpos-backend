@@ -28,6 +28,7 @@ class CommissionReportController extends AbstractController
                 'startDate' => $request->query->get('startDate'),
                 'endDate' => $request->query->get('endDate'),
                 'search' => $request->query->get('search'),
+                'serviceTypeId' => $request->query->get('serviceTypeId'), // Nuevo filtro
             ];
 
             $current = $request->query->getInt('current', 1);
@@ -35,26 +36,33 @@ class CommissionReportController extends AbstractController
 
             $query = $this->repository->getReportQuery($filters);
 
-            // OPCIÓN SEGURA: Usamos el modo de hidratación escalar
-            // y calculamos manualmente el offset/limit si el Paginator sigue dando problemas.
             $query->setFirstResult(($current - 1) * $pageSize)
                 ->setMaxResults($pageSize);
 
-            // Pasamos FALSE como segundo parámetro para indicar que no es una consulta de entidades
             $paginator = new Paginator($query, false);
-
             $resultsRaw = iterator_to_array($paginator->getIterator());
 
             $results = array_map(function ($row) {
-                // Doctrine devuelve el resultado de MAX() como un string o un objeto DateTime
-                // Dependiendo de la configuración, lo normalizamos:
                 $dateObj = is_string($row['date']) ? new \DateTime($row['date']) : $row['date'];
+
+                // LÓGICA DEL PRECIO:
+                // Despejamos el precio: (Comisión total / cantidad) * 100 / porcentaje
+                // O más simple por fila: (Comisión / Porcentaje) * 100
+                $percentage = (float)$row['percentage'];
+                $totalComm = (float)$row['totalCommission'];
+                $quantity = (int)$row['quantity'];
+
+                $unitCommission = $quantity > 0 ? $totalComm / $quantity : 0;
+                $price = ($percentage > 0) ? ($unitCommission * 100) / $percentage : 0;
 
                 return [
                     'service' => $row['service'],
+                    'serviceType' => $row['serviceType'] ?? 'N/A', // Campo que agregamos en la Query
                     'barber' => $row['barber'],
-                    'quantity' => (int)$row['quantity'],
-                    'commission' => number_format((float)$row['totalCommission'], 2, '.', ','),
+                    'price' => number_format((float)$price, 2, '.', ','), // Nuevo campo
+                    'percentage' => number_format($percentage, 2, '.', ','),
+                    'quantity' => $quantity,
+                    'commission' => number_format($totalComm, 2, '.', ','),
                     'date' => $dateObj instanceof \DateTimeInterface
                         ? $dateObj->format('d/m/Y H:i')
                         : $dateObj,
@@ -64,12 +72,12 @@ class CommissionReportController extends AbstractController
             $summary = $this->repository->getTotalSummary($filters);
 
             return $this->json([
-                'total' => count($paginator), // Esto ahora funcionará
+                'total' => count($paginator),
                 'results' => $results,
                 'current' => $current,
                 'pageSize' => $pageSize,
                 'summary' => [
-                    'totalCommission' =>number_format( (float)($summary['totalAmount'] ?? 0), 2, '.', ','),
+                    'totalCommission' => number_format((float)($summary['totalAmount'] ?? 0), 2, '.', ','),
                     'totalServices' => (int)($summary['totalCount'] ?? 0)
                 ],
                 'status' => Response::HTTP_OK
@@ -91,28 +99,49 @@ class CommissionReportController extends AbstractController
             'startDate' => $request->query->get('startDate'),
             'endDate' => $request->query->get('endDate'),
             'search' => $request->query->get('search'),
+            'serviceTypeId' => $request->query->get('serviceTypeId'), // Nuevo filtro
         ];
 
-        // Obtenemos todos los datos sin paginar
-        $data = $this->repository->getExportData($filters);
+        // Obtenemos los datos (Asegúrate de que getExportData use la misma lógica que getReportQuery)
+        $data = $this->repository->getReportQuery($filters)->getResult();
 
         $response = new StreamedResponse(function () use ($data) {
             $handle = fopen('php://output', 'w+');
 
-            // Añadir BOM para que Excel reconozca tildes y caracteres especiales (UTF-8)
+            // Añadir BOM para compatibilidad con Excel (UTF-8)
             fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-            // Cabeceras del CSV
-            fputcsv($handle, ['SERVICIO/PR', 'BARBERO', 'CANTIDAD', 'MONTO CMISION', 'FECHA'], ';');
+            // Cabeceras actualizadas
+            fputcsv($handle, [
+                'SERVICIO',
+                'TIPO SERVICIO',
+                'BARBERO',
+                'PRECIO UNIT.',
+                'CANTIDAD',
+                '% COMISIÓN',
+                'MONTO COMISIÓN',
+                'FECHA'
+            ], ';');
 
             foreach ($data as $row) {
-                $date = new \DateTime($row['date']);
+                $date = $row['date'] instanceof \DateTimeInterface ? $row['date'] : new \DateTime($row['date']);
+
+                // Lógica de cálculo de precio (misma que en el controlador)
+                $percentage = (float)$row['percentage'];
+                $totalComm = (float)$row['totalCommission'];
+                $quantity = (int)$row['quantity'];
+
+                $unitCommission = $quantity > 0 ? $totalComm / $quantity : 0;
+                $unitPrice = ($percentage > 0) ? ($unitCommission * 100) / $percentage : 0;
 
                 fputcsv($handle, [
                     $row['service'],
+                    $row['serviceType'] ?? 'N/A',
                     $row['barber'],
-                    $row['quantity'],
-                    number_format((float)$row['totalCommission'], 2, '.', ''),
+                    number_format((float)$unitPrice, 2, '.', ''),
+                    $quantity,
+                    number_format($percentage, 2, '.', ''),
+                    number_format($totalComm, 2, '.', ''),
                     $date->format('d/m/Y H:i')
                 ], ';');
             }

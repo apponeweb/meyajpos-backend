@@ -16,28 +16,31 @@ class CommissionGeneratedRepository extends BaseRepository
         parent::__construct($registry, CommissionGenerated::class);
     }
 
-    public function getReportQuery(array $filters): Query
+    public function getReportQuery(array $filters): \Doctrine\ORM\Query
     {
         $qb = $this->createQueryBuilder('cg')
             ->select(
                 'mp.name as service',
                 'u.name as barber',
+                'st.name as serviceType', // Agregamos el nombre del tipo de servicio
+                'cg.percentage',
                 'COUNT(cg.id) as quantity',
                 'SUM(cg.commissionAmount) as totalCommission',
-                // Usamos MAX para que sea compatible con only_full_group_by
                 'MAX(cg.createdAt) as date'
             )
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
             ->join('cg.user', 'u')
-            /* Agrupamos por el nombre del servicio, el barbero
-               y la FECHA (sin hora) para que coincida con tu reporte visual
+            ->leftJoin('mp.serviceType', 'st') // Join necesario para ver y filtrar el tipo
+            /* Agrupamos por campos lógicos.
+               Nota: serviceDate se usa para separar registros por día si es necesario.
             */
-            ->groupBy('service', 'barber')
+            ->groupBy('mp.id', 'u.id', 'cg.percentage')
             ->addGroupBy('serviceDate')
             ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
 
+        // --- FILTROS DE FECHA ---
         if (!empty($filters['startDate'])) {
             $qb->andWhere('cg.createdAt >= :startDate')
                 ->setParameter('startDate', $filters['startDate'] . ' 00:00:00');
@@ -48,6 +51,13 @@ class CommissionGeneratedRepository extends BaseRepository
                 ->setParameter('endDate', $filters['endDate'] . ' 23:59:59');
         }
 
+        // --- FILTRO POR TIPO DE SERVICIO ---
+        if (!empty($filters['serviceTypeId'])) {
+            $qb->andWhere('st.id = :serviceTypeId')
+                ->setParameter('serviceTypeId', $filters['serviceTypeId']);
+        }
+
+        // --- BÚSQUEDA GENERAL ---
         if (!empty($filters['search'])) {
             $qb->andWhere('mp.name LIKE :search OR u.name LIKE :search')
                 ->setParameter('search', '%' . $filters['search'] . '%');

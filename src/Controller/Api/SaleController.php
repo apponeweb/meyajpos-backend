@@ -18,6 +18,7 @@ use App\Form\Type\SaleFormType;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\SaleRepository;
 use App\Service\CashBoxMovementService;
+use App\Service\SaleService;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use phpDocumentor\Reflection\Types\This;
@@ -96,7 +97,7 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Post('/sale')]
-    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService): JsonResponse
+    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService, SaleService $saleService): JsonResponse
     {
         $user = $this->security->getUser();
 
@@ -206,7 +207,7 @@ final class SaleController extends BaseController
                 'data' => [
                     'id' => $sale->getId(),
                     'folio' => $sale->getFolio(),
-                    'ticket' => $this->generateTicketData($sale)
+                    'ticket' => $saleService->generateTicketData($sale)
                 ]
             ], JsonResponse::HTTP_OK);
         }
@@ -218,116 +219,6 @@ final class SaleController extends BaseController
         ], JsonResponse::HTTP_BAD_REQUEST);
     }
 
-    private function generateTicketData(Sale $sale)
-    {
-        $cashBox = $sale->getCashBox();
-        /** @var Company $company */
-        $company = $cashBox->getBranch()->getCompany();
-
-        // 1. Obtener nombres únicos de los barberos
-        $barberos = [];
-        foreach ($sale->getDetails() as $detail) {
-            $name = trim($detail->getServiceProvider()->getName() . ' ' . $detail->getServiceProvider()->getLastName());
-            if (!in_array($name, $barberos)) {
-                $barberos[] = $name;
-            }
-        }
-
-        // 2. Mapear items del detalle con formateo numérico
-        $items = [];
-        $totalVat = 0;
-        /** @var SaleDetail $detail */
-        foreach ($sale->getDetails() as $detail) {
-            $product = $detail->getProduct();
-            $unitPrice = (float)$detail->getUnitPrice();
-            $total = (float)$detail->getTotal();
-
-            $totalVat += (float)$product->getVatRate();
-
-            $items[] = [
-                "descripcion" => $product->getName(),
-                "cantidad" => (int)$detail->getQuantity(),
-                "precio" => number_format($unitPrice, 2, '.', ''), // Formato 0.00
-                "importe" => number_format($total, 2, '.', '')     // Formato 0.00
-            ];
-        }
-
-        // 3. Totales por método de pago con formateo
-        $pagosMap = ["Tarjeta" => 0.0, "Efectivo" => 0.0, "Transferencia" => 0.0];
-        foreach ($sale->getPayments() as $payment) {
-            $typeName = $payment->getPaymentType()->getName();
-            $amount = (float)$payment->getAmountReceived();
-
-            if (str_contains(strtolower($typeName), 'tarjeta')) $pagosMap["Tarjeta"] += $amount;
-            elseif (str_contains(strtolower($typeName), 'efectivo')) $pagosMap["Efectivo"] += $amount;
-            elseif (str_contains(strtolower($typeName), 'transferencia')) $pagosMap["Transferencia"] += $amount;
-        }
-
-
-        $rawAddress = '';
-        try {
-            // Usamos un getter seguro o verificamos la inicialización
-            $rawAddress = $company->getTaxAddress() ?? '';
-        } catch (\Error $e) {
-            // Si falla por no estar inicializada, queda como string vacío
-            $rawAddress = '';
-        }
-        $formattedAddress = $rawAddress; // fallback
-        $addressData = null;
-        if (!empty($rawAddress)) {
-            $addressData = json_decode($rawAddress, true);
-        }
-
-        if (json_last_error() === JSON_ERROR_NONE && is_array($addressData)) {
-            $formattedAddress = sprintf(
-                "%s %s, Col. %s, %s, %s. CP: %s",
-                $addressData['street'] ?? '',
-                $addressData['streetNumber'] ?? '',
-                $addressData['neighborhood'] ?? '',
-                $addressData['city'] ?? '',
-                $addressData['state'] ?? '',
-                $addressData['postalCode'] ?? ''
-            );
-        }
-
-        $final = [
-            [
-                "templateId" => 10,
-                "printerName" => $cashBox->getName(),
-                "data" => [
-                    "negocio" => [
-                        "nombreComercial" => $company->getName(),
-                        "razonSocial" => $company->getLegalName(),
-                        "direccion" => $formattedAddress,
-                        "telefono" => $company->getPhone(),
-                        "rfc" => $company->getRfc()
-                    ],
-                    "transaccion" => [
-                        "folio" => $sale->getFolio(),
-                        "fechaHora" => $sale->getSaleDate()->format('d/m/Y H:i:s'),
-                        "barbero" => implode(", ", $barberos)
-                    ],
-                    "detalle" => [
-                        "items" => $items
-                    ],
-                    "totales" => [
-                        "subtotal" => number_format((float)$sale->getSubtotal(), 2, '.', ''),
-                        "iva" => number_format($totalVat, 2, '.', ''),
-                        "total" => number_format((float)$sale->getSubtotal(), 2, '.', ''),
-                        "Tarjeta" => number_format($pagosMap["Tarjeta"], 2, '.', ''),
-                        "Efectivo" => number_format($pagosMap["Efectivo"], 2, '.', ''),
-                        "Transferencia" => number_format($pagosMap["Transferencia"], 2, '.', ''),
-                        "Propina" => ($sale->getTotal() - $sale->getSubtotal())
-                    ],
-                    "adicional" => [
-                        "politicas" => "Cancelaciones con 2 horas de anticipación. Reagendos sujetos a disponibilidad.",
-                        "redes" => "IG: @eltiosbarber | www.eltiosbarber.com"
-                    ]
-                ]
-            ]
-        ];
-        return json_encode($final);
-    }
 
     private function generateDailyFolio(\DateTime $date): string
     {

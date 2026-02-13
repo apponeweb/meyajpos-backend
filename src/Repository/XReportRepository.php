@@ -29,4 +29,36 @@ class XReportRepository extends BaseRepository
             ->getOneOrNullResult();
     }
 
+    public function getReportQuery(array $filters): \Doctrine\ORM\Query
+    {
+        $qb = $this->createQueryBuilder('x')
+            ->select(
+                'x.id',
+                'x.reportNumber',
+                'x.xReportDate',
+                'x.systemTotal',
+                'x.declaredTotal',
+                'x.difference',
+                'x.observations',
+                'u.name as userName',
+                'cs.id as sessionId'
+            )
+            ->join('x.user', 'u')
+            ->join('x.cashSession', 'cs');
+
+        if (!empty($filters['startDate']) && !empty($filters['endDate'])) {
+            $qb->andWhere('x.xReportDate BETWEEN :start AND :end')
+                ->setParameter('start', $filters['startDate'] . ' 00:00:00')
+                ->setParameter('end', $filters['endDate'] . ' 23:59:59');
+        }
+
+        if (!empty($filters['search'])) {
+            $qb->andWhere('u.name LIKE :search OR x.reportNumber LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+
+        $qb->orderBy('x.reportNumber', 'DESC');
+
+        return $qb->getQuery();
+    }
 }
