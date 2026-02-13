@@ -98,10 +98,6 @@ final class SaleController extends BaseController
     #[Rest\Post('/sale')]
     public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService): JsonResponse
     {
-//        $sale = $this->entityManager->getRepository(Sale::class)->find(37);
-//        echo '<pre>';
-//        print_r($this->generateTicketData($sale));
-//        die;
         $user = $this->security->getUser();
 
         // 1. Validar sesión abierta
