@@ -45,7 +45,7 @@ class XReportController extends AbstractController
             return $this->json(['error' => 'No tiene una sesión de la caja activa'], 404);
         }
 
-        $sales = $saleRepository->count(['cashBox' => $session->getCashBox()]);
+        $sales = $saleRepository->count(['cashBoxSession' => $session->getId()]);
         if ($sales == 0) {
             return $this->json([
                 'message' => "No se puede generar un corte X por no haber ventas realizadas en esta sesión.",
