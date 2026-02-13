@@ -23,7 +23,7 @@ class SalesController extends AbstractController
     {
     }
 
-    #[Route('/', name: 'api_sales_ticket', methods: ['GET'])]
+    #[Route('/list', name: 'api_sales_ticket', methods: ['GET'])]
     public function getSales(Request $request): JsonResponse
     {
         try {

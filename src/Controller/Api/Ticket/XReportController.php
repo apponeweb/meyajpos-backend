@@ -22,7 +22,7 @@ class XReportController extends AbstractController
     {
     }
 
-    #[Route('/', name: 'api_x_reports_list', methods: ['GET'])]
+    #[Route('/list', name: 'api_x_reports_list', methods: ['GET'])]
     public function getXReports(Request $request): JsonResponse
     {
         try {
