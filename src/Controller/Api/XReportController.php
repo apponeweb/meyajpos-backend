@@ -93,8 +93,8 @@ class XReportController extends AbstractController
         UserInterface            $user
     ): JsonResponse
     {
-//        $report = $reportRepo->find(51);
-//        $session = $cashBoxSessionRepository->find(5);
+//        $report = $reportRepo->find(66);
+//        $session = $cashBoxSessionRepository->find(6);
 //        $ticket = $this->generateXTicketData($report, $session, $user, $em);
 ////
 //        echo '<pre>';
@@ -236,15 +236,15 @@ class XReportController extends AbstractController
         $ventasTarjeta = 0.00;
         $ventasTransferencia = 0.00;
 
-        $sales = $saleRepo->findBy(['cashBox' => $session->getCashBox(), 'cashBoxSession' => $session->getId()]);
+        $sales = $saleRepo->findBy(['cashBoxSession' => $session->getId()]);
         foreach ($sales as $sale) {
             foreach ($sale->getPayments() as $payment) {
-                $name = strtolower($payment->getPaymentType()->getName());
+                $id = strtolower($payment->getPaymentType()->getId());
 
                 $amount = (float)$payment->getAmountReceived();
-                if (str_contains($name, 'efectivo')) $ventasEfectivo += $amount;
-                elseif (str_contains($name, 'tarjeta')) $ventasTarjeta += $amount;
-                elseif (str_contains($name, 'transferencia')) $ventasTransferencia += $amount;
+                if ($id == 3) $ventasEfectivo += $amount;
+                elseif ($id == 2) $ventasTarjeta += $amount;
+                elseif ($id == 1) $ventasTransferencia += $amount;
             }
         }
 
