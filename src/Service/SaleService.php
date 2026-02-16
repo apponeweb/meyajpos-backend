@@ -4,8 +4,11 @@ namespace App\Service;
 
 use App\Entity\CashBoxMovement;
 use App\Entity\Company;
+use App\Entity\Currency;
+use App\Entity\PaymentType;
 use App\Entity\Sale;
 use App\Entity\SaleDetail;
+use App\Entity\SalePayment;
 use App\Entity\User;
 use App\Enum\CashBoxSessionStatus;
 use App\Enum\CashMovementConcept;
@@ -18,7 +21,9 @@ use Symfony\Bundle\SecurityBundle\Security;
 
 class SaleService
 {
-    public function __construct()
+    public function __construct(
+        private EntityManagerInterface $em,
+    )
     {
     }
 
@@ -131,5 +136,31 @@ class SaleService
             ]
         ];
         return json_encode($final);
+    }
+
+
+    public function initializeEmptyPayments(Sale $sale, User $user): void
+    {
+        // 1. Obtener todos los tipos de pago disponibles (Efectivo, Débito, etc.)
+        $paymentTypes = $this->em->getRepository(PaymentType::class)->findBy(['isActive' => true]);
+
+        // 2. Obtener la moneda local por defecto (ajusta según tu lógica)
+        $defaultCurrency = $this->em->getRepository(Currency::class)->find(1);
+
+        foreach ($paymentTypes as $type) {
+            $payment = new SalePayment();
+            $payment->setSale($sale);
+            $payment->setPaymentType($type);
+            $payment->setCurrency($defaultCurrency);
+            $payment->setAmountReceived(0.00);
+            $payment->setAmountLocalCurrency(0.00);
+            $payment->setExchangeRateUsed(1.00);
+
+            // Auditoría
+            $payment->setCreatedBy($user->getId());
+            $payment->setUpdatedBy($user->getId());
+
+            $sale->addPayment($payment);
+        }
     }
 }

@@ -115,6 +115,8 @@ final class SaleController extends BaseController
         }
 
         $sale = new Sale();
+
+
         $now = new \DateTime();
         // Asignamos datos automáticos antes de procesar el formulario
         $sale->setUser($user);
@@ -160,6 +162,13 @@ final class SaleController extends BaseController
 
             }
 
+
+            $data = json_decode($request->getContent(), true);
+            // Si 'payments' no viene en el JSON o es un array vacío
+            if (empty($data['payments'])) {
+                $saleService->initializeEmptyPayments($sale, $user);
+            }
+
             $firstPayment = $sale->getPayments()->first();
 
             // 1. Procesar Pagos y sus campos de auditoría
@@ -184,19 +193,17 @@ final class SaleController extends BaseController
 
             // Solo si hubo flujo de efectivo real (dinero a la gaveta)
             $totalCashReceived = $sale->getSubtotal();
-            if ($totalCashReceived > 0) {
-                $movement = new CashBoxMovement();
-                $movement->setType(CashMovementType::INCOME);
-                $movement->setConcept(CashMovementConcept::SALE);
-                $movement->setAmount($totalCashReceived);
-                $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
-                $movement->setChange($sale->getChange());
+            $movement = new CashBoxMovement();
+            $movement->setType(CashMovementType::INCOME);
+            $movement->setConcept(CashMovementConcept::SALE);
+            $movement->setAmount($totalCashReceived);
+            $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
+            $movement->setChange($sale->getChange());
 
-                $movementResult = $cashBoxMovementService->createMovement($movement);
+            $movementResult = $cashBoxMovementService->createMovement($movement);
 
-                if (!$movementResult['success']) {
-                    return $this->json($movementResult);
-                }
+            if (!$movementResult['success']) {
+                return $this->json($movementResult);
             }
 
 

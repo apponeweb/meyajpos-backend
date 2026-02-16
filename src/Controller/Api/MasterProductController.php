@@ -70,7 +70,10 @@ final class MasterProductController extends BaseController
             'st.name as serviceTypeName'
         ];
     }
-
+    protected function getSearchFields(): array
+    {
+        return ['u.name', 'u.description', 'u.barcode'];
+    }
     public function list(Request $request, $repository): JsonResponse
     {
         // 1. Llamamos al método list del padre para obtener la respuesta original
