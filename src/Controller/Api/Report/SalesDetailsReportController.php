@@ -62,6 +62,7 @@ class SalesDetailsReportController extends AbstractController
                     $unitPrice = (float)$sd->getUnitPrice();
                     $totalLine = (float)$sd->getTotal();
                     $quantity = (float)$sd->getQuantity();
+                    $cashChange = (float)$sd->getSale()->getCashBox();
                     $tip = $totalLine - $unitPrice;
                     $results[] = [
                         // Generamos un ID único para el frontend (PagoID-DetalleID)
@@ -76,6 +77,7 @@ class SalesDetailsReportController extends AbstractController
                         'unitPrice' => number_format($unitPrice, 2, '.', ','),
                         'total' => number_format($totalLine, 2, '.', ','),
                         'tip' => number_format($tip, 2, '.', ','),
+                        'cashChange' => number_format($cashChange, 2, '.', ','),
                         'date' => $sale->getSaleDate()->format('d/m/Y H:i:s')
                     ];
                 }
