@@ -82,15 +82,19 @@ class XReportService
         $ventasTransferencia = 0.00;
 
         $sales = $saleRepo->findBy(['cashBoxSession' => $session->getId()]);
+        /** @var Sale $sale */
         foreach ($sales as $sale) {
+            $change = (float)$sale->getChange();
             foreach ($sale->getPayments() as $payment) {
                 $id = strtolower($payment->getPaymentType()->getId());
+
 
                 $amount = (float)$payment->getAmountReceived();
                 if ($id == PaymentTypeEnum::CASH->value) $ventasEfectivo += $amount;
                 elseif ($id == PaymentTypeEnum::CARD->value) $ventasTarjeta += $amount;
                 elseif ($id == PaymentTypeEnum::TRANSFER->value) $ventasTransferencia += $amount;
             }
+            $ventasEfectivo = $ventasEfectivo - $change;
         }
 
 
