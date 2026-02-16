@@ -62,7 +62,7 @@ class SalesDetailsReportController extends AbstractController
                     $unitPrice = (float)$sd->getUnitPrice();
                     $totalLine = (float)$sd->getTotal();
                     $quantity = (float)$sd->getQuantity();
-                    $cashChange = (float)$sd->getSale()->getCashBox();
+                    $cashChange = (float)$sd->getSale()->getChange();
                     $tip = $totalLine - $unitPrice;
                     $results[] = [
                         // Generamos un ID único para el frontend (PagoID-DetalleID)
