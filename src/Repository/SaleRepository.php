@@ -55,6 +55,7 @@ class SaleRepository extends BaseRepository
 
         return $qb->getQuery();
     }
+
     public function getExportData(array $filters): array
     {
         // Reutilizamos la consulta base
@@ -63,6 +64,7 @@ class SaleRepository extends BaseRepository
         // Obtenemos los resultados como un array escalar para procesar más rápido
         return $query->getScalarResult();
     }
+
     public function getTotalAccumulated(array $filters): array
     {
         $qb = $this->createQueryBuilder('s')
@@ -101,7 +103,7 @@ class SaleRepository extends BaseRepository
         $now = new \DateTime();
 
         $qb = $this->createQueryBuilder('s')
-            ->select('SUM(sd.amountReceived) as totalAmount')
+            ->select('SUM(sd.amountReceived) - SUM(s.change)  as totalAmount')
             ->innerJoin('s.payments', 'sd')
             ->where('s.cashBoxSession = :cashBoxSession')
             ->andWhere('s.status = :paidStatus')
