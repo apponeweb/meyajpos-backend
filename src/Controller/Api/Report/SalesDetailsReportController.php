@@ -86,7 +86,6 @@ class SalesDetailsReportController extends AbstractController
             // Totales: Recuerda que la función de totales también debe salir de SalePayment
             // para que la duplicación de montos sea coherente con lo que se ve.
             $totals = $this->salePaymentRepository->getDetailsTotalAccumulated($filters);
-
             return $this->json([
                 'total' => count($paginator), // Esto contará los pagos únicos encontrados
                 'results' => $results,
