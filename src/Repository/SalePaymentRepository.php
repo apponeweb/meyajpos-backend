@@ -146,12 +146,8 @@ class SalePaymentRepository extends BaseRepository
         }
 
         $result = $qb->getQuery()->getOneOrNullResult();
-
         $sumTotal = (float)($result['sumTotal'] ?? 0);
-
         $sumUnitPrice = (float)($result['sumUnitPrice'] ?? 0);
-        $sumQuantity = (float)($result['sumQuantity'] ?? 0);
-
 
         return [
             'sumQuantity' => (float)($result['sumQuantity'] ?? 0),
