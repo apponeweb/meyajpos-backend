@@ -133,13 +133,15 @@ class SalesDetailsReportController extends AbstractController
             // Cabeceras
             fputcsv($handle, [
                 'TICKET',
-                'SERV/PROD',
-                'TIPO',
+                'PRODUCTO/SERVICIO',
+                'TIPO DE SERVICIO',
                 'BARBERO',
-                'METODO PAGO',
                 'CANTIDAD',
-                'PRECIO U.',
+                'PRECIO UNITARIO',
+                'PROPINA',
                 'TOTAL',
+                'MÉTODO DE PAGO',
+                'MONTO PAGADO',
                 'FECHA'
             ], ';');
 
@@ -163,11 +165,12 @@ class SalesDetailsReportController extends AbstractController
                         $product ? $product->getName() : 'N/A',
                         $product?->getServiceType()?->getName() ?? 'N/A',
                         $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
-                        $paymentMethodName,
-                        number_format($amountPaidWithThisMethod, 2, '.', ','),
                         $quantity,
                         number_format($unitPrice, 2, '.', ''),
+                        number_format(($totalLine-$unitPrice), 2, '.', ''),
                         number_format($totalLine, 2, '.', ''),
+                        $paymentMethodName,
+                        number_format($amountPaidWithThisMethod, 2, '.', ','),
                         $sale->getSaleDate()->format('d/m/Y H:i:s')
                     ], ';');
                 }

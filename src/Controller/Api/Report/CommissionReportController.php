@@ -114,12 +114,11 @@ class CommissionReportController extends AbstractController
 
             // Cabeceras actualizadas
             fputcsv($handle, [
-                'SERVICIO',
-                'TIPO SERVICIO',
+                'PRODUCTO/SERVICIO',
                 'BARBERO',
-                'PRECIO UNIT.',
+                'PRECIO',
                 'CANTIDAD',
-                '% COMISIÓN',
+                'COMISIÓN %',
                 'MONTO COMISIÓN',
                 'FECHA'
             ], ';');
@@ -137,7 +136,6 @@ class CommissionReportController extends AbstractController
 
                 fputcsv($handle, [
                     $row['service'],
-                    $row['serviceType'] ?? 'N/A',
                     $row['barber'],
                     number_format((float)$unitPrice, 2, '.', ''),
                     $quantity,
