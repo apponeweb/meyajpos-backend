@@ -57,6 +57,13 @@ class CommissionGeneratedRepository extends BaseRepository
                 ->setParameter('serviceTypeId', $filters['serviceTypeId']);
         }
 
+        // --- FILTRO POR BARBERO ---
+        if (!empty($filters['barberId'])) {
+            $qb->andWhere('u.id = :barberId')
+                ->setParameter('barberId', $filters['barberId']);
+        }
+
+
         // --- BÚSQUEDA GENERAL ---
         if (!empty($filters['search'])) {
             $qb->andWhere('mp.name LIKE :search OR u.name LIKE :search')

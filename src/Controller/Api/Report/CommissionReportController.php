@@ -28,7 +28,8 @@ class CommissionReportController extends AbstractController
                 'startDate' => $request->query->get('startDate'),
                 'endDate' => $request->query->get('endDate'),
                 'search' => $request->query->get('search'),
-                'serviceTypeId' => $request->query->get('serviceTypeId'), // Nuevo filtro
+                'serviceTypeId' => $request->query->get('serviceTypeId'),
+                'barberId' => $request->query->get('barberId'),
             ];
 
             $current = $request->query->getInt('current', 1);
