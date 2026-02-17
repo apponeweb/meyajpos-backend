@@ -16,7 +16,6 @@ use Doctrine\ORM\Tools\Pagination\Paginator;
 class SalesDetailsReportController extends AbstractController
 {
     public function __construct(
-        private readonly SaleDetailRepository  $detailRepository,
         private readonly SalePaymentRepository $salePaymentRepository,
     )
     {
@@ -31,6 +30,7 @@ class SalesDetailsReportController extends AbstractController
                 'endDate' => $request->query->get('endDate'),
                 'barberId' => $request->query->get('barberId'),
                 'serviceTypeId' => $request->query->get('serviceTypeId'),
+                'paymentTypeId' => $request->query->get('paymentTypeId'),
                 'search' => $request->query->get('search'),
             ];
 
@@ -66,7 +66,7 @@ class SalesDetailsReportController extends AbstractController
                     $tip = $totalLine - $unitPrice;
                     $results[] = [
                         // Generamos un ID único para el frontend (PagoID-DetalleID)
-                        'id' => uniqid(),
+                        'id' => $sp->getId(),
                         'ticket' => $sale->getFolio(),
                         'servProd' => $product ? $product->getName() : 'N/A',
                         'serviceType' => $product?->getServiceType()?->getName() ?? 'N/A',
@@ -167,7 +167,7 @@ class SalesDetailsReportController extends AbstractController
                         $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
                         $quantity,
                         number_format($unitPrice, 2, '.', ''),
-                        number_format(($totalLine-$unitPrice), 2, '.', ''),
+                        number_format(($totalLine - $unitPrice), 2, '.', ''),
                         number_format($totalLine, 2, '.', ''),
                         $paymentMethodName,
                         number_format($amountPaidWithThisMethod, 2, '.', ','),

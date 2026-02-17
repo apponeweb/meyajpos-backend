@@ -164,7 +164,6 @@ final class SaleController extends BaseController
 
 
             $data = json_decode($request->getContent(), true);
-            // Si 'payments' no viene en el JSON o es un array vacío
             if (empty($data['payments'])) {
                 $saleService->initializeEmptyPayments($sale, $user);
             }
@@ -173,8 +172,8 @@ final class SaleController extends BaseController
 
             // 1. Procesar Pagos y sus campos de auditoría
             foreach ($sale->getPayments() as $payment) {
-                $payment->setCreatedBy($user->getId()); // Suponiendo que BaseEntity tiene este método
-                $payment->setUpdatedBy($user->getId()); // Suponiendo que BaseEntity tiene este método
+                $payment->setCreatedBy($user->getId());
+                $payment->setUpdatedBy($user->getId());
             }
 
             // 2. Procesar Propinas, vincularlas a un pago y auditoría
@@ -192,20 +191,19 @@ final class SaleController extends BaseController
 
 
             // Solo si hubo flujo de efectivo real (dinero a la gaveta)
-            $totalCashReceived = $sale->getSubtotal();
-            $movement = new CashBoxMovement();
-            $movement->setType(CashMovementType::INCOME);
-            $movement->setConcept(CashMovementConcept::SALE);
-            $movement->setAmount($totalCashReceived);
-            $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
-            $movement->setChange($sale->getChange());
-
-            $movementResult = $cashBoxMovementService->createMovement($movement);
-
-            if (!$movementResult['success']) {
-                return $this->json($movementResult);
-            }
-
+//            $totalCashReceived = $sale->getSubtotal();
+//            $movement = new CashBoxMovement();
+//            $movement->setType(CashMovementType::INCOME);
+//            $movement->setConcept(CashMovementConcept::SALE);
+//            $movement->setAmount($totalCashReceived);
+//            $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
+//            $movement->setChange($sale->getChange());
+//
+//            $movementResult = $cashBoxMovementService->createMovement($movement);
+//
+//            if (!$movementResult['success']) {
+//                return $this->json($movementResult);
+//            }
 
             $this->entityManager->flush();
 

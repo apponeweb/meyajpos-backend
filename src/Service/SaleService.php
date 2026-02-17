@@ -13,6 +13,7 @@ use App\Entity\User;
 use App\Enum\CashBoxSessionStatus;
 use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
+use App\Enum\PaymentTypeEnum;
 use App\Repository\CashBoxMovementRepository;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\SalePaymentRepository;
@@ -141,17 +142,20 @@ class SaleService
 
     public function initializeEmptyPayments(Sale $sale, User $user): void
     {
-        // 1. Obtener todos los tipos de pago disponibles (Efectivo, Débito, etc.)
-        $paymentTypes = $this->em->getRepository(PaymentType::class)->findBy(['isActive' => true]);
+        $isCourtesy = false;
+        /** @var SaleDetail $value */
+        foreach ($sale->getDetails() as $value) {
+            if ($value->getProduct()->getServiceType()->isCourtesy()) {
+                $isCourtesy = true;
+                break;
+            }
+        }
 
-        // 2. Obtener la moneda local por defecto (ajusta según tu lógica)
-        $defaultCurrency = $this->em->getRepository(Currency::class)->find(1);
-
-        foreach ($paymentTypes as $type) {
+        if ($isCourtesy) {
             $payment = new SalePayment();
             $payment->setSale($sale);
-            $payment->setPaymentType($type);
-            $payment->setCurrency($defaultCurrency);
+            $payment->setPaymentType($this->em->getRepository(PaymentType::class)->find(PaymentTypeEnum::CASH->value));
+            $payment->setCurrency($this->em->getRepository(Currency::class)->find(1));
             $payment->setAmountReceived(0.00);
             $payment->setAmountLocalCurrency(0.00);
             $payment->setExchangeRateUsed(1.00);

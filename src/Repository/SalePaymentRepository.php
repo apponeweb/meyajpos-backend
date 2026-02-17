@@ -92,6 +92,10 @@ class SalePaymentRepository extends BaseRepository
             $qb->andWhere('st.id = :serviceTypeId')
                 ->setParameter('serviceTypeId', $filters['serviceTypeId']);
         }
+        if (!empty($filters['paymentTypeId'])) {
+            $qb->andWhere('pt.id = :paymentTypeId')
+                ->setParameter('paymentTypeId', $filters['paymentTypeId']);
+        }
 
         if (!empty($filters['search'])) {
             $qb->andWhere('s.folio LIKE :search OR p.name LIKE :search')
