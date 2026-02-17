@@ -95,6 +95,7 @@ class SalesDetailsReportController extends AbstractController
                     'totalQuantity' => number_format($totals['sumQuantity'], 2),
                     'totalAmount' => number_format($totals['sumTotal'], 2, '.', ','),
                     'transfer' => number_format($totals['totalTransfer'], 2, '.', ','),
+                    'totalTips' => number_format((float)($totals['sumTips'] ?? 0), 2, '.', ','),
                     'card' => number_format($totals['totalCard'], 2, '.', ','),
                     'cash' => number_format($totals['totalCash'], 2, '.', ','),
                     'totalUnitPrice' => number_format($totals['sumUnitPrice'], 2, '.', ','),

@@ -104,7 +104,6 @@ class SalePaymentRepository extends BaseRepository
     }
 
 
-
     public function getDetailsTotalAccumulated(array $filters): array
     {
         $qb = $this->createQueryBuilder('sp')
@@ -149,7 +148,10 @@ class SalePaymentRepository extends BaseRepository
         $result = $qb->getQuery()->getOneOrNullResult();
 
         $sumTotal = (float)($result['sumTotal'] ?? 0);
+
         $sumUnitPrice = (float)($result['sumUnitPrice'] ?? 0);
+        $sumQuantity = (float)($result['sumQuantity'] ?? 0);
+
 
         return [
             'sumQuantity' => (float)($result['sumQuantity'] ?? 0),
@@ -158,6 +160,7 @@ class SalePaymentRepository extends BaseRepository
             'totalTransfer' => (float)($result['totalTransfer'] ?? 0),
             'totalCard' => (float)($result['totalCard'] ?? 0),
             'totalCash' => (float)($result['totalCash'] ?? 0),
+            'sumTips' => $sumTotal - $sumUnitPrice
         ];
     }
 }
