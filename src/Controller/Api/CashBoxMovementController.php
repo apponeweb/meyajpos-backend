@@ -12,6 +12,7 @@ use App\Repository\CashBoxMovementRepository;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\SalePaymentRepository;
 use App\Repository\SaleRepository;
+use App\Repository\UserRepository;
 use App\Service\CashBoxMovementService;
 use App\Service\XReportService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,19 +37,47 @@ class CashBoxMovementController extends AbstractController
     #[Route('', name: 'app_cash_movement_index', methods: ['GET'])]
     public function index(
         Request                   $request,
-        CashBoxMovementRepository $movementRepository
+        CashBoxMovementRepository $movementRepository,
+        CashBoxSessionRepository  $sessionRepo,
+        UserRepository            $userRepository
     ): JsonResponse
     {
-
+        $user = $this->getUser();
         $current = $request->query->getInt('current', 1);
         $pageSize = $request->query->getInt('pageSize', 10);
+
 
         // 2. Empaquetar filtros incluyendo la SESIÓN
         $filters = [
             'date' => $request->query->get('date'),
             'type' => $request->query->get('type'),
-            'concept' => $request->query->get('concept'),
+            'concept' => $request->query->get('concept')
         ];
+
+        $currentUser = $userRepository->find($this->getUser());
+        $isAdmin = in_array('ROLE_ADMIN', $currentUser->getRoles());
+
+        if (!$isAdmin) {
+            $activeSession = $sessionRepo->findOneBy([
+                'user' => $user,
+                'status' => CashBoxSessionStatus::OPEN
+            ]);
+
+            if (!$activeSession) {
+                return $this->json([
+                    'total' => 0,
+                    'results' => [],
+                    'message' => 'No hay una sesión de caja activa para este usuario.'
+                ]);
+            }
+
+            $activeSession = $sessionRepo->findOneBy([
+                'user' => $user,
+                'status' => CashBoxSessionStatus::OPEN
+            ]);
+            $filters['session'] = $activeSession;
+        }
+
 
         $query = $movementRepository->getWithPagination($filters);
 
