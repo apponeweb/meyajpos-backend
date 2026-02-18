@@ -149,7 +149,7 @@ final class SaleController extends BaseController
             if ($sale->getChange() > $efective) {
                 return $this->json([
                     'message' => "El cambio a entregar debe ser menor que el efectivo en caja ($efective)",
-                    'error' => "El cambio a entregar debe ser menor que el efectivo en caja ($efective)"
+                    'status' => JsonResponse::HTTP_BAD_REQUEST
                 ], JsonResponse::HTTP_BAD_REQUEST);
             }
 
