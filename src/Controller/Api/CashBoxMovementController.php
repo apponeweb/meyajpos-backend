@@ -38,28 +38,27 @@ class CashBoxMovementController extends AbstractController
         CashBoxSessionRepository  $sessionRepo
     ): JsonResponse
     {
-        $user = $this->getUser();
+//        $user = $this->getUser();
 
         // 1. Obtener sesión activa del cajero
-        $activeSession = $sessionRepo->findOneBy([
-            'user' => $user,
-            'status' => CashBoxSessionStatus::OPEN
-        ]);
-
-        if (!$activeSession) {
-            return $this->json([
-                'total' => 0,
-                'results' => [],
-                'message' => 'No hay una sesión de caja activa para este usuario.'
-            ]);
-        }
+//        $activeSession = $sessionRepo->findOneBy([
+//            'user' => $user,
+//            'status' => CashBoxSessionStatus::OPEN
+//        ]);
+//
+//        if (!$activeSession) {
+//            return $this->json([
+//                'total' => 0,
+//                'results' => [],
+//                'message' => 'No hay una sesión de caja activa para este usuario.'
+//            ]);
+//        }
 
         $current = $request->query->getInt('current', 1);
         $pageSize = $request->query->getInt('pageSize', 10);
 
         // 2. Empaquetar filtros incluyendo la SESIÓN
         $filters = [
-            'session' => $activeSession, // Pasamos el objeto o el ID
             'date' => $request->query->get('date'),
             'type' => $request->query->get('type'),
             'concept' => $request->query->get('concept'),
