@@ -2,8 +2,12 @@
 
 namespace App\Controller\Api\Report;
 
-use App\Repository\SaleDetailRepository;
+
+use App\Entity\Report\DailyReport;
+use App\Repository\Report\DailyReportRepository;
 use App\Repository\SalePaymentRepository;
+
+// Mantenemos este solo para los totales si ya lo tienes listo
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,7 +20,7 @@ use Doctrine\ORM\Tools\Pagination\Paginator;
 class SalesDetailsReportController extends AbstractController
 {
     public function __construct(
-        private readonly SalePaymentRepository $salePaymentRepository,
+        private readonly DailyReportRepository $dailyReportRepository,
     )
     {
     }
@@ -37,68 +41,50 @@ class SalesDetailsReportController extends AbstractController
             $current = $request->query->getInt('current', 1);
             $pageSize = $request->query->getInt('pageSize', 10);
 
-            // Consultamos desde el repositorio de SalePayment
-            $query = $this->salePaymentRepository->getDetailsReportQuery($filters);
+            // 1. Consulta directa a la VISTA
+            $query = $this->dailyReportRepository->getReportQuery($filters);
             $query->setFirstResult(($current - 1) * $pageSize)
                 ->setMaxResults($pageSize);
 
-            // Ahora el Paginator no tendrá problemas con el ID porque sp.id es único
-            $paginator = new Paginator($query, true);
-
+            $paginator = new Paginator($query);
             $results = [];
-            foreach ($paginator as $sp) {
-                /** @var \App\Entity\SalePayment $sp */
-                $sale = $sp->getSale();
-                $paymentMethodName = $sp->getPaymentType()->getName();
 
-                $amountPaidWithThisMethod = (float)$sp->getAmountReceived();
-
-                // Iteramos los detalles de la venta vinculada a este pago específico
-                foreach ($sale->getDetails() as $sd) {
-                    /** @var \App\Entity\SaleDetail $sd */
-                    $product = $sd->getProduct();
-                    $barber = $sd->getServiceProvider();
-
-                    $unitPrice = (float)$sd->getUnitPrice();
-                    $totalLine = (float)$sd->getTotal();
-                    $quantity = (float)$sd->getQuantity();
-                    $cashChange = (float)$sd->getSale()->getChange();
-                    $tip = $totalLine - $unitPrice;
-                    $results[] = [
-                        // Generamos un ID único para el frontend (PagoID-DetalleID)
-                        'id' => $sp->getId(),
-                        'ticket' => $sale->getFolio(),
-                        'servProd' => $product ? $product->getName() : 'N/A',
-                        'serviceType' => $product?->getServiceType()?->getName() ?? 'N/A',
-                        'barber' => $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
-                        'paymentMethod' => $paymentMethodName,
-                        'paymentAmount' => number_format($amountPaidWithThisMethod, 2, '.', ','),
-                        'quantity' => $quantity,
-                        'unitPrice' => number_format($unitPrice, 2, '.', ','),
-                        'total' => number_format($totalLine, 2, '.', ','),
-                        'tip' => number_format($tip, 2, '.', ','),
-                        'cashChange' => number_format($cashChange, 2, '.', ','),
-                        'date' => $sale->getSaleDate()->format('d/m/Y H:i:s')
-                    ];
-                }
+            // 2. Mapeo directo (Sin bucles anidados)
+            /** @var DailyReport $row */
+            foreach ($paginator as $row) {
+                $results[] = [
+                    'id' => $row->getId(),
+                    'ticket' => $row->getTicketFolio(),
+                    'servProd' => $row->getProductServiceName(),
+                    'serviceType' => $row->getServiceTypeName(),
+                    'barber' => $row->getBarberName(),
+                    'paymentMethod' => $row->getPaymentMethod(),
+                    'paymentAmount' => number_format((float)$row->getPaymentAmount(), 2, '.', ','),
+                    'quantity' => (float)$row->getQuantity(),
+                    'unitPrice' => number_format((float)$row->getUnitPrice(), 2, '.', ','),
+                    'total' => number_format((float)$row->getTotal(), 2, '.', ','),
+                    'tip' => number_format((float)$row->getTipAmount(), 2, '.', ','),
+                    'cashChange' => number_format((float)$row->getCashChange(), 2, '.', ','),
+                    'date' => $row->getFormattedSaleDate()
+                ];
             }
 
-            // Totales: Recuerda que la función de totales también debe salir de SalePayment
-            // para que la duplicación de montos sea coherente con lo que se ve.
-            $totals = $this->salePaymentRepository->getDetailsTotalAccumulated($filters);
+            // 3. Totales (Seguimos usando el acumulado optimizado de SalePayment)
+            $totals = $this->dailyReportRepository->getDetailsTotalAccumulated($filters);
+
             return $this->json([
-                'total' => count($paginator), // Esto contará los pagos únicos encontrados
+                'total' => count($paginator),
                 'results' => $results,
                 'current' => $current,
                 'pageSize' => $pageSize,
                 'summary' => [
-                    'totalQuantity' => number_format($totals['sumQuantity'], 2),
-                    'totalAmount' => number_format($totals['sumTotal'], 2, '.', ','),
-                    'transfer' => number_format($totals['totalTransfer'], 2, '.', ','),
+                    'totalQuantity' => number_format($totals['sumQuantity'] ?? 0, 2),
+                    'totalAmount' => number_format($totals['sumTotal'] ?? 0, 2, '.', ','),
+                    'transfer' => number_format($totals['totalTransfer'] ?? 0, 2, '.', ','),
                     'totalTips' => number_format((float)($totals['sumTips'] ?? 0), 2, '.', ','),
-                    'card' => number_format($totals['totalCard'], 2, '.', ','),
-                    'cash' => number_format($totals['totalCash'], 2, '.', ','),
-                    'totalUnitPrice' => number_format($totals['sumUnitPrice'], 2, '.', ','),
+                    'card' => number_format($totals['totalCard'] ?? 0, 2, '.', ','),
+                    'cash' => number_format($totals['totalCash'] ?? 0, 2, '.', ','),
+                    'totalUnitPrice' => number_format($totals['sumUnitPrice'] ?? 0, 2, '.', ','),
                 ],
                 'status' => Response::HTTP_OK
             ], Response::HTTP_OK);
@@ -106,8 +92,7 @@ class SalesDetailsReportController extends AbstractController
         } catch (\Exception $e) {
             return $this->json([
                 'message' => 'Error al generar detalle',
-                'detail' => $e->getMessage(),
-                'status' => 500
+                'detail' => $e->getMessage()
             ], 500);
         }
     }
@@ -123,64 +108,36 @@ class SalesDetailsReportController extends AbstractController
             'search' => $request->query->get('search'),
         ];
 
-        // 1. Usamos SalePaymentRepository para obtener los objetos completos sin paginar
-        $payments = $this->salePaymentRepository->getDetailsReportQuery($filters)->getResult();
+        // Obtenemos todos los registros de la vista sin paginar
+        $data = $this->dailyReportRepository->getReportQuery($filters)->getResult();
 
-        $response = new StreamedResponse(function () use ($payments) {
+        $response = new StreamedResponse(function () use ($data) {
             $handle = fopen('php://output', 'w+');
-            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM para Excel UTF-8
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // UTF-8 BOM
 
-            // Cabeceras
-            fputcsv($handle, [
-                'TICKET',
-                'PRODUCTO/SERVICIO',
-                'TIPO DE SERVICIO',
-                'BARBERO',
-                'CANTIDAD',
-                'PRECIO UNITARIO',
-                'PROPINA',
-                'TOTAL',
-                'MÉTODO DE PAGO',
-                'MONTO PAGADO',
-                'FECHA'
-            ], ';');
+            fputcsv($handle, ['TICKET', 'PRODUCTO', 'TIPO', 'BARBERO', 'CANT', 'PRECIO', 'PROPINA', 'TOTAL', 'METODO', 'PAGADO', 'FECHA'], ';');
 
-            /** @var \App\Entity\SalePayment $sp */
-            foreach ($payments as $sp) {
-                $sale = $sp->getSale();
-                $paymentMethodName = $sp->getPaymentType()->getName();
-                $amountPaidWithThisMethod = (float)$sp->getAmountReceived();
-                // Desglosamos detalles por cada pago (misma lógica que el JSON)
-                foreach ($sale->getDetails() as $sd) {
-                    /** @var \App\Entity\SaleDetail $sd */
-                    $product = $sd->getProduct();
-                    $barber = $sd->getServiceProvider();
-
-                    $unitPrice = (float)$sd->getUnitPrice();
-                    $totalLine = (float)$sd->getTotal();
-                    $quantity = (float)$sd->getQuantity();
-
-                    fputcsv($handle, [
-                        $sale->getFolio(),
-                        $product ? $product->getName() : 'N/A',
-                        $product?->getServiceType()?->getName() ?? 'N/A',
-                        $barber ? ($barber->getName() . ' ' . $barber->getLastName()) : 'Sin asignar',
-                        $quantity,
-                        number_format($unitPrice, 2, '.', ''),
-                        number_format(($totalLine - $unitPrice), 2, '.', ''),
-                        number_format($totalLine, 2, '.', ''),
-                        $paymentMethodName,
-                        number_format($amountPaidWithThisMethod, 2, '.', ','),
-                        $sale->getSaleDate()->format('d/m/Y H:i:s')
-                    ], ';');
-                }
+            /** @var DailyReport $row */
+            foreach ($data as $row) {
+                fputcsv($handle, [
+                    $row->getTicketFolio(),
+                    $row->getProductServiceName(),
+                    $row->getServiceTypeName(),
+                    $row->getBarberName(),
+                    $row->getQuantity(),
+                    $row->getUnitPrice(),
+                    $row->getTipAmount(),
+                    $row->getTotal(),
+                    $row->getPaymentMethod(),
+                    $row->getPaymentAmount(),
+                    $row->getFormattedSaleDate()
+                ], ';');
             }
             fclose($handle);
         });
 
-        $fileName = 'reporte_detalles_' . date('Ymd_His') . '.csv';
-        $response->headers->set('Content-Type', 'text/csv; charset=utf-8');
-        $response->headers->set('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+        $response->headers->set('Content-Type', 'text/csv');
+        $response->headers->set('Content-Disposition', 'attachment; filename="reporte_diario.csv"');
 
         return $response;
     }
