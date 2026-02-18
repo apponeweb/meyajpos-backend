@@ -138,7 +138,7 @@ final class SaleController extends BaseController
         if ($form->isSubmitted() && $form->isValid()) {
 
 
-            $previewData = $reportService->getPreviewData()['details'];
+            $previewData = $reportService->getPreviewData('sale')['details'];
             $efective = 0;
             foreach ($previewData as $value) {
                 if ($value['is_cash']) {

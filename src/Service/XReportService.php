@@ -38,7 +38,7 @@ class XReportService
     {
     }
 
-    public function getPreviewData(): array
+    public function getPreviewData($mode = null): array
     {
         // Obtenemos el usuario autenticado directamente desde el componente Security
         $user = $this->security->getUser();
@@ -54,7 +54,7 @@ class XReportService
         }
 
         $salesCount = $this->saleRepo->count(['cashBoxSession' => $session->getId()]);
-        if ($salesCount === 0) {
+        if ($salesCount === 0 && $mode == null) {
             throw new \Exception('No se puede generar un corte X por no haber ventas realizadas en esta sesión.', 400);
         }
 
