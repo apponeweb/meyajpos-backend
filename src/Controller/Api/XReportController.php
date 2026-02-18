@@ -144,24 +144,4 @@ class XReportController extends AbstractController
             ]
         ], 201);
     }
-
-    private function calculateSystemAmount(CashBoxSession $session, PaymentType $paymentType, EntityManagerInterface $em): string
-    {
-        $saleRepository = $em->getRepository(Sale::class);
-        $movementRepo = $em->getRepository(CashBoxMovement::class);
-
-        $amount = $saleRepository->getSummaryByPaymentType($session, $paymentType->getId());
-
-        if ($paymentType->isCash()) {
-            // (Ventas + Inicial + Depósitos)
-            $amount = bcadd($amount, $session->getInitialAmount(), 2);
-            $amount = bcadd($amount, $movementRepo->getTotalDeposits($session), 2);
-
-            // - Retiros
-            $amount = bcsub($amount, $movementRepo->getTotalWithdrawals($session), 2);
-        }
-
-        return $amount;
-    }
-
 }

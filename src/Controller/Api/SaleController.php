@@ -19,6 +19,7 @@ use App\Repository\CashBoxSessionRepository;
 use App\Repository\SaleRepository;
 use App\Service\CashBoxMovementService;
 use App\Service\SaleService;
+use App\Service\XReportService;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use phpDocumentor\Reflection\Types\This;
@@ -97,7 +98,7 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Post('/sale')]
-    public function create(Request $request, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService, SaleService $saleService): JsonResponse
+    public function create(Request $request, XReportService $reportService, CashBoxSessionRepository $sessionRepo, CashBoxMovementService $cashBoxMovementService, SaleService $saleService): JsonResponse
     {
         $user = $this->security->getUser();
 
@@ -135,6 +136,22 @@ final class SaleController extends BaseController
         $form->submit(json_decode($request->getContent(), true));
 
         if ($form->isSubmitted() && $form->isValid()) {
+
+
+            $previewData = $reportService->getPreviewData()['details'];
+            $efective = 0;
+            foreach ($previewData as $value) {
+                if ($value['is_cash']) {
+                    $efective = $value['system_amount'];
+                    break;
+                }
+            }
+            if ($sale->getChange() > $efective) {
+                return $this->json([
+                    'message' => "El cambio a entregar debe ser menor que el efectivo en caja ($efective)",
+                    'error' => "El cambio a entregar debe ser menor que el efectivo en caja ($efective)"
+                ], JsonResponse::HTTP_BAD_REQUEST);
+            }
 
             $saleDetails = $sale->getDetails();
             /** @var SaleDetail $detail */
