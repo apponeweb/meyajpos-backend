@@ -179,7 +179,6 @@ final class SaleController extends BaseController
 
             }
 
-
             $data = json_decode($request->getContent(), true);
             if (empty($data['payments'])) {
                 $saleService->initializeEmptyPayments($sale, $user);
