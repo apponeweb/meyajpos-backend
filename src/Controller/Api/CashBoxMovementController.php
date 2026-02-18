@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
 use App\Enum\CashBoxSessionStatus;
+use App\Enum\CashMovementConcept;
 use App\Enum\CashMovementType;
 use App\Form\Type\CashBoxMovementType;
 use App\Repository\CashBoxMovementRepository;
@@ -12,6 +13,7 @@ use App\Repository\CashBoxSessionRepository;
 use App\Repository\SalePaymentRepository;
 use App\Repository\SaleRepository;
 use App\Service\CashBoxMovementService;
+use App\Service\XReportService;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,25 +36,9 @@ class CashBoxMovementController extends AbstractController
     #[Route('', name: 'app_cash_movement_index', methods: ['GET'])]
     public function index(
         Request                   $request,
-        CashBoxMovementRepository $movementRepository,
-        CashBoxSessionRepository  $sessionRepo
+        CashBoxMovementRepository $movementRepository
     ): JsonResponse
     {
-//        $user = $this->getUser();
-
-        // 1. Obtener sesión activa del cajero
-//        $activeSession = $sessionRepo->findOneBy([
-//            'user' => $user,
-//            'status' => CashBoxSessionStatus::OPEN
-//        ]);
-//
-//        if (!$activeSession) {
-//            return $this->json([
-//                'total' => 0,
-//                'results' => [],
-//                'message' => 'No hay una sesión de caja activa para este usuario.'
-//            ]);
-//        }
 
         $current = $request->query->getInt('current', 1);
         $pageSize = $request->query->getInt('pageSize', 10);
@@ -99,8 +85,7 @@ class CashBoxMovementController extends AbstractController
         Request                  $request,
         CashBoxSessionRepository $sessionRepo,
         CashBoxMovementService   $movementService,
-        SalePaymentRepository    $paymentRepo,
-        EntityManagerInterface   $entityManager
+        XReportService           $reportService
     ): JsonResponse
     {
         $user = $this->security->getUser();
@@ -122,6 +107,33 @@ class CashBoxMovementController extends AbstractController
         $form->submit(json_decode($request->getContent(), true));
 
         if ($form->isSubmitted() && $form->isValid()) {
+
+            $previewData = $reportService->getPreviewData()['details'];
+            $efective = 0;
+            foreach ($previewData as $value) {
+                if ($value['is_cash']) {
+                    $efective = $value['system_amount'];
+                    break;
+                }
+            }
+
+            if ($movement->getType() == CashMovementType::EXTRACTION) {
+                if ($movement->getAmount() > $efective) {
+                    return $this->json([
+                        'message' => 'Validación fallida',
+                        'errors' => [
+                            'children' => [
+                                'amount' => [
+                                    'errors' => [
+                                        "El monto a retirar debe ser menor que el efectivo en caja ($efective)"
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ], Response::HTTP_BAD_REQUEST);
+                }
+            }
+
             // LLAMADA AL SERVICIO
             $result = $movementService->createMovement($movement);
 

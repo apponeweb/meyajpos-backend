@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\CashBoxMovement;
 use App\Entity\CashBoxSession;
 use App\Entity\Company;
+use App\Entity\PaymentType;
 use App\Entity\Sale;
 use App\Entity\SaleDetail;
 use App\Entity\Tip;
@@ -17,6 +18,7 @@ use App\Enum\PaymentTypeEnum;
 use App\Repository\CashBoxMovementRepository;
 use App\Repository\CashBoxSessionRepository;
 use App\Repository\SalePaymentRepository;
+use App\Repository\SaleRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use phpDocumentor\Reflection\Types\This;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -26,10 +28,83 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class XReportService
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly CashBoxSessionRepository  $sessionRepo,
+        private readonly CashBoxMovementRepository $movementRepo,
+        private readonly SaleRepository            $saleRepo,
+        private readonly EntityManagerInterface    $entityManager,
+        private readonly Security                  $security
 
     )
     {
+    }
+
+    public function getPreviewData(): array
+    {
+        // Obtenemos el usuario autenticado directamente desde el componente Security
+        $user = $this->security->getUser();
+
+        if (!$user) {
+            throw new \Exception('Usuario no autenticado', 401);
+        }
+
+        $session = $this->sessionRepo->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
+
+        if (!$session) {
+            throw new \Exception('No tiene una sesión de la caja activa', 404);
+        }
+
+        $salesCount = $this->saleRepo->count(['cashBoxSession' => $session->getId()]);
+        if ($salesCount === 0) {
+            throw new \Exception('No se puede generar un corte X por no haber ventas realizadas en esta sesión.', 400);
+        }
+
+        $allPaymentTypes = $this->entityManager->getRepository(PaymentType::class)->findBy(['isActive' => true]);
+
+        $previewDetails = [];
+        $totalSystem = '0.00';
+
+        foreach ($allPaymentTypes as $paymentType) {
+            $amount = $this->calculateSystemAmount($session, $paymentType);
+
+            $previewDetails[] = [
+                'payment_type_id' => $paymentType->getId(),
+                'payment_type_name' => $paymentType->getName(),
+                'is_cash' => $paymentType->isCash(),
+                'system_amount' => $amount,
+            ];
+
+            $totalSystem = bcadd($totalSystem, $amount, 2);
+        }
+
+        return [
+            'session_id' => $session->getId(),
+            'initial_amount' => number_format($session->getInitialAmount(), 2, '.', ','),
+            'system_total' => number_format($totalSystem, 2, '.', ','),
+            'total_deposits' => number_format($this->movementRepo->getTotalDeposits($session), 2, '.', ','),
+            'total_extractions' => number_format($this->movementRepo->getTotalWithdrawals($session), 2, '.', ','),
+            'details' => $previewDetails
+        ];
+    }
+
+    /**
+     * Centralizamos el cálculo aquí (o muévelo al SaleRepository para mejor rendimiento)
+     */
+    public function calculateSystemAmount(CashBoxSession $session, PaymentType $paymentType): string
+    {
+        // Obtenemos el total de ventas para este tipo de pago
+        $amount = $this->saleRepo->getSummaryByPaymentType($session, $paymentType->getId());
+
+        // Si es efectivo, ajustamos con saldo inicial y movimientos (Depósitos/Retiros)
+        if ($paymentType->isCash()) {
+            // (Ventas + Inicial + Depósitos)
+            $amount = bcadd($amount, $session->getInitialAmount(), 2);
+            $amount = bcadd($amount, $this->movementRepo->getTotalDeposits($session), 2);
+
+            // - Retiros
+            $amount = bcsub($amount, $this->movementRepo->getTotalWithdrawals($session), 2);
+        }
+
+        return $amount;
     }
 
     public function generateTicketData(XReport $report)

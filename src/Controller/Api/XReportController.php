@@ -39,57 +39,23 @@ class XReportController extends AbstractController
     }
 
     #[Route('/preview', name: 'app_x_report_preview', methods: ['GET'])]
-    public function preview(
-        CashBoxSessionRepository  $cashBoxSessionRepository,
-        EntityManagerInterface    $em,
-        UserInterface             $user,
-        CashBoxMovementRepository $movementRepo,
-        SaleRepository            $saleRepository
-    ): JsonResponse
+    public function preview(XReportService $reportService): JsonResponse
     {
-        $session = $cashBoxSessionRepository->findOneBy(['user' => $user, 'status' => CashBoxSessionStatus::OPEN]);
-
-        if (!$session) {
-            return $this->json(['error' => 'No tiene una sesión de la caja activa'], 404);
-        }
-
-        $sales = $saleRepository->count(['cashBoxSession' => $session->getId()]);
-        if ($sales == 0) {
+        try {
+            $data = $reportService->getPreviewData();
             return $this->json([
-                'message' => "No se puede generar un corte X por no haber ventas realizadas en esta sesión.",
-            ], Response::HTTP_BAD_REQUEST);
+                'status' => 'success',
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            $statusCode = in_array($e->getCode(), [400, 404]) ? $e->getCode() : 500;
+            if ($statusCode === 404) {
+                return $this->json(['error' => $e->getMessage()], 404);
+            }
+            return $this->json([
+                'message' => $e->getMessage()
+            ], $statusCode);
         }
-
-        $paymentTypeRepo = $em->getRepository(PaymentType::class);
-        $allPaymentTypes = $paymentTypeRepo->findBy(['isActive' => true]);
-
-        $previewDetails = [];
-        $totalSystem = '0.00';
-
-        foreach ($allPaymentTypes as $paymentType) {
-            $amount = $this->calculateSystemAmount($session, $paymentType, $em);
-
-            $previewDetails[] = [
-                'payment_type_id' => $paymentType->getId(),
-                'payment_type_name' => $paymentType->getName(),
-                'is_cash' => $paymentType->isCash(),
-                'system_amount' => $amount,
-            ];
-
-            $totalSystem = bcadd($totalSystem, $amount, 2);
-        }
-
-        return $this->json([
-            'status' => 'success',
-            'data' => [
-                'session_id' => $session->getId(),
-                'initial_amount' => number_format($session->getInitialAmount(), 2, '.', ','),
-                'system_total' => number_format($totalSystem, 2, '.', ','),
-                'total_deposits' => number_format($movementRepo->getTotalDeposits($session), 2, '.', ','),
-                'total_extractions' => number_format($movementRepo->getTotalWithdrawals($session), 2, '.', ','),
-                'details' => $previewDetails
-            ]
-        ]);
     }
 
     #[Route('/generate', name: 'app_x_report_generate', methods: ['POST'])]
@@ -98,7 +64,8 @@ class XReportController extends AbstractController
         CashBoxSessionRepository $cashBoxSessionRepository,
         XReportRepository        $reportRepo,
         EntityManagerInterface   $em,
-        UserInterface            $user
+        UserInterface            $user,
+        XReportService           $reportService
     ): JsonResponse
     {
 //        $report = $reportRepo->find(45);
@@ -132,7 +99,7 @@ class XReportController extends AbstractController
             $ptId = $paymentTypeEntity->getId();
 
             // 1. Calculamos lo que dice el sistema
-            $systemAmount = $this->calculateSystemAmount($session, $paymentTypeEntity, $em);
+            $systemAmount = $reportService->calculateSystemAmount($session, $paymentTypeEntity);
 
             // 2. Buscamos en el JSON el valor usando el ID como llave
             // Usamos (string)$ptId porque las llaves de JSON decodificado suelen ser strings
