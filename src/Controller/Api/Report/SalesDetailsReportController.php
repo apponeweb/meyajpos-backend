@@ -115,7 +115,7 @@ class SalesDetailsReportController extends AbstractController
             $handle = fopen('php://output', 'w+');
             fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // UTF-8 BOM
 
-            fputcsv($handle, ['TICKET', 'PRODUCTO', 'TIPO', 'BARBERO', 'CANT', 'PRECIO', 'PROPINA', 'TOTAL', 'METODO', 'PAGADO', 'FECHA'], ';');
+            fputcsv($handle, ['TICKET', 'PRODUCTO/SERVICIO', 'TIPO DE SERVICIO', 'BARBERO', 'CANTIDAD', 'PRECIO UNITARIO', 'PROPINA', 'METODO DE PAGO', 'MONTO PAGADO', 'CAMBIO', 'TOTAL', 'FECHA'], ';');
 
             /** @var DailyReport $row */
             foreach ($data as $row) {
@@ -127,9 +127,10 @@ class SalesDetailsReportController extends AbstractController
                     $row->getQuantity(),
                     $row->getUnitPrice(),
                     $row->getTipAmount(),
-                    $row->getTotal(),
                     $row->getPaymentMethod(),
                     $row->getPaymentAmount(),
+                    $row->getCashChange(),
+                    $row->getTotal(),
                     $row->getFormattedSaleDate()
                 ], ';');
             }
