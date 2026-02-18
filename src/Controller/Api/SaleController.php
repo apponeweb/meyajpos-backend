@@ -188,23 +188,6 @@ final class SaleController extends BaseController
             }
 
             $this->entityManager->persist($sale);
-
-
-            // Solo si hubo flujo de efectivo real (dinero a la gaveta)
-//            $totalCashReceived = $sale->getSubtotal();
-//            $movement = new CashBoxMovement();
-//            $movement->setType(CashMovementType::INCOME);
-//            $movement->setConcept(CashMovementConcept::SALE);
-//            $movement->setAmount($totalCashReceived);
-//            $movement->setDescription("Ingreso automático por Venta Folio: " . $sale->getFolio());
-//            $movement->setChange($sale->getChange());
-//
-//            $movementResult = $cashBoxMovementService->createMovement($movement);
-//
-//            if (!$movementResult['success']) {
-//                return $this->json($movementResult);
-//            }
-
             $this->entityManager->flush();
 
             return $this->json([
@@ -252,7 +235,6 @@ final class SaleController extends BaseController
     private function getFormErrorsAsArray($form): array
     {
         $errors = [];
-
         // Errores globales (Ej: La validación de suma de pagos en la Entidad)
         foreach ($form->getErrors() as $error) {
             $errors['global'][] = $error->getMessage();
@@ -309,7 +291,6 @@ final class SaleController extends BaseController
                 $pay['exchangeRateUsed'] = number_format((float)($pay['exchangeRateUsed'] ?? 1), 2, '.', ',');
             }
         }
-
         return $this->json($data, Response::HTTP_OK);
     }
 
