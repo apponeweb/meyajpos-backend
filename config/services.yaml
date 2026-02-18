@@ -16,5 +16,8 @@ services:
     App\:
         resource: '../src/'
 
+    App\EventListener\IgnoreViewSchemaListener:
+        tags:
+            - { name: doctrine.event_listener, event: postGenerateSchema, connection: default }
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
