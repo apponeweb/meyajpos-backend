@@ -63,6 +63,7 @@ class CommissionReportController extends AbstractController
                     'price' => number_format((float)$price, 2, '.', ','), // Nuevo campo
                     'percentage' => number_format($percentage, 2, '.', ','),
                     'quantity' => $quantity,
+                    'total' => number_format((float)$price * $quantity, 2, '.', ','),
                     'commission' => number_format($totalComm, 2, '.', ','),
                     'date' => $dateObj instanceof \DateTimeInterface
                         ? $dateObj->format('d/m/Y H:i')
@@ -118,6 +119,7 @@ class CommissionReportController extends AbstractController
                 'BARBERO',
                 'PRECIO',
                 'CANTIDAD',
+                'TOTAL',
                 'COMISIÓN %',
                 'MONTO COMISIÓN',
                 'FECHA'
@@ -139,6 +141,7 @@ class CommissionReportController extends AbstractController
                     $row['barber'],
                     number_format((float)$unitPrice, 2, '.', ''),
                     $quantity,
+                    number_format((float)$unitPrice * $quantity, 2, '.', ','),
                     number_format($percentage, 2, '.', ''),
                     number_format($totalComm, 2, '.', ''),
                     $date->format('d/m/Y H:i')
