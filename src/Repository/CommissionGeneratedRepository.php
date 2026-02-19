@@ -94,7 +94,24 @@ class CommissionGeneratedRepository extends BaseRepository
             $qb->andWhere('cg.createdAt <= :endDate')
                 ->setParameter('endDate', new \DateTime($filters['endDate'] . ' 23:59:59'));
         }
+// --- FILTRO POR TIPO DE SERVICIO ---
+        if (!empty($filters['serviceTypeId'])) {
+            $qb->andWhere('st.id = :serviceTypeId')
+                ->setParameter('serviceTypeId', $filters['serviceTypeId']);
+        }
 
+        // --- FILTRO POR BARBERO ---
+        if (!empty($filters['barberId'])) {
+            $qb->andWhere('u.id = :barberId')
+                ->setParameter('barberId', $filters['barberId']);
+        }
+
+
+        // --- BÚSQUEDA GENERAL ---
+        if (!empty($filters['search'])) {
+            $qb->andWhere('mp.name LIKE :search OR u.name LIKE :search')
+                ->setParameter('search', '%' . $filters['search'] . '%');
+        }
         return $qb->getQuery()->getSingleResult();
     }
 
