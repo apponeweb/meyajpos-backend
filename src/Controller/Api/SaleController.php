@@ -273,17 +273,12 @@ final class SaleController extends BaseController
     #[Rest\Get('/sale/{id}')]
     public function get(Sale $id): JsonResponse
     {
-        // 1. Llamamos a la validación genérica del padre (check de eliminado/inactivo)
         $response = $this->getDetails($id);
-
-        // 2. Si el padre devolvió un error (404 o 500), lo retornamos tal cual
         if ($response->getStatusCode() !== Response::HTTP_OK) {
             return $response;
         }
-
         $data = json_decode($response->getContent(), true);
 
-        // Campos raíz
         $data['subtotal'] = $this->moneyFormat($data['subtotal'] ?? 0);
         $data['totalTax'] = $this->moneyFormat($data['totalTax'] ?? 0);
         $data['total'] = $this->moneyFormat($data['total'] ?? 0);
