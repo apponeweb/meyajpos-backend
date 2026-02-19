@@ -31,7 +31,7 @@ class CommissionGeneratedRepository extends BaseRepository
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
             ->join('cg.user', 'u')
-            ->leftJoin('mp.serviceType', 'st') // Join necesario para ver y filtrar el tipo
+            ->leftJoin('mp.serviceType', 'st')
             /* Agrupamos por campos lógicos.
                Nota: serviceDate se usa para separar registros por día si es necesario.
             */
@@ -82,7 +82,8 @@ class CommissionGeneratedRepository extends BaseRepository
             )
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
-            ->join('cg.user', 'u');
+            ->join('cg.user', 'u')
+            ->leftJoin('mp.serviceType', 'st');
 
         // Reutilizar lógica de filtros aquí o mediante un Helper
         if (!empty($filters['startDate'])) {
@@ -94,7 +95,7 @@ class CommissionGeneratedRepository extends BaseRepository
             $qb->andWhere('cg.createdAt <= :endDate')
                 ->setParameter('endDate', new \DateTime($filters['endDate'] . ' 23:59:59'));
         }
-// --- FILTRO POR TIPO DE SERVICIO ---
+        // --- FILTRO POR TIPO DE SERVICIO ---
         if (!empty($filters['serviceTypeId'])) {
             $qb->andWhere('st.id = :serviceTypeId')
                 ->setParameter('serviceTypeId', $filters['serviceTypeId']);
