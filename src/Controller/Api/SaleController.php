@@ -328,7 +328,6 @@ final class SaleController extends BaseController
                 'status' => Response::HTTP_NOT_FOUND
             ], Response::HTTP_NOT_FOUND);
         }
-
         try {
             $em->remove($sale);
             $id = $sale->getId();
