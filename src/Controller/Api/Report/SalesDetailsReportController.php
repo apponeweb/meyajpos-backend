@@ -105,6 +105,7 @@ class SalesDetailsReportController extends AbstractController
             'endDate' => $request->query->get('endDate'),
             'barberId' => $request->query->get('barberId'),
             'serviceTypeId' => $request->query->get('serviceTypeId'),
+            'paymentTypeId' => $request->query->get('paymentTypeId'),
             'search' => $request->query->get('search'),
         ];
 
