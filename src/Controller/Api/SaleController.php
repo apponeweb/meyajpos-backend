@@ -20,6 +20,7 @@ use App\Repository\SaleRepository;
 use App\Service\CashBoxMovementService;
 use App\Service\SaleService;
 use App\Service\XReportService;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use phpDocumentor\Reflection\Types\This;
@@ -316,5 +317,35 @@ final class SaleController extends BaseController
     private function moneyFormat($value): string
     {
         return number_format((float)$value, 2, '.', ',');
+    }
+
+    #[Rest\Delete('/sale/{id}')]
+    public function deleteSale(?Sale $sale, EntityManagerInterface $em): JsonResponse
+    {
+        if (!$sale) {
+            return $this->json([
+                'message' => 'La venta con el ID proporcionado no existe o ya fue eliminada',
+                'status' => Response::HTTP_NOT_FOUND
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $em->remove($sale);
+            $id = $sale->getId();
+            $ticket = $sale->getFolio();
+            $em->flush();
+
+            return $this->json([
+                'status' => Response::HTTP_OK,
+                'message' => "La venta #{$id} y ticket:{$ticket} ha sido eliminada correctamente."
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'message' => 'No se pudo completar la eliminación',
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                'details' => $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }

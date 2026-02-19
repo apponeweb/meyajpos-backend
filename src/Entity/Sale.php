@@ -59,7 +59,7 @@ class Sale extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
     private ?string $cancellationReason = null;
 
-    #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'],orphanRemoval: true)]
     private Collection $payments;
 
     private Collection $tips;

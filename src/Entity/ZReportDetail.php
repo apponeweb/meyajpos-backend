@@ -17,7 +17,8 @@ class ZReportDetail extends BaseEntity
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: ZReport::class, inversedBy: 'details')]
-    #[ORM\JoinColumn(name: 'z_report_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'z_report_id', referencedColumnName: 'id', nullable: false,
+        onDelete: 'CASCADE')]
     private ?ZReport $zReport = null;
 
     #[ORM\ManyToOne(targetEntity: PaymentType::class)]

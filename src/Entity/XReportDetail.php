@@ -17,7 +17,8 @@ class XReportDetail extends BaseEntity
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: XReport::class)]
-    #[ORM\JoinColumn(name: 'x_report_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'x_report_id', referencedColumnName: 'id', nullable: false,
+        onDelete: 'CASCADE')]
     private ?XReport $xReport = null;
 
     #[ORM\ManyToOne(targetEntity: PaymentType::class)]

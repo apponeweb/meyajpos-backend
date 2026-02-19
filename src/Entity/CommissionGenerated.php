@@ -18,7 +18,8 @@ class CommissionGenerated extends BaseEntity
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: SaleDetail::class)]
-    #[ORM\JoinColumn(name: 'sale_detail_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'sale_detail_id', referencedColumnName: 'id', nullable: false,
+        onDelete: 'CASCADE')]
     private ?SaleDetail $saleDetail = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]

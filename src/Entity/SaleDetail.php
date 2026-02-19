@@ -21,7 +21,8 @@ class SaleDetail extends Base
     private ?int $id = null;
     #[Ignore]
     #[ORM\ManyToOne(targetEntity: Sale::class)]
-    #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false,
+        onDelete: 'CASCADE')]
     private ?Sale $sale = null;
 
     #[ORM\Column(type: Types::STRING, length: 100, unique: true)]

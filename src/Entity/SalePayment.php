@@ -20,7 +20,7 @@ class SalePayment extends BaseEntity
     private ?int $id = null;
     #[Ignore]
     #[ORM\ManyToOne(targetEntity: Sale::class, inversedBy: 'payments')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?Sale $sale = null;
 
     #[ORM\ManyToOne(targetEntity: PaymentType::class)]

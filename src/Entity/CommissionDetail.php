@@ -28,7 +28,8 @@ class CommissionDetail extends BaseEntity
     private ?int $id = null;
 
     #[ORM\ManyToOne(targetEntity: Commission::class)]
-    #[ORM\JoinColumn(name: 'commission_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\JoinColumn(name: 'commission_id', referencedColumnName: 'id', nullable: false,
+        onDelete: 'CASCADE')]
     private ?Commission $commission = null;
 
 

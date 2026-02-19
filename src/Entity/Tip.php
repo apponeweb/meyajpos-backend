@@ -20,7 +20,8 @@ class Tip extends BaseEntity
     private ?int $id = null;
     #[Ignore]
     #[ORM\ManyToOne(targetEntity: SalePayment::class)]
-    #[ORM\JoinColumn(name: 'sale_payment_id', referencedColumnName: 'id', nullable: true)]
+    #[ORM\JoinColumn(name: 'sale_payment_id', referencedColumnName: 'id', nullable: true,
+        onDelete: 'CASCADE')]
     private ?SalePayment $salePayment = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
