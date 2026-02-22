@@ -229,24 +229,29 @@ final class SaleController extends BaseController
     {
         $repository = $this->entityManager->getRepository(Sale::class);
 
-        // Definir el rango del día (desde las 00:00:00 hasta las 23:59:59)
-        $startOfDay = (clone $date)->setTime(0, 0, 0);
-        $endOfDay = (clone $date)->setTime(23, 59, 59);
+        // Prefijo del día actual para buscar el máximo consecutivo
+        $datePrefix = 'V-' . $date->format('Ymd') . '-';
 
-        // Contar cuántas ventas se han realizado hoy
-        $count = $repository->createQueryBuilder('s')
-            ->select('COUNT(s.id)')
-            ->where('s.saleDate BETWEEN :start AND :end')
-            ->setParameter('start', $startOfDay)
-            ->setParameter('end', $endOfDay)
+        // Obtener el folio máximo del día actual
+        $maxFolio = $repository->createQueryBuilder('s')
+            ->select('MAX(s.folio)')
+            ->where('s.folio LIKE :prefix')
+            ->setParameter('prefix', $datePrefix . '%')
             ->getQuery()
             ->getSingleScalarResult();
 
-        $nextNumber = (int)$count + 1;
+        if ($maxFolio) {
+            // Extraer el consecutivo del folio máximo (últimos 4 dígitos después del último guion)
+            $parts = explode('-', $maxFolio);
+            $lastNumber = (int)end($parts);
+            $nextNumber = $lastNumber + 1;
+        } else {
+            $nextNumber = 1;
+        }
 
-        // Formato: AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
-        // Ejemplo: 20260126-0001
-        return "V-" . sprintf('%s-%04d', $date->format('Ymd'), $nextNumber);
+        // Formato: V-AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
+        // Ejemplo: V-20260126-0001
+        return sprintf('%s%04d', $datePrefix, $nextNumber);
     }
 
     private function getFormErrorsAsArray($form): array
