@@ -119,9 +119,9 @@ final class SaleController extends BaseController
         $today = new \DateTime();
         if ($activeSession->getCreatedAt()->format('Y-m-d') !== $today->format('Y-m-d')) {
             return $this->json([
-                'message' => 'Error al crear la venta. La fecha de la sesión abierta no corresponde con la fecha actual.',
+                'message' => 'No puedes realizar una nueva venta hasta que hagas el cierre del día anterior.',
                 'errors' => [
-                    'cashBox' => 'La sesión actual pertenece a un día anterior. Por favor, cierre la sesión y abra una nueva para hoy.'
+                    'cashBox' => 'No puedes realizar una nueva venta hasta que hagas el cierre del día anterior.'
                 ]
             ], JsonResponse::HTTP_BAD_REQUEST);
         }
