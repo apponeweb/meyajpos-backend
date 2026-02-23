@@ -116,8 +116,18 @@ final class SaleController extends BaseController
             ], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $sale = new Sale();
+        $today = new \DateTime();
+        if ($activeSession->getCreatedAt()->format('Y-m-d') !== $today->format('Y-m-d')) {
+            return $this->json([
+                'message' => 'Error al crear la venta. La fecha de la sesión abierta no corresponde con la fecha actual.',
+                'errors' => [
+                    'cashBox' => 'La sesión actual pertenece a un día anterior. Por favor, cierre la sesión y abra una nueva para hoy.'
+                ]
+            ], JsonResponse::HTTP_BAD_REQUEST);
+        }
 
+
+        $sale = new Sale();
 
         $now = new \DateTime();
         // Asignamos datos automáticos antes de procesar el formulario
