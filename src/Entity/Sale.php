@@ -13,6 +13,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Component\Validator\Constraints as Assert;
+use Doctrine\ORM\Event\PreRemoveEventArgs;
 
 #[ORM\Entity(repositoryClass: SaleRepository::class)]
 #[ORM\Table(name: 'tbd_sale')]
@@ -59,7 +60,7 @@ class Sale extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
     private ?string $cancellationReason = null;
 
-    #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'],orphanRemoval: true)]
+    #[ORM\OneToMany(targetEntity: SalePayment::class, mappedBy: 'sale', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $payments;
 
     private Collection $tips;
@@ -344,5 +345,73 @@ class Sale extends BaseEntity
         $this->cashBoxSession = $cashBoxSession;
     }
 
+    #[ORM\PreRemove]
+    public function onPreRemove(PreRemoveEventArgs $args): void
+    {
+        $em = $args->getObjectManager();
 
+        // 1. Instanciar registro de auditoría
+        $audit = new SaleAuditDeleted();
+        $audit->setFolio($this->folio);
+        $audit->setTotal($this->total);
+
+        // 2. Construir Snapshot base
+        $snapshot = [
+            'sale_date' => $this->saleDate?->format('Y-m-d H:i:s'),
+            'user_id' => $this->user?->getId(),
+            'cash_box_id' => $this->cashBox?->getId(),
+            'subtotal' => $this->subtotal,
+            'tax' => $this->totalTax,
+            'change' => $this->change,
+            'status' => $this->status->value,
+            'details' => [],
+            'payments' => []
+        ];
+
+        // 3. Procesar Detalles (SaleDetail)
+        foreach ($this->details as $detail) {
+            $snapshot['details'][] = [
+                'itemLine' => $detail->getItemLine(),
+                'product_id' => $detail->getProduct()?->getId(),
+                'product_name' => $detail->getProduct()?->getName(),
+                'quantity' => $detail->getQuantity(),
+                'unitPrice' => $detail->getUnitPrice(),
+                'discount' => $detail->getDiscount(),
+                'subtotal' => $detail->getSubtotal(),
+                'tax' => $detail->getTax(),
+                'total' => $detail->getTotal(),
+                'provider_id' => $detail->getServiceProvider()?->getId(),
+                'isCourtesy' => $detail->isCourtesy()
+            ];
+        }
+
+        // 4. Procesar Pagos (SalePayment) y sus Propinas (Tips)
+        foreach ($this->payments as $payment) {
+            $paymentData = [
+                'paymentType' => $payment->getPaymentType()?->getName(),
+                'currency' => $payment->getCurrency()?->getName(), // O getCode()
+                'amountReceived' => $payment->getAmountReceived(),
+                'amountLocalCurrency' => $payment->getAmountLocalCurrency(),
+                'exchangeRate' => $payment->getExchangeRateUsed(),
+                'reference' => $payment->getReference(),
+                'tips' => []
+            ];
+
+            // Extraer propinas vinculadas a este pago específico
+            foreach ($payment->getTips() as $tip) {
+                $paymentData['tips'][] = [
+                    'amount' => $tip->getAmount(),
+                    'paymentType' => $tip->getPaymentType()->getId(),
+                    'description' => $tip->getDescription() // Ajustar según campos de tu entidad Tip
+                ];
+            }
+
+            $snapshot['payments'][] = $paymentData;
+        }
+
+        $audit->setContent($snapshot);
+
+        // 5. Persistir (Doctrine procesará el INSERT al hacer el flush() del DELETE)
+        $em->persist($audit);
+    }
 }
