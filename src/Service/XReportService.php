@@ -184,10 +184,13 @@ class XReportService
         $ventasTransferenciaV2 = 0.00;
         $courtesy = 0.00;
 
+        $changeSale = 0;
         foreach ($sales as $sale) {
+            $changeSale += $sale->getChange();
             foreach ($sale->getPayments() as $payment) {
                 $tips = $tipRepo->findBy(['salePayment' => $payment->getId()]);
-                $name = strtolower($payment->getPaymentType()->getName());
+                $id = $payment->getPaymentType()->getId();
+
                 foreach ($tips as $tip) {
                     $tipAmount = (float)$tip->getAmount();
                     $finalType = null;
@@ -206,9 +209,10 @@ class XReportService
                     elseif ($finalType === 'transferencia') $propinaTransferencia += $tipAmount;
                 }
                 $amount = (float)$payment->getAmountReceived();
-                if (str_contains($name, 'efectivo')) $ventasEfectivoV2 += $amount;
-                elseif (str_contains($name, 'tarjeta')) $ventasTarjetaV2 += $amount;
-                elseif (str_contains($name, 'transferencia')) $ventasTransferenciaV2 += $amount;
+
+                if ($id == PaymentTypeEnum::CASH->value) $ventasEfectivoV2 += $amount;
+                elseif ($id == PaymentTypeEnum::CARD->value) $ventasTarjetaV2 += $amount;
+                elseif ($id == PaymentTypeEnum::TRANSFER->value) $ventasTransferenciaV2 += $amount;
             }
             /** @var SaleDetail $detail */
             foreach ($sale->getDetails() as $detail) {
@@ -217,7 +221,10 @@ class XReportService
                 }
             }
         }
+
+
         $ventasEfectivoV2 -= $propinaEfectivo;
+        $ventasEfectivoV2 -= $changeSale;
         $ventasTarjetaV2 -= $propinaTarjeta;
 
 
@@ -231,6 +238,7 @@ class XReportService
                 break;
             }
         }
+
         $diferencia = $efectivoDeclarado - $efectivoEsperado;
 
         // 5. Determinar Estatus

@@ -91,7 +91,7 @@ class XReportController extends AbstractController
 
             if (!$xreport) {
                 return $this->json([
-                    'message' => 'Coret X no encontrada',
+                    'message' => 'Corte X no encontrada',
                     'status' => Response::HTTP_NOT_FOUND
                 ], Response::HTTP_NOT_FOUND);
             }
