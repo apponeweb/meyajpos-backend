@@ -5,6 +5,8 @@ namespace App\Controller\Api\Ticket;
 use App\Enum\SaleStatus;
 use App\Repository\XReportRepository;
 use App\Service\XReportService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -114,5 +116,47 @@ class XReportController extends AbstractController
                 'status' => Response::HTTP_INTERNAL_SERVER_ERROR
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+
+    #[Route('/pdf/{id}', name: 'api_xreport_pdf_ticket', methods: ['GET'])]
+    public function generatePdf($id): Response
+    {
+        $xreport = $this->xReportRepository->find($id);
+
+        if (!$xreport) {
+            return $this->json([
+                'message' => 'Corte X no encontrada',
+                'status' => Response::HTTP_NOT_FOUND
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        // 2. Generar la data usando el servicio
+        $fullData = json_decode($this->xReportService->generateTicketData($xreport), true);
+        $ticketData = $fullData[0]['data'] ?? null;
+
+
+        // 2. Configurar Dompdf
+        $pdfOptions = new Options();
+        $pdfOptions->set('defaultFont', 'Helvetica');
+        $pdfOptions->set('isRemoteEnabled', true); // Por si usas imágenes externas (logos)
+
+        $dompdf = new Dompdf($pdfOptions);
+
+        // 3. Renderizar el HTML usando Twig
+        $html = $this->renderView('ticket/xreport.html.twig', [
+            'data' => $ticketData
+        ]);
+
+        // 4. Cargar HTML y generar PDF
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        // 5. Devolver el PDF al navegador
+        return new Response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="corte_caja.pdf"'
+        ]);
     }
 }

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Helvetica', sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .header {
+            display: table;
+            width: 100%;
+            border-bottom: 2px solid #000;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+
+        .header-logo {
+            display: table-cell;
+            vertical-align: middle;
+        }
+
+        .header-info {
+            display: table-cell;
+            text-align: right;
+            vertical-align: middle;
+        }
+
+        .business-name {
+            font-size: 26px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .folio-badge {
+            display: inline-block;
+            background-color: #1e293b;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .section-title {
+            background: #f1f5f9;
+            padding: 6px 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-left: 4px solid #000;
+            margin: 20px 0 10px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background-color: #f8fafc;
+            padding: 10px;
+            border-bottom: 2px solid #e2e8f0;
+            text-align: left;
+            color: #64748b;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .totals-container {
+            width: 40%;
+            margin-left: 60%;
+            margin-top: 20px;
+        }
+
+        .total-row-highlight {
+            background-color: #f8fafc;
+            font-size: 16px;
+            border-top: 2px solid #000;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            color: #94a3b8;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-logo">
+        <h1 class="business-name">{{ data.negocio.nombreComercial }}</h1>
+        <div class="folio-badge">FOLIO: {{ data.transaccion.folio }}</div>
+    </div>
+    <div class="header-info">
+        <strong>Fecha:</strong> {{ data.transaccion.fechaHora }}<br>
+        <strong>Barbero:</strong> {{ data.transaccion.barbero }}<br>
+        <strong>RFC:</strong> {{ data.negocio.rfc }}
+    </div>
+</div>
+
+<div class="section-title">Detalle del Servicio</div>
+<table>
+    <thead>
+    <tr>
+        <th width="10%">Cant.</th>
+        <th>Descripción</th>
+        <th width="20%" class="text-right">Precio</th>
+        <th width="20%" class="text-right">Importe</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for item in data.detalle.items %}
+        <tr>
+            <td>{{ item.cantidad }}</td>
+            <td class="font-bold">{{ item.descripcion }}</td>
+            <td class="text-right">${{ item.precio }}</td>
+            <td class="text-right font-bold">${{ item.importe }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="totals-container">
+    <table>
+        <tr>
+            <td class="text-right">Subtotal:</td>
+            <td class="text-right">${{ data.totales.subtotal }}</td>
+        </tr>
+        <tr>
+            <td class="text-right">IVA ({{ data.totales.iva }}%):</td>
+            <td class="text-right">$0.00</td>
+        </tr>
+        <tr class="total-row-highlight">
+            <td class="text-right font-bold">TOTAL:</td>
+            <td class="text-right font-bold">${{ data.totales.total }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="footer">
+    <p><strong>Políticas:</strong> {{ data.adicional.politicas }}</p>
+    <p><strong>Redes:</strong> {{ data.adicional.redes }}</p>
+</div>
+
+</body>
+</html>

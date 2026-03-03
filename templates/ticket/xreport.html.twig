@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Helvetica', sans-serif;
+            color: #333;
+            padding: 20px;
+            font-size: 12px;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .business-name {
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+            background-color: {{ data.corte.estatus == 'CUADRADO' ? '#059669' : '#dc2626' }};
+            color: white;
+        }
+
+        .section-title {
+            background: #f1f5f9;
+            padding: 5px 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-left: 4px solid #000;
+            margin: 15px 0 10px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        th, td {
+            padding: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .footer-signatures {
+            margin-top: 50px;
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            width: 200px;
+            display: inline-block;
+            margin: 0 40px;
+            padding-top: 5px;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1 class="business-name">{{ data.negocio.nombreComercial }}</h1>
+    <div class="status-badge">ESTATUS: {{ data.corte.estatus }}</div>
+    <p>Reporte de Corte de Caja | Impreso: {{ data.corte.impresoAt }}</p>
+</div>
+
+<table>
+    <tr>
+        <td><strong>Caja:</strong> {{ data.corte.caja }}</td>
+        <td><strong>Cajero:</strong> {{ data.corte.cajero }}</td>
+        <td class="text-right"><strong>Periodo:</strong> {{ data.corte.periodo.inicio }} - {{ data.corte.periodo.fin }}
+        </td>
+    </tr>
+</table>
+
+<div class="section-title">Ventas por Forma de Pago</div>
+<table>
+    <tr>
+        <td>Efectivo</td>
+        <td class="text-right">{{ data.corte.ventasPorFormaPago.efectivo }}</td>
+    </tr>
+    <tr>
+        <td>Tarjeta</td>
+        <td class="text-right">{{ data.corte.ventasPorFormaPago.tarjeta }}</td>
+    </tr>
+    <tr>
+        <td>Transferencias</td>
+        <td class="text-right">{{ data.corte.ventasPorFormaPago.transferencias }}</td>
+    </tr>
+    <tr class="font-bold">
+        <td>TOTAL VENTAS</td>
+        <td class="text-right">{{ data.corte.ventasPorFormaPago.totalVentas }}</td>
+    </tr>
+</table>
+
+<div class="section-title">Efectivo en Caja</div>
+<table>
+    <tr>
+        <td>Fondo Inicial</td>
+        <td class="text-right">{{ data.corte.fondoInicial }}</td>
+    </tr>
+    <tr>
+        <td>Efectivo Esperado</td>
+        <td class="text-right">{{ data.corte.efectivoEnCaja.efectivoEsperado }}</td>
+    </tr>
+    <tr>
+        <td>Efectivo Declarado</td>
+        <td class="text-right">{{ data.corte.efectivoEnCaja.efectivoDeclarado }}</td>
+    </tr>
+    <tr class="font-bold" style="color: {{ data.corte.efectivoEnCaja.diferencia == '$0.00' ? '#059669' : '#dc2626' }};">
+        <td>DIFERENCIA</td>
+        <td class="text-right">{{ data.corte.efectivoEnCaja.diferencia }}</td>
+    </tr>
+</table>
+
+<div class="section-title">Propinas</div>
+<table>
+    <tr class="font-bold">
+        <td>TOTAL PROPINAS</td>
+        <td class="text-right">{{ data.corte.propinas.totalPropinas }}</td>
+    </tr>
+</table>
+
+<div class="footer-signatures">
+    <div class="signature-line">
+        <p>{{ data.corte.firmas.cajero.nombre }}</p>
+        <small>Cajero | {{ data.corte.firmas.cajero.fecha }}</small>
+    </div>
+    <div class="signature-line">
+        <p>{{ data.corte.firmas.supervisor.nombre }}</p>
+        <small>Supervisor | {{ data.corte.firmas.supervisor.fecha }}</small>
+    </div>
+</div>
+</body>
+</html>

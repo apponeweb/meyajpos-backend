@@ -5,6 +5,8 @@ namespace App\Controller\Api\Ticket;
 use App\Enum\SaleStatus;
 use App\Repository\SaleRepository;
 use App\Service\SaleService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -116,6 +118,62 @@ class SalesController extends AbstractController
         } catch (\Exception $e) {
             return $this->json([
                 'message' => 'Error al generar la data del ticket',
+                'detail' => $e->getMessage(),
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/pdf/{id}', name: 'api_sales_pdf_ticket', methods: ['GET'])]
+    public function generateSalePdf(int $id): Response
+    {
+        try {
+            // 1. Buscar la venta
+            $sale = $this->saleRepository->find($id);
+
+            if (!$sale) {
+                return $this->json([
+                    'message' => 'Venta no encontrada',
+                    'status' => Response::HTTP_NOT_FOUND
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            // 2. Generar y decodificar la data (Limpieza del JSON)
+            $fullData = json_decode($this->salesService->generateTicketData($sale), true);
+
+            // Al igual que el reporte, extraemos el objeto real
+            $ticketData = $fullData[0]['data'] ?? null;
+
+            if (!$ticketData) {
+                throw new \Exception("La estructura del ticket es inválida.");
+            }
+
+            // 3. Configurar Dompdf
+            $pdfOptions = new Options();
+            $pdfOptions->set('defaultFont', 'Helvetica');
+            $pdfOptions->set('isRemoteEnabled', true);
+
+            $dompdf = new Dompdf($pdfOptions);
+
+            // 4. Renderizar la plantilla Twig (La propuesta de diseño de ticket que te di)
+            $html = $this->renderView('ticket/sale.html.twig', [
+                'data' => $ticketData
+            ]);
+
+            // 5. Generar PDF
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait'); // O 'A4' si prefieres el formato grande que pediste
+            $dompdf->render();
+
+            // 6. Retorno del PDF
+            return new Response($dompdf->output(), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="ticket_venta_'.$sale->getId().'.pdf"'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'message' => 'Error al generar el PDF de la venta',
                 'detail' => $e->getMessage(),
                 'status' => Response::HTTP_INTERNAL_SERVER_ERROR
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
