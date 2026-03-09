@@ -70,4 +70,29 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->getQuery()
             ->getResult();
     }
+
+    public function getBarbersWithPagination(?string $search = null)
+    {
+        $qb = $this->createQueryBuilder('u')
+            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled')
+            ->andWhere('u.barberSn = :isBarber')
+            ->setParameter('isBarber', true);
+
+        if ($search) {
+            $qb->andWhere('(u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search)')
+                ->setParameter('search', '%' . $search . '%');
+        }
+
+        return $qb->getQuery();
+    }
+
+    public function getAllBarbersToSelect()
+    {
+        $queryBuilder = $this->createQueryBuilder('u')
+            ->select('u.id', 'u.name')
+            ->andWhere('u.barberSn = :isBarber')
+            ->setParameter('isBarber', true)
+            ->orderBy('u.name', 'ASC');
+        return $queryBuilder->getQuery()->getResult();
+    }
 }

@@ -28,7 +28,8 @@ class BranchFormType extends BaseFormType
             'invalid_message' => 'La compañía seleccionada no es válida.',
         ])
             ->add('acronym')
-            ->add('address') ;
+            ->add('address')
+            ->add('phone');
     }
 
     public function configureOptions(OptionsResolver $resolver): void

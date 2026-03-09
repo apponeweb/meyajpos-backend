@@ -29,6 +29,9 @@ class Branch extends BaseEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private string $address;
 
+    #[ORM\Column(type: Types::STRING, length: 50, nullable: true)]
+    private ?string $phone = null;
+
     public function getAddress(): string
     {
         return $this->address;
@@ -57,6 +60,16 @@ class Branch extends BaseEntity
     public function setCompany(?Company $company): void
     {
         $this->company = $company;
+    }
+
+    public function getPhone(): ?string
+    {
+        return $this->phone;
+    }
+
+    public function setPhone(?string $phone): void
+    {
+        $this->phone = $phone;
     }
 
 }
