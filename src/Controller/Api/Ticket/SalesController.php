@@ -21,8 +21,7 @@ class SalesController extends AbstractController
     public function __construct(
         private readonly SaleRepository $saleRepository,
         private readonly SaleService $salesService
-    )
-    {
+    ) {
     }
 
     #[Route('/list', name: 'api_sales_ticket', methods: ['GET'])]
@@ -48,7 +47,7 @@ class SalesController extends AbstractController
             // Mapeo manual para formatear FECHAS y TOTALES
             $results = array_map(function ($sale) {
                 // 1. Obtenemos el valor crudo (asegurando que sea int)
-                $statusRawValue = (int)(is_object($sale['status']) ? $sale['status']->value : $sale['status']);
+                $statusRawValue = (int) (is_object($sale['status']) ? $sale['status']->value : $sale['status']);
 
                 // 2. Intentamos obtener el Enum de forma segura
                 $statusEnum = SaleStatus::tryFrom($statusRawValue) ?? SaleStatus::IN_PROGRESS;
@@ -62,10 +61,10 @@ class SalesController extends AbstractController
                     'cashier' => $sale['cashier'],
                     'cashbox' => $sale['cashbox'],
                     'status' => $statusEnum->getLabel(),
-                    'subtotal' => number_format((float)$sale['subtotal'], 2, '.', ','),
-                    'tax' => number_format((float)$sale['totalTax'], 2, '.', ','),
-                    'total' => number_format((float)$sale['total'], 2, '.', ','),
-                    'change' => number_format((float)($sale['change'] ?? 0), 2, '.', ',')
+                    'subtotal' => number_format((float) $sale['subtotal'], 2, '.', ','),
+                    'tax' => number_format((float) $sale['totalTax'], 2, '.', ','),
+                    'total' => number_format((float) $sale['total'], 2, '.', ','),
+                    'change' => number_format((float) ($sale['change'] ?? 0), 2, '.', ',')
                 ];
             }, $paginator->getIterator()->getArrayCopy());
 
@@ -168,12 +167,49 @@ class SalesController extends AbstractController
             // 6. Retorno del PDF
             return new Response($dompdf->output(), 200, [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="ticket_venta_'.$sale->getId().'.pdf"'
+                'Content-Disposition' => 'inline; filename="ticket_venta_' . $sale->getId() . '.pdf"'
             ]);
 
         } catch (\Exception $e) {
             return $this->json([
                 'message' => 'Error al generar el PDF de la venta',
+                'detail' => $e->getMessage(),
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/html/{id}', name: 'api_sales_html_ticket', methods: ['GET'])]
+    public function generateSaleHtml(int $id): Response
+    {
+        try {
+            $sale = $this->saleRepository->find($id);
+
+            if (!$sale) {
+                return $this->json([
+                    'message' => 'Venta no encontrada',
+                    'status' => Response::HTTP_NOT_FOUND
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $fullData = json_decode($this->salesService->generateTicketData($sale), true);
+            $ticketData = $fullData[0]['data'] ?? null;
+
+            if (!$ticketData) {
+                throw new \Exception("La estructura del ticket es inválida.");
+            }
+
+            $html = $this->renderView('ticket/sale.html.twig', [
+                'data' => $ticketData
+            ]);
+
+            return new Response($html, 200, [
+                'Content-Type' => 'text/html'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'message' => 'Error al generar el HTML de la venta',
                 'detail' => $e->getMessage(),
                 'status' => Response::HTTP_INTERNAL_SERVER_ERROR
             ], Response::HTTP_INTERNAL_SERVER_ERROR);

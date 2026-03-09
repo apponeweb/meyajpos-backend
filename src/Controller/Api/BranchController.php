@@ -48,6 +48,7 @@ final class BranchController extends BaseController
             'u.isActive',
             'u.acronym',
             'u.address',
+            'u.phone',
             'c.name as companyName',
             'c.id as companyId'
         ];
