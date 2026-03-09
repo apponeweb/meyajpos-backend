@@ -1,0 +1,112 @@
+<?php
+
+namespace App\Controller\Api;
+
+use App\Entity\Branch;
+use App\Entity\BranchHour;
+use App\Form\Type\BranchHourFormType;
+use App\Repository\BranchHourRepository;
+use Doctrine\ORM\QueryBuilder;
+use FOS\RestBundle\Controller\Annotations as Rest;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+final class BranchHourController extends BaseController
+{
+    protected function getEntityClass(): string
+    {
+        return BranchHour::class;
+    }
+
+    protected function getFormTypeClass(): string
+    {
+        return BranchHourFormType::class;
+    }
+
+    protected function getListSelectFields(): array
+    {
+        return [
+            'u.id',
+            'u.dayOfWeek',
+            'u.openTime',
+            'u.closeTime',
+            'u.validFrom',
+            'u.validTo',
+            'b.id as branchId',
+            'b.name as branchName'
+        ];
+    }
+
+    protected function configureListQuery(QueryBuilder $qb, Request $request): void
+    {
+        $qb->leftJoin('u.branch', 'b');
+
+        if ($branchId = $request->query->get('branchId')) {
+            $qb->andWhere('b.id = :branchId')
+                ->setParameter('branchId', $branchId);
+        }
+    }
+
+    #[Rest\Get('/branch-hour')]
+    public function index(Request $request, BranchHourRepository $repository): JsonResponse
+    {
+        return $this->list($request, $repository);
+    }
+
+    #[Rest\Post('/branch-hour')]
+    public function create(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        if ($this->checkDuplicateDay($data)) {
+            return $this->json(['message' => 'Ya existe un horario configurado para este día en la sucursal.'], Response::HTTP_BAD_REQUEST);
+        }
+        return $this->processForm($request, new BranchHour(), "Horario configurado correctamente");
+    }
+
+    #[Rest\Put('/branch-hour/{id}')]
+    public function update(Request $request, BranchHour $id): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        if ($this->checkDuplicateDay($data, (int) $id->getId())) {
+            return $this->json(['message' => 'Ya existe un horario configurado para este día en la sucursal.'], Response::HTTP_BAD_REQUEST);
+        }
+        return $this->processForm($request, $id, "Horario actualizado correctamente");
+    }
+
+    private function checkDuplicateDay(array $data, ?int $currentId = null): bool
+    {
+        $branchId = $data['branch'] ?? null;
+        $dayOfWeek = $data['dayOfWeek'] ?? null;
+
+        if (!$branchId || !$dayOfWeek)
+            return false;
+
+        $repository = $this->entityManager->getRepository(BranchHour::class);
+        $qb = $repository->createQueryBuilder('u')
+            ->where('u.branch = :branchId')
+            ->andWhere('u.dayOfWeek = :dayOfWeek')
+            ->andWhere('u.deletedAt IS NULL')
+            ->setParameter('branchId', $branchId)
+            ->setParameter('dayOfWeek', $dayOfWeek);
+
+        if ($currentId) {
+            $qb->andWhere('u.id != :currentId')
+                ->setParameter('currentId', $currentId);
+        }
+
+        return count($qb->getQuery()->getResult()) > 0;
+    }
+
+    #[Rest\Delete('/branch-hour/{id}')]
+    public function remove(BranchHour $id): mixed
+    {
+        return $this->delete($id);
+    }
+
+    #[Rest\Get('/branch-hour/{id}')]
+    public function get(BranchHour $id): mixed
+    {
+        return $this->getDetails($id);
+    }
+}
