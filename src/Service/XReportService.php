@@ -28,14 +28,13 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class XReportService
 {
     public function __construct(
-        private readonly CashBoxSessionRepository  $sessionRepo,
+        private readonly CashBoxSessionRepository $sessionRepo,
         private readonly CashBoxMovementRepository $movementRepo,
-        private readonly SaleRepository            $saleRepo,
-        private readonly EntityManagerInterface    $entityManager,
-        private readonly Security                  $security
+        private readonly SaleRepository $saleRepo,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly Security $security
 
-    )
-    {
+    ) {
     }
 
     public function getPreviewData($mode = null): array
@@ -120,7 +119,7 @@ class XReportService
         $now = new \DateTime();
 
         // Función auxiliar para formatear moneda localmente
-        $fmt = fn($n) => '$' . number_format((float)$n, 2, '.', ',');
+        $fmt = fn($n) => '$' . number_format((float) $n, 2, '.', ',');
 
 
         // 1. Clasificar Movimientos (Ingresos y Retiros)
@@ -131,7 +130,7 @@ class XReportService
         $totalRetirosVal = 0;
 
         foreach ($movements as $m) {
-            $amount = (float)$m->getAmount();
+            $amount = (float) $m->getAmount();
             $item = [
                 "hora" => $m->getCreatedAt()->format('H:i'),
                 "monto" => $fmt($amount),
@@ -159,15 +158,18 @@ class XReportService
         $sales = $saleRepo->findBy(['cashBoxSession' => $session->getId()]);
         /** @var Sale $sale */
         foreach ($sales as $sale) {
-            $change = (float)$sale->getChange();
+            $change = (float) $sale->getChange();
             foreach ($sale->getPayments() as $payment) {
                 $id = strtolower($payment->getPaymentType()->getId());
 
 
-                $amount = (float)$payment->getAmountReceived();
-                if ($id == PaymentTypeEnum::CASH->value) $ventasEfectivo += $amount;
-                elseif ($id == PaymentTypeEnum::CARD->value) $ventasTarjeta += $amount;
-                elseif ($id == PaymentTypeEnum::TRANSFER->value) $ventasTransferencia += $amount;
+                $amount = (float) $payment->getAmountReceived();
+                if ($id == PaymentTypeEnum::CASH->value)
+                    $ventasEfectivo += $amount;
+                elseif ($id == PaymentTypeEnum::CARD->value)
+                    $ventasTarjeta += $amount;
+                elseif ($id == PaymentTypeEnum::TRANSFER->value)
+                    $ventasTransferencia += $amount;
             }
             $ventasEfectivo = $ventasEfectivo - $change;
         }
@@ -192,7 +194,7 @@ class XReportService
                 $id = $payment->getPaymentType()->getId();
 
                 foreach ($tips as $tip) {
-                    $tipAmount = (float)$tip->getAmount();
+                    $tipAmount = (float) $tip->getAmount();
                     $finalType = null;
                     foreach ($sale->getPayments() as $sPayment) {
                         $name = strtolower($sPayment->getPaymentType()->getName());
@@ -204,15 +206,21 @@ class XReportService
                             $finalType = 'tarjeta';
                         }
                     }
-                    if ($finalType === 'efectivo') $propinaEfectivo += $tipAmount;
-                    elseif ($finalType === 'tarjeta') $propinaTarjeta += $tipAmount;
-                    elseif ($finalType === 'transferencia') $propinaTransferencia += $tipAmount;
+                    if ($finalType === 'efectivo')
+                        $propinaEfectivo += $tipAmount;
+                    elseif ($finalType === 'tarjeta')
+                        $propinaTarjeta += $tipAmount;
+                    elseif ($finalType === 'transferencia')
+                        $propinaTransferencia += $tipAmount;
                 }
-                $amount = (float)$payment->getAmountReceived();
+                $amount = (float) $payment->getAmountReceived();
 
-                if ($id == PaymentTypeEnum::CASH->value) $ventasEfectivoV2 += $amount;
-                elseif ($id == PaymentTypeEnum::CARD->value) $ventasTarjetaV2 += $amount;
-                elseif ($id == PaymentTypeEnum::TRANSFER->value) $ventasTransferenciaV2 += $amount;
+                if ($id == PaymentTypeEnum::CASH->value)
+                    $ventasEfectivoV2 += $amount;
+                elseif ($id == PaymentTypeEnum::CARD->value)
+                    $ventasTarjetaV2 += $amount;
+                elseif ($id == PaymentTypeEnum::TRANSFER->value)
+                    $ventasTransferenciaV2 += $amount;
             }
             /** @var SaleDetail $detail */
             foreach ($sale->getDetails() as $detail) {
@@ -228,23 +236,27 @@ class XReportService
         $ventasTarjetaV2 -= $propinaTarjeta;
 
 
-        // 4. Lógica de Efectivo en Caja
-        // Efectivo Esperado = Fondo Inicial + Ventas Efectivo + Ingresos - Retiros
-        $efectivoEsperado = (float)$session->getInitialAmount() + $ventasEfectivoV2 + $totalIngresosVal - $totalRetirosVal + $propinaEfectivo;
+        // 4. Lógica de Efectivo en Caja (Usamos la data guardada en el reporte)
+        $efectivoEsperado = 0.00;
         $efectivoDeclarado = 0.00;
+        $diferencia = 0.00;
+
         foreach ($report->getDetails() as $detail) {
             if ($detail->getPaymentType()->isCash()) {
-                $efectivoDeclarado = (float)$detail->getDeclaredAmount();
+                $efectivoEsperado = (float) $detail->getSystemAmount();
+                $efectivoDeclarado = (float) $detail->getDeclaredAmount();
+                $diferencia = (float) $detail->getSystemAmount() - (float) $detail->getDeclaredAmount();
                 break;
             }
         }
 
-        $diferencia = $efectivoDeclarado - $efectivoEsperado;
-
-        // 5. Determinar Estatus
+        // 5. Determinar Estatus basado en la diferencia (Sistema - Declarado)
         $estatus = "CUADRADO";
-        if ($diferencia > 0.01) $estatus = "SOBRANTE";
-        if ($diferencia < -0.01) $estatus = "FALTANTE";
+        if ($diferencia > 0.01) {
+            $estatus = "FALTANTE";
+        } elseif ($diferencia < -0.01) {
+            $estatus = "SOBRANTE";
+        }
 
         $response = [
             "templateId" => 20,
@@ -262,11 +274,11 @@ class XReportService
                     ],
                     "fondoInicial" => $fmt($session->getInitialAmount()),
                     "ventasPorFormaPago" => [
-                        "efectivo" => $fmt($ventasEfectivo - $propinaEfectivo),
-                        "tarjeta" => $fmt($ventasTarjeta - $propinaTarjeta),
-                        "transferencias" => $fmt($ventasTransferencia - $propinaTransferencia),
+                        "efectivo" => $fmt($ventasEfectivoV2),
+                        "tarjeta" => $fmt($ventasTarjetaV2),
+                        "transferencias" => $fmt($ventasTransferenciaV2),
                         "cortesias" => $fmt($courtesy),
-                        "totalVentas" => $fmt(($ventasEfectivo - $propinaEfectivo) + ($ventasTarjeta - $propinaTarjeta) + ($ventasTransferencia - $propinaTransferencia) + $courtesy)
+                        "totalVentas" => $fmt($ventasEfectivoV2 + $ventasTarjetaV2 + $ventasTransferenciaV2 + $courtesy)
                     ],
                     "ingresosCaja" => [
                         "movimientos" => $ingresosItems,

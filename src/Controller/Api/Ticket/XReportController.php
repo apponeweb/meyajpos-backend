@@ -19,9 +19,8 @@ class XReportController extends AbstractController
 {
     public function __construct(
         private readonly XReportRepository $xReportRepository,
-        private readonly XReportService    $xReportService
-    )
-    {
+        private readonly XReportService $xReportService
+    ) {
     }
 
     #[Route('/list', name: 'api_x_reports_list', methods: ['GET'])]
@@ -55,12 +54,12 @@ class XReportController extends AbstractController
                         : $report['xReportDate'],
                     'user' => $report['userName'],
                     'sessionId' => $report['sessionId'],
-                    'systemTotal' => number_format((float)$report['systemTotal'], 2, '.', ','),
-                    'declaredTotal' => number_format((float)$report['declaredTotal'], 2, '.', ','),
-                    'difference' => number_format((float)$report['difference'], 2, '.', ','),
+                    'systemTotal' => number_format((float) $report['systemTotal'], 2, '.', ','),
+                    'declaredTotal' => number_format((float) $report['declaredTotal'], 2, '.', ','),
+                    'difference' => number_format((float) $report['difference'], 2, '.', ','),
                     'observations' => $report['observations'],
                     // Semáforo visual para el frontend: si hay diferencia negativa o positiva
-                    'hasDifference' => abs((float)$report['difference']) > 0.01
+                    'hasDifference' => abs((float) $report['difference']) > 0.01
                 ];
             }, $paginator->getIterator()->getArrayCopy());
 
@@ -158,5 +157,42 @@ class XReportController extends AbstractController
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="corte_caja.pdf"'
         ]);
+    }
+
+    #[Route('/html/{id}', name: 'api_xreport_html_ticket', methods: ['GET'])]
+    public function generateHtml(int $id): Response
+    {
+        try {
+            $xreport = $this->xReportRepository->find($id);
+
+            if (!$xreport) {
+                return $this->json([
+                    'message' => 'Corte X no encontrada',
+                    'status' => Response::HTTP_NOT_FOUND
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $fullData = json_decode($this->xReportService->generateTicketData($xreport), true);
+            $ticketData = $fullData[0]['data'] ?? null;
+
+            if (!$ticketData) {
+                throw new \Exception("La estructura del ticket es inválida.");
+            }
+
+            $html = $this->renderView('ticket/xreport.html.twig', [
+                'data' => $ticketData
+            ]);
+
+            return new Response($html, 200, [
+                'Content-Type' => 'text/html'
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'message' => 'Error al generar el HTML del reporte',
+                'detail' => $e->getMessage(),
+                'status' => Response::HTTP_INTERNAL_SERVER_ERROR
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }
