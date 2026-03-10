@@ -2,35 +2,38 @@
 
 namespace App\Form\Type;
 
-use App\Entity\BarberProfile;
+use App\Entity\BarberTimeOff;
 use App\Entity\User;
+use App\Entity\Branch;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\TextareaType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
-use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
-class BarberProfileFormType extends AbstractType
+class BarberTimeOffFormType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
-            ->add('user', EntityType::class, [
+            ->add('barber', EntityType::class, [
                 'class' => User::class,
                 'required' => true,
             ])
-            ->add('bio', TextareaType::class, [
+            ->add('startAtLocal', DateTimeType::class, [
+                'widget' => 'single_text',
+                'required' => true,
+            ])
+            ->add('endAtLocal', DateTimeType::class, [
+                'widget' => 'single_text',
+                'required' => true,
+            ])
+            ->add('reason', TextType::class, [
                 'required' => false,
             ])
-            ->add('avgRating', NumberType::class, [
-                'required' => false,
-            ])
-            ->add('ratingCount', IntegerType::class, [
-                'required' => false,
-            ])
-            ->add('slotMinutes', IntegerType::class, [
+            ->add('branch', EntityType::class, [
+                'class' => Branch::class,
                 'required' => false,
             ]);
     }
@@ -38,7 +41,7 @@ class BarberProfileFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class' => BarberProfile::class,
+            'data_class' => BarberTimeOff::class,
             'csrf_protection' => false,
             'allow_extra_fields' => true,
         ]);

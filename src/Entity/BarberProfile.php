@@ -32,6 +32,9 @@ class BarberProfile extends BaseEntity
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
     private int $ratingCount = 0;
 
+    #[ORM\Column(type: Types::INTEGER, options: ['default' => 30])]
+    private int $slotMinutes = 30;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -89,6 +92,17 @@ class BarberProfile extends BaseEntity
     public function setRatingCount(int $ratingCount): self
     {
         $this->ratingCount = $ratingCount;
+        return $this;
+    }
+
+    public function getSlotMinutes(): int
+    {
+        return $this->slotMinutes;
+    }
+
+    public function setSlotMinutes(int $slotMinutes): self
+    {
+        $this->slotMinutes = $slotMinutes;
         return $this;
     }
 }
