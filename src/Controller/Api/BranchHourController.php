@@ -46,6 +46,11 @@ final class BranchHourController extends BaseController
             $qb->andWhere('b.id = :branchId')
                 ->setParameter('branchId', $branchId);
         }
+
+        if ($dayOfWeek = $request->query->get('dayOfWeek')) {
+            $qb->andWhere('u.dayOfWeek = :dayOfWeek')
+                ->setParameter('dayOfWeek', $dayOfWeek);
+        }
     }
 
     #[Rest\Get('/branch-hour')]
@@ -99,9 +104,15 @@ final class BranchHourController extends BaseController
     }
 
     #[Rest\Delete('/branch-hour/{id}')]
-    public function remove(BranchHour $id): mixed
+    public function remove(BranchHour $id): JsonResponse
     {
-        return $this->delete($id);
+        try {
+            $this->entityManager->remove($id);
+            $this->entityManager->flush();
+            return $this->json(['message' => 'Horario eliminado físicamente'], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return $this->json(['message' => 'Error al eliminar: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     #[Rest\Get('/branch-hour/{id}')]
