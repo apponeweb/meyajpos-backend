@@ -74,7 +74,8 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function getBarbersWithPagination(?string $search = null)
     {
         $qb = $this->createQueryBuilder('u')
-            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled')
+            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled', 'p.photoUrl', 'p.avgRating', 'p.ratingCount')
+            ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u.id')
             ->andWhere('u.barberSn = :isBarber')
             ->setParameter('isBarber', true);
 
