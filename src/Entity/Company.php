@@ -33,6 +33,27 @@ class Company extends BaseEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $taxAddress = null;
 
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $tagline = null;
+
+    #[ORM\Column(type: Types::STRING, length: 100, nullable: true)]
+    private ?string $email = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $coverImage = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $logo = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $socialNetworks = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $cancellationPolicy = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $privacyPolicy = null;
+
     public function getAcronym(): string
     {
         return $this->acronym;
@@ -84,5 +105,73 @@ class Company extends BaseEntity
         $this->phone = $phone;
     }
 
+    public function getTagline(): ?string
+    {
+        return $this->tagline;
+    }
 
+    public function setTagline(?string $tagline): void
+    {
+        $this->tagline = $tagline;
+    }
+
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+
+    public function setEmail(?string $email): void
+    {
+        $this->email = $email;
+    }
+
+    public function getCoverImage(): ?string
+    {
+        return $this->coverImage;
+    }
+
+    public function setCoverImage(?string $coverImage): void
+    {
+        $this->coverImage = $coverImage;
+    }
+
+    public function getLogo(): ?string
+    {
+        return $this->logo;
+    }
+
+    public function setLogo(?string $logo): void
+    {
+        $this->logo = $logo;
+    }
+
+    public function getSocialNetworks(): ?string
+    {
+        return $this->socialNetworks;
+    }
+
+    public function setSocialNetworks(?string $socialNetworks): void
+    {
+        $this->socialNetworks = $socialNetworks;
+    }
+
+    public function getCancellationPolicy(): ?string
+    {
+        return $this->cancellationPolicy;
+    }
+
+    public function setCancellationPolicy(?string $cancellationPolicy): void
+    {
+        $this->cancellationPolicy = $cancellationPolicy;
+    }
+
+    public function getPrivacyPolicy(): ?string
+    {
+        return $this->privacyPolicy;
+    }
+
+    public function setPrivacyPolicy(?string $privacyPolicy): void
+    {
+        $this->privacyPolicy = $privacyPolicy;
+    }
 }

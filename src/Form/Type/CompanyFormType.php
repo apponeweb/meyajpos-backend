@@ -3,8 +3,6 @@
 namespace App\Form\Type;
 
 use App\Entity\Company;
-use Doctrine\ORM\EntityRepository;
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -20,6 +18,11 @@ class CompanyFormType extends BaseFormType
         $builder->add('rfc');
         $builder->add('taxAddress');
         $builder->add('phone');
+        $builder->add('tagline', TextType::class, ['required' => false]);
+        $builder->add('email', TextType::class, ['required' => false]);
+        $builder->add('coverImage', TextType::class, ['required' => false]);
+        $builder->add('logo', TextType::class, ['required' => false]);
+        $builder->add('socialNetworks', TextType::class, ['required' => false]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
@@ -27,6 +30,7 @@ class CompanyFormType extends BaseFormType
         $resolver->setDefaults([
             'data_class' => Company::class,
             'csrf_protection' => false,
+            'allow_extra_fields' => true,
         ]);
     }
 }
