@@ -4,10 +4,13 @@ namespace App\Controller\Api;
 
 use App\Entity\Company;
 use App\Form\Type\CompanyFormType;
+use App\Form\Type\CompanyPolicyFormType;
 use App\Repository\CompanyRepository;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Filesystem\Filesystem;
 
 final class CompanyController extends BaseController
 {
@@ -33,6 +36,11 @@ final class CompanyController extends BaseController
             'u.legalName',
             'u.rfc',
             'u.taxAddress',
+            'u.tagline',
+            'u.email',
+            'u.coverImage',
+            'u.logo',
+            'u.socialNetworks',
         ];
     }
 
@@ -52,15 +60,13 @@ final class CompanyController extends BaseController
     #[Rest\Post('/company')]
     public function create(Request $request): JsonResponse
     {
-        $this->normalizeAddress($request, 'taxAddress');
-        return $this->processForm($request, new Company(), "Empresa creada correctamente");
+        return $this->handleSave($request, new Company(), "Empresa creada correctamente");
     }
 
     #[Rest\Put('/company/{id}')]
     public function update(Request $request, Company $id): JsonResponse
     {
-        $this->normalizeAddress($request, 'taxAddress');
-        return $this->processForm($request, $id, "Empresa actualizada correctamente");
+        return $this->handleSave($request, $id, "Empresa actualizada correctamente");
     }
 
     #[Rest\Delete('/company/{id}')]
@@ -93,4 +99,161 @@ final class CompanyController extends BaseController
         return new JsonResponse($data, $response->getStatusCode());
     }
 
+    #[Rest\Put('/company/{id}/policy')]
+    public function updatePolicy(Request $request, Company $id): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $form = $this->createForm(CompanyPolicyFormType::class, $id);
+        $form->submit($data ?? $request->request->all(), false);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            try {
+                $now = new \DateTime();
+                $user = $this->security->getUser();
+                $userId = ($user && method_exists($user, 'getId')) ? (int) $user->getId() : null;
+
+                if ($userId && method_exists($id, 'setUpdatedBy'))
+                    $id->setUpdatedBy($userId);
+                if (method_exists($id, 'setUpdatedAt'))
+                    $id->setUpdatedAt($now);
+
+                $this->entityManager->persist($id);
+                $this->entityManager->flush();
+
+                return $this->json([
+                    'message' => 'Políticas actualizadas correctamente',
+                    'data' => ['id' => $id->getId()]
+                ], JsonResponse::HTTP_OK);
+            } catch (\Exception $e) {
+                return $this->json(['message' => 'Error: ' . $e->getMessage()], 500);
+            }
+        }
+
+        return $this->json([
+            'message' => 'Validación fallida',
+            'errors' => $this->getFormErrors($form)
+        ], JsonResponse::HTTP_BAD_REQUEST);
+    }
+
+    #[Rest\Get('/company/{id}/info')]
+    public function info(Request $request, Company $id): JsonResponse
+    {
+        $company = $id;
+
+        $socialNetworks = [];
+        if ($company->getSocialNetworks()) {
+            $decoded = json_decode($company->getSocialNetworks(), true);
+            if (is_array($decoded)) {
+                $socialNetworks = $decoded;
+            }
+        }
+
+        $scheme = $request->getScheme();
+        $host = $request->getHttpHost();
+        $baseUrl = $scheme . '://' . $host;
+
+        $coverImageFull = $company->getCoverImage() ? $baseUrl . $company->getCoverImage() : null;
+        $logoFull = $company->getLogo() ? $baseUrl . $company->getLogo() : null;
+
+        $data = [
+            'name' => $company->getName(),
+            'tagline' => $company->getTagline(),
+            'phone' => $company->getPhone(),
+            'email' => $company->getEmail(),
+            'instagram' => $socialNetworks['instagram'] ?? null,
+            'facebook' => $socialNetworks['facebook'] ?? null,
+            'tiktok' => $socialNetworks['tiktok'] ?? null,
+            'whatsapp' => $socialNetworks['whatsapp'] ?? null,
+            'coverImage' => $coverImageFull,
+            'logo' => $logoFull,
+            'cancellationPolicy' => $company->getCancellationPolicy(),
+            'privacyPolicy' => $company->getPrivacyPolicy(),
+        ];
+
+        return new JsonResponse($data, JsonResponse::HTTP_OK);
+    }
+
+    private function handleSave(Request $request, Company $entity, string $successMessage): JsonResponse
+    {
+        $this->normalizeAddress($request, 'taxAddress');
+        $this->normalizeAddress($request, 'socialNetworks');
+
+        $data = json_decode($request->getContent(), true);
+
+        // Handle coverImage base64
+        if (isset($data['coverImageBase64']) && !empty($data['coverImageBase64'])) {
+            $fileUrl = $this->saveBase64Image($data['coverImageBase64'], 'cover');
+            if ($fileUrl) {
+                $data['coverImage'] = $fileUrl;
+                $entity->setCoverImage($fileUrl);
+            }
+        } elseif (isset($data['removeCoverImage']) && $data['removeCoverImage'] === true) {
+            $data['coverImage'] = null;
+            $entity->setCoverImage(null);
+        }
+
+        // Handle logo base64
+        if (isset($data['logoBase64']) && !empty($data['logoBase64'])) {
+            $fileUrl = $this->saveBase64Image($data['logoBase64'], 'logo');
+            if ($fileUrl) {
+                $data['logo'] = $fileUrl;
+                $entity->setLogo($fileUrl);
+            }
+        } elseif (isset($data['removeLogo']) && $data['removeLogo'] === true) {
+            $data['logo'] = null;
+            $entity->setLogo(null);
+        }
+
+        unset(
+            $data['coverImageBase64'],
+            $data['removeCoverImage'],
+            $data['logoBase64'],
+            $data['removeLogo']
+        );
+
+        // Re-initialize request for processForm
+        $request->initialize(
+            $request->query->all(),
+            $request->request->all(),
+            $request->attributes->all(),
+            $request->cookies->all(),
+            $request->files->all(),
+            $request->server->all(),
+            json_encode($data)
+        );
+
+        return $this->processForm($request, $entity, $successMessage);
+    }
+
+    private function saveBase64Image(string $base64String, string $prefix): ?string
+    {
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64String, $match)) {
+            $data = substr($base64String, strpos($base64String, ',') + 1);
+            $type = strtolower($match[1]);
+
+            if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                return null;
+            }
+
+            $data = base64_decode($data);
+            if ($data === false) {
+                return null;
+            }
+
+            $uploadDir = $this->getParameter('kernel.project_dir') . '/public/uploads/companies';
+            $fs = new Filesystem();
+            if (!$fs->exists($uploadDir)) {
+                $fs->mkdir($uploadDir, 0755);
+            }
+
+            $fileName = uniqid($prefix . '_') . '.' . $type;
+            $filePath = $uploadDir . '/' . $fileName;
+
+            file_put_contents($filePath, $data);
+
+            return '/uploads/companies/' . $fileName;
+        }
+
+        return null;
+    }
 }

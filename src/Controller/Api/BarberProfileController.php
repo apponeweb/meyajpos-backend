@@ -33,6 +33,8 @@ final class BarberProfileController extends BaseController
             'u.avgRating',
             'u.ratingCount',
             'u.slotMinutes',
+            'u.classification',
+            'u.experience',
             'usr.id as userId',
             'usr.name as userName',
             'usr.lastName as userLastName'

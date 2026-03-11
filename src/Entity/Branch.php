@@ -32,6 +32,15 @@ class Branch extends BaseEntity
     #[ORM\Column(type: Types::STRING, length: 50, nullable: true)]
     private ?string $phone = null;
 
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $image = null;
+
+    #[ORM\Column(type: Types::FLOAT, nullable: true)]
+    private ?float $rating = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $reviewCount = null;
+
     public function getAddress(): string
     {
         return $this->address;
@@ -70,6 +79,36 @@ class Branch extends BaseEntity
     public function setPhone(?string $phone): void
     {
         $this->phone = $phone;
+    }
+
+    public function getImage(): ?string
+    {
+        return $this->image;
+    }
+
+    public function setImage(?string $image): void
+    {
+        $this->image = $image;
+    }
+
+    public function getRating(): ?float
+    {
+        return $this->rating;
+    }
+
+    public function setRating(?float $rating): void
+    {
+        $this->rating = $rating;
+    }
+
+    public function getReviewCount(): ?int
+    {
+        return $this->reviewCount;
+    }
+
+    public function setReviewCount(?int $reviewCount): void
+    {
+        $this->reviewCount = $reviewCount;
     }
 
 }

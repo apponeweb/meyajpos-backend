@@ -35,6 +35,12 @@ class BarberProfile extends BaseEntity
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 30])]
     private int $slotMinutes = 30;
 
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $classification = null;
+
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $experience = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -103,6 +109,28 @@ class BarberProfile extends BaseEntity
     public function setSlotMinutes(int $slotMinutes): self
     {
         $this->slotMinutes = $slotMinutes;
+        return $this;
+    }
+
+    public function getClassification(): ?string
+    {
+        return $this->classification;
+    }
+
+    public function setClassification(?string $classification): self
+    {
+        $this->classification = $classification;
+        return $this;
+    }
+
+    public function getExperience(): ?string
+    {
+        return $this->experience;
+    }
+
+    public function setExperience(?string $experience): self
+    {
+        $this->experience = $experience;
         return $this;
     }
 }
