@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Entity\Branch;
+use App\Entity\BranchHour;
 use App\Entity\CashBox;
 use App\Entity\Sale;
 use App\Form\Type\BranchFormType;
@@ -49,6 +50,9 @@ final class BranchController extends BaseController
             'u.acronym',
             'u.address',
             'u.phone',
+            'u.image',
+            'u.rating',
+            'u.reviewCount',
             'c.name as companyName',
             'c.id as companyId'
         ];
@@ -67,18 +71,141 @@ final class BranchController extends BaseController
         return $branchRepository->getAllToSelect();
     }
 
+    #[Rest\Get('/branch/public-list')]
+    public function publicList(Request $request, BranchRepository $repository): JsonResponse
+    {
+        $companyId = $request->query->get('company');
+        if ($companyId) {
+            $branches = $repository->findBy(['company' => $companyId, 'deletedAt' => null, 'isActive' => true]);
+        } else {
+            $branches = $repository->findBy(['deletedAt' => null, 'isActive' => true]);
+        }
+
+
+        $scheme = $request->getScheme();
+        $host = $request->getHttpHost();
+        $baseUrl = $scheme . '://' . $host;
+
+        $result = [];
+        $dayNames = [
+            1 => 'Monday',
+            2 => 'Tuesday',
+            3 => 'Wednesday',
+            4 => 'Thursday',
+            5 => 'Friday',
+            6 => 'Saturday',
+            7 => 'Sunday'
+        ];
+
+        foreach ($branches as $branch) {
+            $hours = [];
+            foreach ($dayNames as $idx => $name) {
+                $hours[$name] = ['open' => false, 'entry' => '', 'exit' => ''];
+            }
+
+            $branchHours = $this->entityManager->getRepository(BranchHour::class)->findBy(['branch' => $branch]);
+            foreach ($branchHours as $bh) {
+                $dayName = $dayNames[$bh->getDayOfWeek()] ?? null;
+                if ($dayName) {
+                    $hours[$dayName] = [
+                        'open' => true,
+                        'entry' => $bh->getOpenTime()->format('g:i A'),
+                        'exit' => $bh->getCloseTime()->format('g:i A')
+                    ];
+                }
+            }
+
+            $result[] = [
+                'id' => $branch->getId(),
+                'name' => $branch->getName(),
+                'address' => $branch->getAddress(),
+                'phone' => $branch->getPhone(),
+                'image' => $branch->getImage() ? $baseUrl . $branch->getImage() : null,
+                'rating' => $branch->getRating(),
+                'reviewCount' => $branch->getReviewCount(),
+                'hours' => $hours,
+                'mapUrl' => 'https://maps.google.com/?q=' . urlencode($branch->getAddress()),
+            ];
+        }
+
+        return $this->json($result, Response::HTTP_OK);
+    }
+
     #[Rest\Post('/branch')]
     public function create(Request $request): JsonResponse
     {
-        $this->normalizeAddress($request, 'address');
-        return $this->processForm($request, new Branch(), "Sucursal creada correctamente");
+        return $this->handleSave($request, new Branch(), "Sucursal creada correctamente");
     }
 
     #[Rest\Put('/branch/{id}')]
     public function update(Request $request, Branch $id): JsonResponse
     {
+        return $this->handleSave($request, $id, "Sucursal actualizada correctamente");
+    }
+
+    private function handleSave(Request $request, Branch $entity, string $successMessage): JsonResponse
+    {
         $this->normalizeAddress($request, 'address');
-        return $this->processForm($request, $id, "Sucursal actualizada correctamente");
+        $data = json_decode($request->getContent(), true);
+
+        // Handle image base64
+        if (isset($data['imageBase64']) && !empty($data['imageBase64'])) {
+            $fileUrl = $this->saveBase64Image($data['imageBase64'], 'branch');
+            if ($fileUrl) {
+                $data['image'] = $fileUrl;
+                $entity->setImage($fileUrl);
+            }
+        } elseif (isset($data['removeImage']) && $data['removeImage'] === true) {
+            $data['image'] = null;
+            $entity->setImage(null);
+        }
+
+        unset(
+            $data['imageBase64'],
+            $data['removeImage']
+        );
+
+        // Re-initialize request for processForm
+        $request->initialize(
+            $request->query->all(),
+            $request->request->all(),
+            $request->attributes->all(),
+            $request->cookies->all(),
+            $request->files->all(),
+            $request->server->all(),
+            json_encode($data)
+        );
+
+        return $this->processForm($request, $entity, $successMessage);
+    }
+
+    private function saveBase64Image(string $base64String, string $prefix): ?string
+    {
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64String, $match)) {
+            $data = substr($base64String, strpos($base64String, ',') + 1);
+            $type = strtolower($match[1]);
+
+            if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                return null;
+            }
+
+            $data = base64_decode($data);
+            if ($data === false) {
+                return null;
+            }
+
+            $uploadDir = $this->getParameter('kernel.project_dir') . '/public/uploads/branches/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+
+            $fileName = $prefix . '_' . uniqid() . '.' . $type;
+            file_put_contents($uploadDir . $fileName, $data);
+
+            return '/uploads/branches/' . $fileName;
+        }
+
+        return null;
     }
 
     #[Rest\Delete('/branch/{id}')]
@@ -122,5 +249,4 @@ final class BranchController extends BaseController
         // 6. Retornamos la respuesta ya corregida
         return new JsonResponse($data, $response->getStatusCode());
     }
-
 }

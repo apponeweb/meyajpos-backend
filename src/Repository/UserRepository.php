@@ -71,20 +71,30 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->getResult();
     }
 
-    public function getBarbersWithPagination(?string $search = null)
+    public function getBarbersWithPagination(?string $search = null, ?string $classification = null, ?string $experience = null)
     {
         $qb = $this->createQueryBuilder('u')
-            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled', 'p.photoUrl', 'p.avgRating', 'p.ratingCount', 'p.slotMinutes')
-            ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u.id')
+            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled', 'p.photoUrl', 'p.avgRating', 'p.ratingCount', 'p.slotMinutes', 'p.classification', 'p.experience')
+            ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
             ->andWhere('u.barberSn = :isBarber')
             ->setParameter('isBarber', true);
 
         if ($search) {
-            $qb->andWhere('(u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search)')
+            $qb->andWhere('u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search')
                 ->setParameter('search', '%' . $search . '%');
         }
 
-        return $qb->getQuery();
+        if ($classification) {
+            $qb->andWhere('p.classification LIKE :classification')
+                ->setParameter('classification', '%' . $classification . '%');
+        }
+
+        if ($experience) {
+            $qb->andWhere('p.experience LIKE :experience')
+                ->setParameter('experience', '%' . $experience . '%');
+        }
+
+        return $qb;
     }
 
     public function getAllBarbersToSelect()

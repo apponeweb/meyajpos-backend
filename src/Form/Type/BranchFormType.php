@@ -29,7 +29,10 @@ class BranchFormType extends BaseFormType
         ])
             ->add('acronym')
             ->add('address')
-            ->add('phone');
+            ->add('phone')
+            ->add('image')
+            ->add('rating')
+            ->add('reviewCount');
     }
 
     public function configureOptions(OptionsResolver $resolver): void

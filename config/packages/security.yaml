@@ -50,6 +50,8 @@ security:
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
         - { path: ^/api/company/\d+/info$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }
+        - { path: ^/api/barber/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/reports/sales-details, roles: [ ROLE_CASHIER ] }
         - { path: ^/api/company/all, roles: [ ROLE_CASHIER ] }
         - { path: ^/api/company, roles: [ ROLE_ADMIN ] }
