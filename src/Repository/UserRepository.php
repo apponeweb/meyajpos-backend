@@ -80,7 +80,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->setParameter('isBarber', true);
 
         if ($search) {
-            $qb->andWhere('u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search')
+            $qb->andWhere('u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search OR CONCAT(u.name, \' \', u.lastName) LIKE :search')
                 ->setParameter('search', '%' . $search . '%');
         }
 
