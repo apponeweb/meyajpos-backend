@@ -49,7 +49,7 @@ security:
     # Note: Only the *first* access control that matches will be used
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
-        - { path: ^/api/company/\d+/info$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/company/public-list/(info|\d+/info|info/\d+)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/barber/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/reports/sales-details, roles: [ ROLE_CASHIER ] }

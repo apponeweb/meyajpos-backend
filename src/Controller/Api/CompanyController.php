@@ -44,7 +44,55 @@ final class CompanyController extends BaseController
         ];
     }
 
-    #[Rest\Get('/company/all')]
+
+    #[Rest\Get('/company/public-list/{company_id}', defaults: ['company_id' => null])]
+    public function info(Request $request, CompanyRepository $repository, $company_id = null): JsonResponse
+    {
+        if ($company_id === null) {
+            $company = $repository->findOneBy([]);
+        } else {
+            $company = $repository->find($company_id);
+        }
+        if (!$company) {
+            return new JsonResponse(['error' => 'Company not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $socialNetworks = [];
+        if ($company->getSocialNetworks()) {
+            $decoded = json_decode($company->getSocialNetworks(), true);
+            if (is_array($decoded)) {
+                $socialNetworks = $decoded;
+            }
+        }
+
+        $scheme = $request->getScheme();
+        $host = $request->getHttpHost();
+        $baseUrl = $scheme . '://' . $host;
+
+        $coverImageFull = $company->getCoverImage() ? $baseUrl . $company->getCoverImage() : null;
+        $logoFull = $company->getLogo() ? $baseUrl . $company->getLogo() : null;
+
+        $data = [
+            'name' => $company->getName(),
+            'tagline' => $company->getTagline(),
+            'phone' => $company->getPhone(),
+            'email' => $company->getEmail(),
+            'instagram' => $socialNetworks['instagram'] ?? null,
+            'facebook' => $socialNetworks['facebook'] ?? null,
+            'tiktok' => $socialNetworks['tiktok'] ?? null,
+            'whatsapp' => $socialNetworks['whatsapp'] ?? null,
+            'coverImage' => $coverImageFull,
+            'logo' => $logoFull,
+            'cancellationPolicy' => $company->getCancellationPolicy(),
+            'privacyPolicy' => $company->getPrivacyPolicy(),
+        ];
+
+        return new JsonResponse($data, JsonResponse::HTTP_OK);
+    }
+
+
+    #[
+        Rest\Get('/company/all')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function all(CompanyRepository $companyRepository)
     {
@@ -110,7 +158,7 @@ final class CompanyController extends BaseController
             try {
                 $now = new \DateTime();
                 $user = $this->security->getUser();
-                $userId = ($user && method_exists($user, 'getId')) ? (int) $user->getId() : null;
+                $userId = ($user && method_exists($user, 'getId')) ? (int)$user->getId() : null;
 
                 if ($userId && method_exists($id, 'setUpdatedBy'))
                     $id->setUpdatedBy($userId);
@@ -135,43 +183,6 @@ final class CompanyController extends BaseController
         ], JsonResponse::HTTP_BAD_REQUEST);
     }
 
-    #[Rest\Get('/company/{id}/info')]
-    public function info(Request $request, Company $id): JsonResponse
-    {
-        $company = $id;
-
-        $socialNetworks = [];
-        if ($company->getSocialNetworks()) {
-            $decoded = json_decode($company->getSocialNetworks(), true);
-            if (is_array($decoded)) {
-                $socialNetworks = $decoded;
-            }
-        }
-
-        $scheme = $request->getScheme();
-        $host = $request->getHttpHost();
-        $baseUrl = $scheme . '://' . $host;
-
-        $coverImageFull = $company->getCoverImage() ? $baseUrl . $company->getCoverImage() : null;
-        $logoFull = $company->getLogo() ? $baseUrl . $company->getLogo() : null;
-
-        $data = [
-            'name' => $company->getName(),
-            'tagline' => $company->getTagline(),
-            'phone' => $company->getPhone(),
-            'email' => $company->getEmail(),
-            'instagram' => $socialNetworks['instagram'] ?? null,
-            'facebook' => $socialNetworks['facebook'] ?? null,
-            'tiktok' => $socialNetworks['tiktok'] ?? null,
-            'whatsapp' => $socialNetworks['whatsapp'] ?? null,
-            'coverImage' => $coverImageFull,
-            'logo' => $logoFull,
-            'cancellationPolicy' => $company->getCancellationPolicy(),
-            'privacyPolicy' => $company->getPrivacyPolicy(),
-        ];
-
-        return new JsonResponse($data, JsonResponse::HTTP_OK);
-    }
 
     private function handleSave(Request $request, Company $entity, string $successMessage): JsonResponse
     {
