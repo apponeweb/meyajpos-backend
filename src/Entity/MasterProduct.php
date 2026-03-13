@@ -42,6 +42,9 @@ class MasterProduct extends BaseEntity
     #[ORM\JoinColumn(name: 'service_type_id', referencedColumnName: 'id', nullable: true)]
     private ?ServiceType $serviceType = null;
 
+    #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
+    private ?string $image = null;
+
     public function getSku(): string
     {
         return $this->sku;
@@ -110,5 +113,15 @@ class MasterProduct extends BaseEntity
     public function setVatRate(string $vatRate): void
     {
         $this->vatRate = $vatRate;
+    }
+
+    public function getImage(): ?string
+    {
+        return $this->image;
+    }
+
+    public function setImage(?string $image): void
+    {
+        $this->image = $image;
     }
 }

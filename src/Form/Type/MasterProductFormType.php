@@ -40,7 +40,8 @@ class MasterProductFormType extends BaseFormType
                         ->orderBy('s.name', 'ASC');
                 },
                 'invalid_message' => 'El tipo de servicio seleccionado no es válido.',
-            ]);
+            ])
+            ->add('image');
     }
 
     public function configureOptions(OptionsResolver $resolver): void

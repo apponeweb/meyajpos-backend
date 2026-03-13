@@ -2,13 +2,17 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\BarberSchedule;
+use App\Entity\BarberService;
 use App\Entity\MasterProduct;
+use App\Entity\ServiceType;
 use App\Form\Type\MasterProductFormType;
 use App\Repository\MasterProductRepository;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 final class MasterProductController extends BaseController
 {
@@ -66,14 +70,17 @@ final class MasterProductController extends BaseController
             'u.price',
             'u.uom',
             'u.isInventoriable',
+            'u.image',
             'st.id as serviceTypeId',
             'st.name as serviceTypeName'
         ];
     }
+
     protected function getSearchFields(): array
     {
         return ['u.name', 'u.description', 'u.barcode'];
     }
+
     public function list(Request $request, $repository): JsonResponse
     {
         // 1. Llamamos al método list del padre para obtener la respuesta original
@@ -82,15 +89,19 @@ final class MasterProductController extends BaseController
         // 2. Decodificamos el contenido para manipular los datos
         $data = json_decode($response->getContent(), true);
 
-        // 3. Formateamos el precio en los resultados
+        $baseUrl = $request->getSchemeAndHttpHost();
+
+        // 3. Formateamos el precio y la imagen en los resultados
         if (isset($data['results'])) {
-            $data['results'] = array_map(function ($item) {
+            $data['results'] = array_map(function ($item) use ($baseUrl) {
                 if (isset($item['price'])) {
                     // Aplicamos el formato: 1,000.00
                     $item['price'] = number_format((float)$item['price'], 2, '.', ',');
-
-                    // Si prefieres reemplazar el valor original en lugar de crear uno nuevo:
-                    // $item['price'] = number_format((float)$item['price'], 2, '.', ',');
+                }
+                if (isset($item['image']) && $item['image']) {
+                    $item['image'] = $baseUrl . $item['image'];
+                } else {
+                    $item['image'] = $baseUrl . '/uploads/products/placeholder.png';
                 }
                 return $item;
             }, $data['results']);
@@ -110,20 +121,84 @@ final class MasterProductController extends BaseController
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function all(MasterProductRepository $masterProductRepository)
     {
-        $extraColumns = ['price'];
+        $extraColumns = ['price', 'image'];
         return $masterProductRepository->getAllToSelect($extraColumns);
     }
 
     #[Rest\Post('/master_product')]
     public function create(Request $request): JsonResponse
     {
-        return $this->processForm($request, new MasterProduct(), "Producto maestro creado correctamente");
+        return $this->handleSave($request, new MasterProduct(), "Producto maestro creado correctamente");
     }
 
     #[Rest\Put('/master_product/{id}')]
     public function update(Request $request, MasterProduct $id): JsonResponse
     {
-        return $this->processForm($request, $id, "Producto maestro actualizado correctamente");
+        return $this->handleSave($request, $id, "Producto maestro actualizado correctamente");
+    }
+
+    private function handleSave(Request $request, MasterProduct $entity, string $successMessage): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+
+        // Handle image base64
+        if (isset($data['imageBase64']) && !empty($data['imageBase64'])) {
+            $fileUrl = $this->saveBase64Image($data['imageBase64'], 'product');
+            if ($fileUrl) {
+                $data['image'] = $fileUrl;
+                $entity->setImage($fileUrl);
+            }
+        } elseif (isset($data['removeImage']) && $data['removeImage'] === true) {
+            $data['image'] = null;
+            $entity->setImage(null);
+        }
+
+        unset(
+            $data['imageBase64'],
+            $data['removeImage']
+        );
+
+        // Re-initialize request for processForm
+        $request->initialize(
+            $request->query->all(),
+            $request->request->all(),
+            $request->attributes->all(),
+            $request->cookies->all(),
+            $request->files->all(),
+            $request->server->all(),
+            json_encode($data)
+        );
+
+        return $this->processForm($request, $entity, $successMessage);
+    }
+
+    private function saveBase64Image(string $base64String, string $prefix): ?string
+    {
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64String, $match)) {
+            $data = substr($base64String, strpos($base64String, ',') + 1);
+            $type = strtolower($match[1]);
+
+            if (!in_array($type, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                return null;
+            }
+
+            $data = base64_decode($data);
+            if ($data === false) {
+                return null;
+            }
+
+            $uploadDir = $this->getParameter('kernel.project_dir') . '/public/uploads/products/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+
+            $fileName = $prefix . '_' . uniqid() . '.' . $type;
+            file_put_contents($uploadDir . $fileName, $data);
+
+            return '/uploads/products/' . $fileName;
+        }
+
+        return null;
     }
 
     #[Rest\Delete('/master_product/{id}')]
@@ -133,7 +208,7 @@ final class MasterProductController extends BaseController
     }
 
     #[Rest\Get('/master_product/{id}')]
-    public function get(MasterProduct $id): JsonResponse
+    public function get(MasterProduct $id, Request $request): JsonResponse
     {
         // 1. Llamamos al método base para obtener la respuesta original
         $response = $this->getDetails($id);
@@ -163,8 +238,55 @@ final class MasterProductController extends BaseController
             $data['price'] = number_format((float)$data['price'], 2, '.', ',');
         }
 
+        if (isset($data['image']) && $data['image']) {
+            $baseUrl = $request->getSchemeAndHttpHost();
+            $data['image'] = $baseUrl . $data['image'];
+        } else {
+            $baseUrl = $request->getSchemeAndHttpHost();
+            $data['image'] = $baseUrl . '/uploads/products/placeholder.png';
+        }
+
         // 6. Retornamos la respuesta ya corregida
         return new JsonResponse($data, $response->getStatusCode());
+    }
+
+    #[Rest\Get('/service/public-list')]
+    public function publicList(Request $request): JsonResponse
+    {
+        $branchId = $request->query->get('branchId');
+        if (!$branchId) {
+            return $this->json(['message' => 'branchId is required'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $qb = $this->entityManager->getRepository(MasterProduct::class)->createQueryBuilder('mp');
+        $qb->select('DISTINCT mp.id', 'mp.name', 'st.name as category', 'mp.description', 'mp.price', 'mp.image')
+            ->addSelect('bs.durationOverrideMinutes')
+            ->join(ServiceType::class, 'st', 'WITH', 'mp.serviceType = st.id')
+            ->join(BarberService::class, 'bs', 'WITH', 'bs.product = mp.id')
+            ->join(BarberSchedule::class, 'bsch', 'WITH', 'bsch.barber = bs.barber')
+            ->where('bsch.branch = :branchId')
+            ->andWhere('mp.isActive = :active')
+            ->andWhere('mp.deletedAt IS NULL')
+            ->andWhere('bs.isActive = :active')
+            ->andWhere('bs.deletedAt IS NULL')
+            ->setParameter('branchId', $branchId)
+            ->setParameter('active', true);
+
+        $services = $qb->getQuery()->getResult();
+
+        $baseUrl = $request->getSchemeAndHttpHost();
+        $result = array_map(fn($s) => [
+            'id' => $s['id'],
+            'name' => $s['name'],
+            'category' => $s['category'],
+            'description' => $s['description'],
+            'duration' => $s['durationOverrideMinutes'] ?? 40, // Default duration if not specified
+            'price' => number_format((float)$s['price'], 2, '.', ','),
+            'image' => $s['image'] ? $baseUrl . $s['image'] : $baseUrl . '/uploads/products/placeholder.png',
+            'popular' => false,
+        ], $services);
+
+        return $this->json($result, Response::HTTP_OK);
     }
 
     #[Rest\Get('/master_product/barcode/{barcode}')]

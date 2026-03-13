@@ -52,6 +52,8 @@ security:
         - { path: ^/api/company/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/barber/public-list, roles: PUBLIC_ACCESS }
+        - { path: ^/api/category/public-list, roles: PUBLIC_ACCESS }
+        - { path: ^/api/service/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/reports/sales-details, roles: [ ROLE_CASHIER ] }
         - { path: ^/api/company/all, roles: [ ROLE_CASHIER ] }
         - { path: ^/api/company, roles: [ ROLE_ADMIN ] }

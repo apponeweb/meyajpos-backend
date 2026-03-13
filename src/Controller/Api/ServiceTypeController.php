@@ -4,6 +4,9 @@ namespace App\Controller\Api;
 
 use App\Entity\CommissionDetail;
 use App\Entity\Sale;
+use App\Entity\BarberSchedule;
+use App\Entity\BarberService;
+use App\Entity\MasterProduct;
 use App\Entity\ServiceType;
 use App\Form\Type\ServiceTypeFormType;
 use App\Repository\ServiceTypeRepository;
@@ -96,5 +99,46 @@ final class ServiceTypeController extends BaseController
 
         // 6. Retornamos la respuesta ya corregida
         return new JsonResponse($data, $response->getStatusCode());
+    }
+
+    #[Rest\Get('/category/public-list')]
+    public function publicList(Request $request): JsonResponse
+    {
+        $branchId = $request->query->get('branchId');
+        if (!$branchId) {
+            return $this->json(['message' => 'branchId is required'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $qb = $this->entityManager->getRepository(ServiceType::class)->createQueryBuilder('st');
+        $qb->select('st.id', 'st.name', 'COUNT(mp.id) as count')
+            ->join(MasterProduct::class, 'mp', 'WITH', 'mp.serviceType = st.id')
+            ->join(BarberService::class, 'bs', 'WITH', 'bs.product = mp.id')
+            ->join(BarberSchedule::class, 'bsch', 'WITH', 'bsch.barber = bs.barber')
+            ->where('bsch.branch = :branchId')
+            ->andWhere('st.isActive = :active')
+            ->andWhere('st.deletedAt IS NULL')
+            ->andWhere('mp.isActive = :active')
+            ->andWhere('mp.deletedAt IS NULL')
+            ->andWhere('bs.isActive = :active')
+            ->andWhere('bs.deletedAt IS NULL')
+            ->setParameter('branchId', $branchId)
+            ->setParameter('active', true)
+            ->groupBy('st.id', 'st.name');
+
+        $categories = $qb->getQuery()->getResult();
+
+        $result = array_map(fn($c) => [
+            'id' => $c['id'],
+            'name' => $c['name'],
+            'count' => (int)$c['count']
+        ], $categories);
+
+        // Add 'Todos' if there are results
+        if (count($result) > 0) {
+            $totalCount = array_sum(array_column($result, 'count'));
+            array_unshift($result, ['id' => 'all', 'name' => 'Todos', 'count' => $totalCount]);
+        }
+
+        return $this->json($result, Response::HTTP_OK);
     }
 }
