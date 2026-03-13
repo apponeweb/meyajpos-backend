@@ -61,7 +61,22 @@ final class BranchController extends BaseController
     #[Rest\Get('/branch')]
     public function index(Request $request, BranchRepository $repository): JsonResponse
     {
-        return $this->list($request, $repository);
+        $response = $this->list($request, $repository);
+        $data = json_decode($response->getContent(), true);
+        $baseUrl = $request->getSchemeAndHttpHost();
+
+        if (isset($data['results'])) {
+            $data['results'] = array_map(function ($item) use ($baseUrl) {
+                if (isset($item['image']) && $item['image']) {
+                    $item['image'] = $baseUrl . $item['image'];
+                } else {
+                    $item['image'] = $baseUrl . '/uploads/products/placeholder.png'; // Using the same premium placeholder
+                }
+                return $item;
+            }, $data['results']);
+        }
+
+        return new JsonResponse($data, $response->getStatusCode());
     }
 
     #[Rest\Get('/branch/all')]
