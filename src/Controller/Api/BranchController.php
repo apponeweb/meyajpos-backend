@@ -74,32 +74,29 @@ final class BranchController extends BaseController
     #[Rest\Get('/branch/public-list')]
     public function publicList(Request $request, BranchRepository $repository): JsonResponse
     {
+        // 1. Manejo de filtros iniciales
         $companyId = $request->query->get('company');
+        $criteria = ['deletedAt' => null, 'isActive' => true];
+
         if ($companyId) {
-            $branches = $repository->findBy(['company' => $companyId, 'deletedAt' => null, 'isActive' => true]);
-        } else {
-            $branches = $repository->findBy(['deletedAt' => null, 'isActive' => true]);
+            $criteria['company'] = $companyId;
         }
 
+        $branches = $repository->findBy($criteria);
 
-        $scheme = $request->getScheme();
-        $host = $request->getHttpHost();
-        $baseUrl = $scheme . '://' . $host;
-
+        // 2. Preparación de variables de entorno y mapeo
+        $baseUrl = $request->getSchemeAndHttpHost();
         $result = [];
         $dayNames = [
-            1 => 'Monday',
-            2 => 'Tuesday',
-            3 => 'Wednesday',
-            4 => 'Thursday',
-            5 => 'Friday',
-            6 => 'Saturday',
-            7 => 'Sunday'
+            1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday',
+            4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'
         ];
 
         foreach ($branches as $branch) {
+            // --- PROCESAMIENTO DE HORARIOS ---
             $hours = [];
-            foreach ($dayNames as $idx => $name) {
+            // Inicializar todos los días como cerrados
+            foreach ($dayNames as $name) {
                 $hours[$name] = ['open' => false, 'entry' => '', 'exit' => ''];
             }
 
@@ -109,22 +106,54 @@ final class BranchController extends BaseController
                 if ($dayName) {
                     $hours[$dayName] = [
                         'open' => true,
-                        'entry' => $bh->getOpenTime()->format('g:i A'),
-                        'exit' => $bh->getCloseTime()->format('g:i A')
+                        'entry' => $bh->getOpenTime() ? $bh->getOpenTime()->format('g:i A') : '',
+                        'exit' => $bh->getCloseTime() ? $bh->getCloseTime()->format('g:i A') : ''
                     ];
                 }
             }
 
+            // --- PROCESAMIENTO DE DIRECCIÓN (JSON A STRING) ---
+            $addressRaw = $branch->getAddress();
+            $formattedAddress = "Dirección no disponible";
+            $mapQuery = "";
+
+            if ($addressRaw) {
+                $addr = json_decode($addressRaw, true);
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($addr)) {
+                    // Construimos las partes: "Calle Número", "Ciudad", "Estado"
+                    $streetPart = trim(($addr['street'] ?? '') . ' ' . ($addr['streetNumber'] ?? ''));
+
+                    $parts = array_filter([
+                        $streetPart,
+                        $addr['city'] ?? null,
+                        $addr['state'] ?? null
+                    ]);
+
+                    // Resultado: "Pedro Infante 10, Monterrey, Nuevo Leon"
+                    $formattedAddress = implode(', ', $parts);
+                    $mapQuery = urlencode($formattedAddress);
+                } else {
+                    // Fallback si no es un JSON válido
+                    $formattedAddress = $addressRaw;
+                    $mapQuery = urlencode($addressRaw);
+                }
+            }
+
+            // --- CONSTRUCCIÓN DEL RESULTADO ---
             $result[] = [
                 'id' => $branch->getId(),
                 'name' => $branch->getName(),
-                'address' => $branch->getAddress(),
+                'address' => $formattedAddress,
                 'phone' => $branch->getPhone(),
                 'image' => $branch->getImage() ? $baseUrl . $branch->getImage() : null,
-                'rating' => $branch->getRating(),
-                'reviewCount' => $branch->getReviewCount(),
+                'rating' => (float)($branch->getRating() ?? 0),
+                'reviewCount' => (int)($branch->getReviewCount() ?? 0),
                 'hours' => $hours,
-                'mapUrl' => 'https://maps.google.com/?q=' . urlencode($branch->getAddress()),
+                // URL oficial de búsqueda de Google Maps (Universal para Web y App)
+                'mapUrl' => !empty($mapQuery)
+                    ? 'https://www.google.com/maps/search/?api=1&query=' . $mapQuery
+                    : null,
             ];
         }
 
