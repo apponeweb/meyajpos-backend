@@ -49,7 +49,7 @@ final class CompanyController extends BaseController
     public function info(Request $request, CompanyRepository $repository, $company_id = null): JsonResponse
     {
         if ($company_id === null) {
-            $company = $repository->findOneBy([]);
+            $company = $repository->findOneBy(['isActive'=>true]);
         } else {
             $company = $repository->find($company_id);
         }
