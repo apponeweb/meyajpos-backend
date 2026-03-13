@@ -170,7 +170,9 @@ final class BarberController extends BaseController
                 'id' => $barber['id'],
                 'name' => $barber['name'] . ($barber['lastName'] ? ' ' . $barber['lastName'] : ''),
                 'role' => $barber['classification'] ?? '',
-                'experience' => $barber['experience'] . ' años de experiencia' ?? '',
+                'experience' => (!empty($barber['experience']) && $barber['experience'] > 0)
+                    ? $barber['experience'] . ($barber['experience'] == 1 ? ' año de experiencia' : ' años de experiencia')
+                    : null,
                 'rating' => (float)$barber['avgRating'],
                 'reviewCount' => (int)$barber['ratingCount'],
                 'image' => $barber['photoUrl'] ? $baseUrl . $barber['photoUrl'] : null,
