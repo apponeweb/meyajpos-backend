@@ -145,20 +145,15 @@ final class MasterProductController extends BaseController
         if (isset($data['imageBase64']) && !empty($data['imageBase64'])) {
             $fileUrl = $this->saveBase64Image($data['imageBase64'], 'product');
             if ($fileUrl) {
-                $data['image'] = $fileUrl;
                 $entity->setImage($fileUrl);
             }
         } elseif (isset($data['removeImage']) && $data['removeImage'] === true) {
-            $data['image'] = null;
             $entity->setImage(null);
         }
 
-        unset(
-            $data['imageBase64'],
-            $data['removeImage']
-        );
+        // Re-initialize request for processForm without images-related data to avoid form confusion (though already ignored by FormType)
+        unset($data['imageBase64'], $data['removeImage']);
 
-        // Re-initialize request for processForm
         $request->initialize(
             $request->query->all(),
             $request->request->all(),
