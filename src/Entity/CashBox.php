@@ -22,7 +22,7 @@ class CashBox extends BaseEntity
     private ?Branch $branch = null;
 
     #[ORM\Column(type: Types::STRING, length: 250, nullable: true)]
-    private string $ticketSerie;
+    private ?string $ticketSerie = null;
 
     #[ORM\Column(type: Types::INTEGER, nullable: true)]
     private ?int $currentFolio = 0;
@@ -42,12 +42,12 @@ class CashBox extends BaseEntity
         $this->branch = $branch;
     }
 
-    public function getTicketSerie()
+    public function getTicketSerie(): ?string
     {
         return $this->ticketSerie;
     }
 
-    public function setTicketSerie($ticketSerie): void
+    public function setTicketSerie(?string $ticketSerie): void
     {
         $this->ticketSerie = $ticketSerie;
     }
