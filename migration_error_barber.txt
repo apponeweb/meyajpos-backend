@@ -1,0 +1,100 @@
+[notice] Migrating up to DoctrineMigrations\Version20260311190527
+[info] ++ migrating DoctrineMigrations\Version20260311190527
+[debug] ALTER TABLE tbd_barber_profile ADD classification VARCHAR(255) DEFAULT NULL, ADD experience VARCHAR(255) DEFAULT NULL, CHANGE avg_rating avg_rating NUMERIC(3, 2) DEFAULT 0 NOT NULL 
+[error] Migration DoctrineMigrations\Version20260311190527 failed during Execution. Error: "An exception occurred while executing a query: SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'classification'"
+
+In ExceptionConverter.php line 66:
+                                                                
+  [Doctrine\DBAL\Exception\NonUniqueFieldNameException (1060)]  
+  An exception occurred while executin                          
+  g a query: SQLSTATE[42S21]: Column a                          
+  lready exists: 1060 Duplicate column                          
+   name 'classification'                                        
+                                                                
+
+Exception trace:
+  at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\API\MySQL\ExceptionConverter.php:66
+ Doctrine\DBAL\Driver\API\MySQL\ExceptionConverter->convert() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Connection.php:1456
+ Doctrine\DBAL\Connection->handleDriverException() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Connection.php:1392
+ Doctrine\DBAL\Connection->convertExceptionDuringQuery() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Connection.php:809
+ Doctrine\DBAL\Connection->executeQuery() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:275
+ Doctrine\Migrations\Version\DbalExecutor->executeResult() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:152
+ Doctrine\Migrations\Version\DbalExecutor->executeMigration() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:72
+ Doctrine\Migrations\Version\DbalExecutor->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:87
+ Doctrine\Migrations\DbalMigrator->executePlan() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:54
+ Doctrine\Migrations\DbalMigrator->executeMigrations() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:134
+ Doctrine\Migrations\DbalMigrator->migrate() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Tools\Console\Command\MigrateCommand.php:225
+ Doctrine\Migrations\Tools\Console\Command\MigrateCommand->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Command\Command.php:318
+ Symfony\Component\Console\Command\Command->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:1073
+ Symfony\Component\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:123
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:356
+ Symfony\Component\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:77
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:195
+ Symfony\Component\Console\Application->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\runtime\Runner\Symfony\ConsoleApplicationRunner.php:49
+ Symfony\Component\Runtime\Runner\Symfony\ConsoleApplicationRunner->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\autoload_runtime.php:29
+ require_once() at D:\Proyectos\Personales\Mexico\meyajpos-backend\bin\console:15
+
+In Exception.php line 24:
+                                               
+  [Doctrine\DBAL\Driver\PDO\Exception (1060)]  
+  SQLSTATE[42S21]: Column already exis         
+  ts: 1060 Duplicate column name 'clas         
+  sification'                                  
+                                               
+
+Exception trace:
+  at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\PDO\Exception.php:24
+ Doctrine\DBAL\Driver\PDO\Exception::new() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\PDO\Connection.php:62
+ Doctrine\DBAL\Driver\PDO\Connection->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\Middleware\AbstractConnectionMiddleware.php:24
+ Doctrine\DBAL\Driver\Middleware\AbstractConnectionMiddleware->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\doctrine-bridge\Middleware\Debug\Connection.php:55
+ Symfony\Bridge\Doctrine\Middleware\Debug\Connection->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Connection.php:804
+ Doctrine\DBAL\Connection->executeQuery() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:275
+ Doctrine\Migrations\Version\DbalExecutor->executeResult() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:152
+ Doctrine\Migrations\Version\DbalExecutor->executeMigration() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:72
+ Doctrine\Migrations\Version\DbalExecutor->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:87
+ Doctrine\Migrations\DbalMigrator->executePlan() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:54
+ Doctrine\Migrations\DbalMigrator->executeMigrations() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:134
+ Doctrine\Migrations\DbalMigrator->migrate() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Tools\Console\Command\MigrateCommand.php:225
+ Doctrine\Migrations\Tools\Console\Command\MigrateCommand->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Command\Command.php:318
+ Symfony\Component\Console\Command\Command->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:1073
+ Symfony\Component\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:123
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:356
+ Symfony\Component\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:77
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:195
+ Symfony\Component\Console\Application->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\runtime\Runner\Symfony\ConsoleApplicationRunner.php:49
+ Symfony\Component\Runtime\Runner\Symfony\ConsoleApplicationRunner->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\autoload_runtime.php:29
+ require_once() at D:\Proyectos\Personales\Mexico\meyajpos-backend\bin\console:15
+
+In Connection.php line 57:
+                                        
+  [PDOException (42S21)]                
+  SQLSTATE[42S21]: Column already exis  
+  ts: 1060 Duplicate column name 'clas  
+  sification'                           
+                                        
+
+Exception trace:
+  at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\PDO\Connection.php:57
+ PDO->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\PDO\Connection.php:57
+ Doctrine\DBAL\Driver\PDO\Connection->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Driver\Middleware\AbstractConnectionMiddleware.php:24
+ Doctrine\DBAL\Driver\Middleware\AbstractConnectionMiddleware->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\doctrine-bridge\Middleware\Debug\Connection.php:55
+ Symfony\Bridge\Doctrine\Middleware\Debug\Connection->query() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\dbal\src\Connection.php:804
+ Doctrine\DBAL\Connection->executeQuery() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:275
+ Doctrine\Migrations\Version\DbalExecutor->executeResult() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:152
+ Doctrine\Migrations\Version\DbalExecutor->executeMigration() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Version\DbalExecutor.php:72
+ Doctrine\Migrations\Version\DbalExecutor->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:87
+ Doctrine\Migrations\DbalMigrator->executePlan() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:54
+ Doctrine\Migrations\DbalMigrator->executeMigrations() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\DbalMigrator.php:134
+ Doctrine\Migrations\DbalMigrator->migrate() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\doctrine\migrations\src\Tools\Console\Command\MigrateCommand.php:225
+ Doctrine\Migrations\Tools\Console\Command\MigrateCommand->execute() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Command\Command.php:318
+ Symfony\Component\Console\Command\Command->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:1073
+ Symfony\Component\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:123
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRunCommand() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:356
+ Symfony\Component\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\framework-bundle\Console\Application.php:77
+ Symfony\Bundle\FrameworkBundle\Console\Application->doRun() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\console\Application.php:195
+ Symfony\Component\Console\Application->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\symfony\runtime\Runner\Symfony\ConsoleApplicationRunner.php:49
+ Symfony\Component\Runtime\Runner\Symfony\ConsoleApplicationRunner->run() at D:\Proyectos\Personales\Mexico\meyajpos-backend\vendor\autoload_runtime.php:29
+ require_once() at D:\Proyectos\Personales\Mexico\meyajpos-backend\bin\console:15
+
+doctrine:migrations:migrate [--write-sql [WRITE-SQL]] [--dry-run] [--query-time] [--allow-no-migration] [--all-or-nothing [ALL-OR-NOTHING]] [--no-all-or-nothing] [--configuration CONFIGURATION] [--em EM] [--conn CONN] [--] [<version>]
+

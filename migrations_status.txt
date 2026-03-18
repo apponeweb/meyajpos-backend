@@ -1,0 +1,22 @@
++----------------------+----------------------+------------------------------------------------------------------------+
+| Configuration                                                                                                        |
++----------------------+----------------------+------------------------------------------------------------------------+
+| Storage              | Type                 | Doctrine\Migrations\Metadata\Storage\TableMetadataStorageConfiguration |
+|                      | Table Name           | doctrine_migration_versions                                            |
+|                      | Column Name          | version                                                                |
+|----------------------------------------------------------------------------------------------------------------------|
+| Database             | Driver               | Symfony\Bridge\Doctrine\Middleware\IdleConnection\Driver               |
+|                      | Name                 | meyajpos                                                               |
+|----------------------------------------------------------------------------------------------------------------------|
+| Versions             | Previous             | 0                                                                      |
+|                      | Current              | DoctrineMigrations\Version20260311174047                               |
+|                      | Next                 | DoctrineMigrations\Version20251214190518                               |
+|                      | Latest               | DoctrineMigrations\Version20260311184836                               |
+|----------------------------------------------------------------------------------------------------------------------|
+| Migrations           | Executed             | 1                                                                      |
+|                      | Executed Unavailable | 0                                                                      |
+|                      | Available            | 3                                                                      |
+|                      | New                  | 2                                                                      |
+|----------------------------------------------------------------------------------------------------------------------|
+| Migration Namespaces | DoctrineMigrations   | D:\Proyectos\Personales\Mexico\meyajpos-backend/migrations             |
++----------------------+----------------------+------------------------------------------------------------------------+
