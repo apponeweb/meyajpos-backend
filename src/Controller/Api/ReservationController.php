@@ -49,11 +49,32 @@ class ReservationController extends BaseController
         $current = $request->query->get('current', 1);
         $pageSize = $request->query->get('pageSize', 10);
         $search = $request->query->get('search');
+        $date = $request->query->get('date');
+        $barberId = $request->query->get('barberId');
 
         $queryBuilder = $this->entityManager->getRepository(Appointment::class)
             ->createQueryBuilder('a')
             ->leftJoin('a.customer', 'c')
             ->orderBy('a.createdAt', 'DESC');
+
+        if ($date || $barberId) {
+            $queryBuilder->leftJoin('a.services', 'srv');
+            
+            if ($barberId) {
+                $queryBuilder->leftJoin('srv.barber', 'b')
+                             ->andWhere('b.user = :barberId')
+                             ->setParameter('barberId', $barberId);
+            }
+            
+            if ($date) {
+                $dateStart = new \DateTime($date . ' 00:00:00');
+                $dateEnd = new \DateTime($date . ' 23:59:59');
+                $queryBuilder->andWhere('srv.scheduledDateTime >= :dateStart')
+                             ->andWhere('srv.scheduledDateTime <= :dateEnd')
+                             ->setParameter('dateStart', $dateStart)
+                             ->setParameter('dateEnd', $dateEnd);
+            }
+        }
 
         if ($search) {
             $queryBuilder->andWhere('c.name LIKE :search OR c.email LIKE :search')
@@ -117,6 +138,7 @@ class ReservationController extends BaseController
     {
         $startStr = $request->query->get('start'); // Format: 2026-03-01T00:00:00Z
         $endStr = $request->query->get('end');
+        $barberId = $request->query->get('barberId');
         
         $start = new \DateTime($startStr);
         $end = new \DateTime($endStr);
@@ -124,16 +146,22 @@ class ReservationController extends BaseController
         $configs = $this->getStatusConfigs();
 
         // 1. Fetch Appointment Services
-        $services = $this->appointmentServiceRepository->createQueryBuilder('s')
+        $servicesQuery = $this->appointmentServiceRepository->createQueryBuilder('s')
             ->join('s.appointment', 'a')
             ->where('s.scheduledDateTime >= :start')
             ->andWhere('s.scheduledDateTime <= :end')
             ->andWhere('a.status != :cancelled')
             ->setParameter('start', $start)
             ->setParameter('end', $end)
-            ->setParameter('cancelled', AppointmentStatus::CANCELLED)
-            ->getQuery()
-            ->getResult();
+            ->setParameter('cancelled', AppointmentStatus::CANCELLED);
+
+        if ($barberId) {
+            $servicesQuery->join('s.barber', 'b')
+                          ->andWhere('b.user = :barberId')
+                          ->setParameter('barberId', $barberId);
+        }
+
+        $services = $servicesQuery->getQuery()->getResult();
 
         $events = [];
         foreach ($services as $s) {
@@ -159,13 +187,18 @@ class ReservationController extends BaseController
         }
 
         // 2. Fetch Blocks (TimeOff)
-        $blocks = $this->barberTimeOffRepository->createQueryBuilder('b')
+        $blocksQuery = $this->barberTimeOffRepository->createQueryBuilder('b')
             ->where('b.startAtLocal >= :start OR b.endAtLocal >= :start')
             ->andWhere('b.startAtLocal <= :end')
             ->setParameter('start', $start)
-            ->setParameter('end', $end)
-            ->getQuery()
-            ->getResult();
+            ->setParameter('end', $end);
+
+        if ($barberId) {
+            $blocksQuery->andWhere('b.barber = :barberId')
+                        ->setParameter('barberId', $barberId);
+        }
+
+        $blocks = $blocksQuery->getQuery()->getResult();
 
         foreach ($blocks as $b) {
             $events[] = [
