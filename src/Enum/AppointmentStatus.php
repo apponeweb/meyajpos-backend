@@ -9,6 +9,7 @@ enum AppointmentStatus: int
     case CANCELLED = 3;
     case COMPLETED = 4;
     case NO_SHOW = 5;
+    case IN_PROCESS = 6;
 
     public function getLabel(): string
     {
@@ -18,6 +19,7 @@ enum AppointmentStatus: int
             self::CANCELLED => 'Cancelada',
             self::COMPLETED => 'Completada',
             self::NO_SHOW => 'No asistió',
+            self::IN_PROCESS => 'En proceso',
         };
     }
 }
