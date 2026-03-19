@@ -90,14 +90,21 @@ class AppointmentBookingController extends BaseController
 
             // 4. Procesar Servicios y Manejar Concurrencia
             foreach ($data['services'] as $serviceData) {
-                $barberId = $serviceData['professionalId'];
+                $userId = $serviceData['professionalId'];
                 
                 // --- BLOQUEO PESIMISTA ---
                 // Bloqueamos al barbero para evitar que otras transacciones verifiquen disponibilidad simultáneamente
-                $barber = $this->entityManager->find(BarberProfile::class, $barberId, LockMode::PESSIMISTIC_WRITE);
+                $barber = $this->entityManager->createQueryBuilder()
+                    ->select('bp')
+                    ->from(BarberProfile::class, 'bp')
+                    ->where('bp.user = :userId')
+                    ->setParameter('userId', $userId)
+                    ->getQuery()
+                    ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                    ->getOneOrNullResult();
                 
                 if (!$barber) {
-                    throw new \Exception("Barbero no encontrado: " . $barberId);
+                    throw new \Exception("Barbero no encontrado para el usuario: " . $userId);
                 }
 
                 $scheduledDateTimeStr = $serviceData['scheduledDateTime'];
@@ -110,7 +117,7 @@ class AppointmentBookingController extends BaseController
                 $duration = (int)$serviceData['duration'];
 
                 // Verificar traslape
-                if ($this->appointmentServiceRepository->hasOverlap($barberId, $scheduledDateTime, $duration)) {
+                if ($this->appointmentServiceRepository->hasOverlap($barber->getId(), $scheduledDateTime, $duration)) {
                     throw new \Exception(sprintf(
                         "El barbero %s ya tiene una cita programada en el horario %s que se traslapa con esta solicitud.",
                         $serviceData['professionalName'],
