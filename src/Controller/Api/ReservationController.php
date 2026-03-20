@@ -98,6 +98,7 @@ class ReservationController extends BaseController
                     'id' => $s->getId(),
                     'service' => $s->getService()->getName(),
                     'barber' => $s->getBarber()->getUser()->getName(),
+                    'barberPhoto' => $s->getBarber()->getPhotoUrl(),
                     'date' => $s->getScheduledDateTime()->format('d/m/Y H:i:s'),
                     'price' => $s->getPrice()
                 ];
