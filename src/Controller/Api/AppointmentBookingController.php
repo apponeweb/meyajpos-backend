@@ -9,6 +9,12 @@ use App\Entity\Branch;
 use App\Entity\Customer;
 use App\Entity\MasterProduct;
 use App\Enum\AppointmentStatus;
+use App\Enum\SaleStatus;
+use App\Entity\BarberService;
+use App\Entity\BarberSchedule;
+use App\Entity\User;
+use App\Entity\BarberTimeOff;
+use App\Entity\Sale;
 use App\Repository\CustomerRepository;
 use App\Repository\AppointmentServiceRepository;
 use Doctrine\DBAL\LockMode;
@@ -92,21 +98,13 @@ class AppointmentBookingController extends BaseController
             foreach ($data['services'] as $serviceData) {
                 $userId = $serviceData['professionalId'];
                 
-                // --- BLOQUEO PESIMISTA ---
-                // Bloqueamos al barbero para evitar que otras transacciones verifiquen disponibilidad simultáneamente
-                $barber = $this->entityManager->createQueryBuilder()
-                    ->select('bp')
-                    ->from(BarberProfile::class, 'bp')
-                    ->where('bp.user = :userId')
-                    ->setParameter('userId', $userId)
-                    ->getQuery()
-                    ->setLockMode(LockMode::PESSIMISTIC_WRITE)
-                    ->getOneOrNullResult();
+                $serviceId = $serviceData['serviceId'];
+                $masterProduct = $this->entityManager->getRepository(MasterProduct::class)->find($serviceId);
                 
-                if (!$barber) {
-                    throw new \Exception("Barbero no encontrado para el usuario: " . $userId);
+                if (!$masterProduct) {
+                    throw new \Exception("Servicio no encontrado: " . $serviceId);
                 }
-
+                
                 $scheduledDateTimeStr = $serviceData['scheduledDateTime'];
                 $scheduledDateTime = \DateTime::createFromFormat('Y-m-d h:i A', $scheduledDateTimeStr);
                 
@@ -115,21 +113,36 @@ class AppointmentBookingController extends BaseController
                 }
 
                 $duration = (int)$serviceData['duration'];
-
-                // Verificar traslape
-                if ($this->appointmentServiceRepository->hasOverlap($barber->getId(), $scheduledDateTime, $duration)) {
-                    throw new \Exception(sprintf(
-                        "El barbero %s ya tiene una cita programada en el horario %s que se traslapa con esta solicitud.",
-                        $serviceData['professionalName'],
-                        $scheduledDateTimeStr
-                    ));
-                }
-
-                $serviceId = $serviceData['serviceId'];
-                $masterProduct = $this->entityManager->getRepository(MasterProduct::class)->find($serviceId);
                 
-                if (!$masterProduct) {
-                    throw new \Exception("Servicio no encontrado: " . $serviceId);
+                if ($userId === 'any') {
+                    $barber = $this->findAvailableBarber((int)$branchId, $scheduledDateTime, $duration, (int)$serviceId);
+                    if (!$barber) {
+                        throw new \Exception("No hay barberos disponibles para el servicio " . $masterProduct->getName() . " en el horario " . $scheduledDateTimeStr);
+                    }
+                } else {
+                    // --- BLOQUEO PESIMISTA ---
+                    // Bloqueamos al barbero para evitar que otras transacciones verifiquen disponibilidad simultáneamente
+                    $barber = $this->entityManager->createQueryBuilder()
+                        ->select('bp')
+                        ->from(BarberProfile::class, 'bp')
+                        ->where('bp.user = :userId')
+                        ->setParameter('userId', $userId)
+                        ->getQuery()
+                        ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                        ->getOneOrNullResult();
+                    
+                    if (!$barber) {
+                        throw new \Exception("Barbero no encontrado para el usuario: " . $userId);
+                    }
+
+                    // Verificar traslape Manual
+                    if ($this->appointmentServiceRepository->hasOverlap($barber->getId(), $scheduledDateTime, $duration)) {
+                        throw new \Exception(sprintf(
+                            "El barbero %s ya tiene una cita programada en el horario %s que se traslapa con esta solicitud.",
+                            $serviceData['professionalName'] ?? 'seleccionado',
+                            $scheduledDateTimeStr
+                        ));
+                    }
                 }
 
                 $appService = new AppointmentService();
@@ -162,5 +175,105 @@ class AppointmentBookingController extends BaseController
                 'detail' => $e->getMessage()
             ], Response::HTTP_CONFLICT); // HTTP 409 Conflict para traslapes o errores de negocio
         }
+    }
+
+    private function findAvailableBarber(int $branchId, \DateTime $scheduledDateTime, int $duration, int $productId): ?BarberProfile
+    {
+        $dayOfWeek = (int)$scheduledDateTime->format('N');
+        $shiftStart = clone $scheduledDateTime;
+        $shiftEnd = (clone $scheduledDateTime)->modify("+{$duration} minutes");
+
+        // 1. Get potential barbers
+        $qb = $this->entityManager->createQueryBuilder()
+            ->select('bp')
+            ->from(BarberProfile::class, 'bp')
+            ->join(BarberService::class, 'bserv', 'WITH', 'bserv.barber = bp.user')
+            ->join(BarberSchedule::class, 'bsched', 'WITH', 'bsched.barber = bp.user')
+            ->join(User::class, 'u', 'WITH', 'u.id = bp.user')
+            ->where('u.enabled = true AND u.barberSn = true')
+            ->andWhere('bserv.product = :productId AND bserv.isActive = true')
+            ->andWhere('bsched.branch = :branchId AND bsched.dayOfWeek = :dayOfWeek')
+            ->andWhere('bsched.validFrom <= :date AND (bsched.validTo IS NULL OR bsched.validTo >= :date)')
+            ->setParameter('productId', $productId)
+            ->setParameter('branchId', $branchId)
+            ->setParameter('dayOfWeek', $dayOfWeek)
+            ->setParameter('date', $scheduledDateTime->format('Y-m-d'));
+
+        $potentialBarbers = $qb->getQuery()->getResult();
+
+        foreach ($potentialBarbers as $barberProfile) {
+            $barberId = $barberProfile->getUser()->getId();
+
+            // First check basic AppointmentService overlap
+            if ($this->appointmentServiceRepository->hasOverlap($barberProfile->getId(), $scheduledDateTime, $duration)) {
+                continue;
+            }
+
+            // Check TimeOff Overlap
+            $timeOffOverlap = $this->entityManager->getRepository(BarberTimeOff::class)
+                ->createQueryBuilder('to')
+                ->where('to.barber = :barberId')
+                ->andWhere('to.branch = :branchId OR to.branch IS NULL')
+                ->andWhere(':shiftStart < to.endAtLocal AND :shiftEnd > to.startAtLocal')
+                ->setParameter('barberId', $barberId)
+                ->setParameter('branchId', $branchId)
+                ->setParameter('shiftStart', $shiftStart)
+                ->setParameter('shiftEnd', $shiftEnd)
+                ->getQuery()
+                ->getResult();
+
+            if (!empty($timeOffOverlap)) {
+                continue;
+            }
+
+            // Check Sale overlap
+            $sales = $this->entityManager->getRepository(Sale::class)
+                ->createQueryBuilder('s')
+                ->join('s.details', 'd')
+                ->where('d.serviceProvider = :barberId')
+                ->andWhere('s.status != :cancelled')
+                ->andWhere('s.saleDate >= :startOfDay AND s.saleDate <= :endOfDay')
+                ->setParameter('barberId', $barberId)
+                ->setParameter('startOfDay', $scheduledDateTime->format('Y-m-d 00:00:00'))
+                ->setParameter('endOfDay', $scheduledDateTime->format('Y-m-d 23:59:59'))
+                ->setParameter('cancelled', SaleStatus::CANCELLED->value)
+                ->getQuery()
+                ->getResult();
+
+            $isOccupiedBySale = false;
+            foreach ($sales as $sale) {
+                // Approximate 60 minutes for sales
+                $saleStart = clone $sale->getSaleDate();
+                $saleEnd = (clone $saleStart)->modify("+60 minutes");
+                
+                $maxStart = max($shiftStart->getTimestamp(), $saleStart->getTimestamp());
+                $minEnd = min($shiftEnd->getTimestamp(), $saleEnd->getTimestamp());
+                
+                if ($maxStart < $minEnd) {
+                    $isOccupiedBySale = true;
+                    break;
+                }
+            }
+
+            if ($isOccupiedBySale) {
+                continue;
+            }
+
+            // If we've made it here, lock this barber pesimistically and return it!
+            $lockedBarberProfile = $this->entityManager->createQueryBuilder()
+                ->select('bp')
+                ->from(BarberProfile::class, 'bp')
+                ->where('bp.id = :id')
+                ->setParameter('id', $barberProfile->getId())
+                ->getQuery()
+                ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+                ->getOneOrNullResult();
+
+            if ($lockedBarberProfile) {
+                return $lockedBarberProfile;
+            }
+        }
+        
+        return null;
     }
 }

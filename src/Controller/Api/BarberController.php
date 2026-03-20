@@ -175,6 +175,7 @@ final class BarberController extends BaseController
             ->setParameter('branchId', $branchId)
             ->setParameter('dayOfWeek', $dayOfWeek)
             ->setParameter('date', $date->format('Y-m-d'))
+            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
 
@@ -283,9 +284,9 @@ final class BarberController extends BaseController
         $dateStr = $request->query->get('date');
         $productId = $request->query->get('productId');
 
-        if (!$barberId || !$branchId || !$dateStr || !$productId) {
+        if (!$branchId || !$dateStr || !$productId) {
             return $this->json([
-                'message' => 'Faltan parámetros requeridos: barberId, branchId, date, productId'
+                'message' => 'Faltan parámetros requeridos: branchId, date, productId'
             ], Response::HTTP_BAD_REQUEST);
         }
 
@@ -308,11 +309,49 @@ final class BarberController extends BaseController
             ->setParameter('branchId', $branchId)
             ->setParameter('dayOfWeek', $dayOfWeek)
             ->setParameter('date', $date->format('Y-m-d'))
+            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
 
         if (!$branchHourOpen) {
             return $this->json([], Response::HTTP_OK); // Branch closed
+        }
+
+        // Si no mandan barbero, retornamos el horario general de la sucursal
+        if (!$barberId) {
+            $slots = [];
+            $currentTime = clone $date;
+            $currentTime->setTime((int)$branchHourOpen->getOpenTime()->format('H'), (int)$branchHourOpen->getOpenTime()->format('i'));
+            
+            $endTime = clone $date;
+            $endTime->setTime((int)$branchHourOpen->getCloseTime()->format('H'), (int)$branchHourOpen->getCloseTime()->format('i'));
+
+            while ($currentTime < $endTime) {
+                $slots[] = $currentTime->format('h:i A');
+                $currentTime->modify("+30 minutes");
+            }
+
+            $groups = [
+                ['id' => 'Mañana', 'icon' => 'Sun', 'times' => []],
+                ['id' => 'Tarde', 'icon' => 'CloudSun', 'times' => []],
+                ['id' => 'Noche', 'icon' => 'Moon', 'times' => []],
+            ];
+
+            foreach ($slots as $timeStr) {
+                $time = \DateTime::createFromFormat('h:i A', $timeStr);
+                $hour = (int)$time->format('H');
+                
+                if ($hour < 12) {
+                    $groups[0]['times'][] = $timeStr;
+                } elseif ($hour < 17) {
+                    $groups[1]['times'][] = $timeStr;
+                } else {
+                    $groups[2]['times'][] = $timeStr;
+                }
+            }
+
+            $result = array_values(array_filter($groups, fn($g) => !empty($g['times'])));
+            return $this->json($result, Response::HTTP_OK);
         }
 
         // 2. Check if Barber provides the product
@@ -338,6 +377,7 @@ final class BarberController extends BaseController
             ->setParameter('branchId', $branchId)
             ->setParameter('dayOfWeek', $dayOfWeek)
             ->setParameter('date', $date->format('Y-m-d'))
+            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
 

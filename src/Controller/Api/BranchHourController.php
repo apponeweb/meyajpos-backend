@@ -79,6 +79,55 @@ final class BranchHourController extends BaseController
         return $this->processForm($request, $id, "Horario actualizado correctamente");
     }
 
+    #[Rest\Post('/branch-hour/generate-weekly')]
+    public function generateWeekly(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $branchId = $data['branchId'] ?? null;
+        $openTimeStr = $data['openTime'] ?? null;
+        $closeTimeStr = $data['closeTime'] ?? null;
+
+        if (!$branchId || !$openTimeStr || !$closeTimeStr) {
+            return $this->json(['message' => 'Faltan parámetros requeridos.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $branch = $this->entityManager->getRepository(Branch::class)->find($branchId);
+        if (!$branch) {
+            return $this->json(['message' => 'Sucursal no encontrada.'], Response::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $repository = $this->entityManager->getRepository(BranchHour::class);
+            $existingHours = $repository->findBy(['branch' => $branch]);
+            
+            foreach ($existingHours as $hour) {
+                $this->entityManager->remove($hour);
+            }
+
+            $openTime = new \DateTime($openTimeStr);
+            $closeTime = new \DateTime($closeTimeStr);
+            $validFrom = new \DateTime();
+
+            for ($day = 1; $day <= 7; $day++) {
+                $branchHour = new BranchHour();
+                $branchHour->setBranch($branch);
+                $branchHour->setDayOfWeek($day);
+                $branchHour->setOpenTime($openTime);
+                $branchHour->setCloseTime($closeTime);
+                $branchHour->setValidFrom($validFrom);
+                $branchHour->setValidTo(null);
+
+                $this->entityManager->persist($branchHour);
+            }
+
+            $this->entityManager->flush();
+
+            return $this->json(['message' => 'Horarios generados correctamente.'], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return $this->json(['message' => 'Error al generar horarios: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
     private function checkDuplicateDay(array $data, ?int $currentId = null): bool
     {
         $branchId = $data['branch'] ?? null;
