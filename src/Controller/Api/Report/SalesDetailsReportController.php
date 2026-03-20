@@ -4,8 +4,10 @@ namespace App\Controller\Api\Report;
 
 
 use App\Entity\Report\DailyReport;
+use App\Entity\BarberProfile;
 use App\Repository\Report\DailyReportRepository;
 use App\Repository\SalePaymentRepository;
+use Doctrine\ORM\EntityManagerInterface;
 
 // Mantenemos este solo para los totales si ya lo tienes listo
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,6 +23,7 @@ class SalesDetailsReportController extends AbstractController
 {
     public function __construct(
         private readonly DailyReportRepository $dailyReportRepository,
+        private readonly EntityManagerInterface $entityManager,
     )
     {
     }
@@ -49,15 +52,27 @@ class SalesDetailsReportController extends AbstractController
             $paginator = new Paginator($query);
             $results = [];
 
-            // 2. Mapeo directo (Sin bucles anidados)
+            $scheme = $request->getScheme();
+            $host = $request->getHttpHost();
+            $baseUrl = $scheme . '://' . $host;
+            $barberPhotoCache = [];
+
             /** @var DailyReport $row */
             foreach ($paginator as $row) {
+                $barberId = $row->getBarberId();
+                if (!isset($barberPhotoCache[$barberId])) {
+                    $profile = $this->entityManager->getRepository(BarberProfile::class)->findOneBy(['user' => $barberId]);
+                    $barberPhotoCache[$barberId] = $profile?->getPhotoUrl();
+                }
+                $photoUrl = $barberPhotoCache[$barberId];
+
                 $results[] = [
                     'id' => $row->getId(),
                     'ticket' => $row->getTicketFolio(),
                     'servProd' => $row->getProductServiceName(),
                     'serviceType' => $row->getServiceTypeName(),
                     'barber' => $row->getBarberName(),
+                    'barberPhoto' => $photoUrl ? $baseUrl . $photoUrl : null,
                     'paymentMethod' => $row->getPaymentMethod(),
                     'paymentAmount' => number_format((float)$row->getPaymentAmount(), 2, '.', ','),
                     'quantity' => (float)$row->getQuantity(),
