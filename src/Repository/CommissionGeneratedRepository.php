@@ -22,7 +22,8 @@ class CommissionGeneratedRepository extends BaseRepository
             ->select(
                 'mp.name as service',
                 'u.name as barber',
-                'st.name as serviceType', // Agregamos el nombre del tipo de servicio
+                'u.id as barberId',
+                'st.name as serviceType',
                 'cg.percentage',
                 'COUNT(cg.id) as quantity',
                 'SUM(cg.commissionAmount) as totalCommission',

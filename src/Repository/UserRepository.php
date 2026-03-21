@@ -61,7 +61,8 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function findAllBarbers(): array
     {
         return $this->createQueryBuilder('u')
-            ->select('u.id', 'u.name', 'u.lastName')
+            ->select('u.id', 'u.name', 'u.lastName', 'p.photoUrl AS photoUrl')
+            ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
             ->where('u.barberSn = :barberSn')
             ->andWhere('u.enabled = :enabled')
             ->setParameter('enabled', true)

@@ -92,6 +92,136 @@ final class BarberScheduleController extends BaseController
         return $this->processForm($request, $id, "Horario actualizado correctamente");
     }
 
+    #[Rest\Post('/barber-schedule/generate-weekly')]
+    public function generateWeekly(Request $request, BarberScheduleRepository $repository, BranchHourRepository $branchHourRepository): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $barberId = $data['barberId'] ?? null;
+        $branchId = $data['branchId'] ?? null;
+        $openTimeStr = $data['openTime'] ?? null;
+        $closeTimeStr = $data['closeTime'] ?? null;
+        $turnDurationStr = $data['turnDuration'] ?? 30;
+        $slotMinutesStr = $data['slotMinutes'] ?? 30;
+        $ignoreConflicts = $data['ignoreConflicts'] ?? false;
+
+        if (!$barberId || !$branchId || !$openTimeStr || !$closeTimeStr) {
+            return $this->json(['message' => 'Faltan parámetros requeridos.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $barber = $this->entityManager->getRepository(\App\Entity\User::class)->find($barberId);
+        $branch = $this->entityManager->getRepository(\App\Entity\Branch::class)->find($branchId);
+
+        if (!$barber || !$branch) {
+            return $this->json(['message' => 'Barbero o sucursal no encontrada.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $openTime = new \DateTime('1970-01-01 ' . $openTimeStr);
+        $closeTime = new \DateTime('1970-01-01 ' . $closeTimeStr);
+        $validFrom = new \DateTime();
+
+        try {
+            $branchHours = $branchHourRepository->findBy(['branch' => $branch]);
+            $errores = [];
+            $validDays = [];
+            $dayNames = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
+
+            // Verify all 7 days first
+            for ($day = 1; $day <= 7; $day++) {
+                $bh = null;
+                foreach ($branchHours as $bhour) {
+                    if ($bhour->getDayOfWeek() == $day && $bhour->getDeletedAt() === null) {
+                        $bh = $bhour; break;
+                    }
+                }
+
+                if (!$bh) {
+                    $errores[] = "La sucursal no está configurada o abierta el " . $dayNames[$day] . " (Configura su horario de sucursal primero)";
+                    continue;
+                }
+
+                $branchOpen = new \DateTime('1970-01-01 ' . $bh->getOpenTime()->format('H:i:s'));
+                $branchClose = new \DateTime('1970-01-01 ' . $bh->getCloseTime()->format('H:i:s'));
+
+                if ($openTime < $branchOpen || $closeTime > $branchClose) {
+                    $errores[] = "El horario deseado el " . $dayNames[$day] . " excede el horario de la sucursal (" . $branchOpen->format('H:i') . " - " . $branchClose->format('H:i') . ")";
+                    continue;
+                }
+
+                $overlapping = $repository->findOverlappingSchedules(
+                    (int) $barberId,
+                    $day,
+                    $openTime,
+                    $closeTime,
+                    $validFrom,
+                    null,
+                    null
+                );
+
+                $hasOverlap = false;
+                foreach ($overlapping as $overlap) {
+                    // Ignore overlaps within the same branch as they will be wiped.
+                    if ($overlap->getBranch()->getId() !== $branch->getId()) {
+                        $errores[] = "El barbero ya tiene horario asignado en " . $overlap->getBranch()->getName() . " el " . $dayNames[$day];
+                        $hasOverlap = true;
+                        break;
+                    }
+                }
+                if ($hasOverlap) {
+                    continue;
+                }
+
+                $validDays[] = $day;
+            }
+
+            if (!empty($errores) && !$ignoreConflicts) {
+                return $this->json([
+                    'message' => 'Conflictos detectados',
+                    'conflicts' => $errores
+                ], Response::HTTP_CONFLICT);
+            }
+
+            if (empty($validDays)) {
+                return $this->json([
+                    'message' => "No hay días válidos para generar horarios. Por favor revisa los conflictos reportados."
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
+            $existingSchedules = $repository->findBy([
+                'barber' => $barber,
+                'branch' => $branch
+            ]);
+            
+            foreach ($existingSchedules as $schedule) {
+                $this->entityManager->remove($schedule);
+            }
+            
+            foreach ($validDays as $day) {
+                $schedule = new BarberSchedule();
+                $schedule->setBarber($barber);
+                $schedule->setBranch($branch);
+                $schedule->setDayOfWeek($day);
+                $schedule->setOpenTime($openTime);
+                $schedule->setCloseTime($closeTime);
+                $schedule->setSlotMinutes((int)$slotMinutesStr);
+                $schedule->setTurnDuration((int)$turnDurationStr);
+                $schedule->setValidFrom($validFrom);
+                $schedule->setValidTo(null);
+
+                $this->entityManager->persist($schedule);
+            }
+
+            $this->entityManager->flush();
+
+            return $this->json([
+                'message' => empty($errores) 
+                    ? 'Horarios generados correctamente para los 7 días.' 
+                    : 'Horarios generados omitiendo los días conflictivos.'
+            ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return $this->json(['message' => 'Error al generar horarios: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
     private function validateScheduleOverlap(array $data, BarberScheduleRepository $repository, BranchHourRepository $branchHourRepository, ?int $currentId = null): ?JsonResponse
     {
         $barberId = $data['barber'] ?? null;

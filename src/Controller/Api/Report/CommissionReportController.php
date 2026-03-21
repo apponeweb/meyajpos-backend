@@ -3,6 +3,8 @@
 namespace App\Controller\Api\Report;
 
 use App\Repository\CommissionGeneratedRepository;
+use App\Entity\BarberProfile;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,7 +17,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class CommissionReportController extends AbstractController
 {
     public function __construct(
-        private readonly CommissionGeneratedRepository $repository
+        private readonly CommissionGeneratedRepository $repository,
+        private readonly EntityManagerInterface $entityManager,
     )
     {
     }
@@ -43,12 +46,14 @@ class CommissionReportController extends AbstractController
             $paginator = new Paginator($query, false);
             $resultsRaw = iterator_to_array($paginator->getIterator());
 
-            $results = array_map(function ($row) {
+            $barberPhotoCache = [];
+            $scheme = $request->getScheme();
+            $host = $request->getHttpHost();
+            $baseUrl = $scheme . '://' . $host;
+
+            $results = array_map(function ($row) use (&$barberPhotoCache, $baseUrl) {
                 $dateObj = is_string($row['date']) ? new \DateTime($row['date']) : $row['date'];
 
-                // LÓGICA DEL PRECIO:
-                // Despejamos el precio: (Comisión total / cantidad) * 100 / porcentaje
-                // O más simple por fila: (Comisión / Porcentaje) * 100
                 $percentage = (float)$row['percentage'];
                 $totalComm = (float)$row['totalCommission'];
                 $quantity = (int)$row['quantity'];
@@ -56,11 +61,19 @@ class CommissionReportController extends AbstractController
                 $unitCommission = $quantity > 0 ? $totalComm / $quantity : 0;
                 $price = ($percentage > 0) ? ($unitCommission * 100) / $percentage : 0;
 
+                $barberId = $row['barberId'] ?? null;
+                if ($barberId && !isset($barberPhotoCache[$barberId])) {
+                    $profile = $this->entityManager->getRepository(BarberProfile::class)->findOneBy(['user' => $barberId]);
+                    $barberPhotoCache[$barberId] = $profile?->getPhotoUrl();
+                }
+                $photoUrl = $barberId ? ($barberPhotoCache[$barberId] ?? null) : null;
+
                 return [
                     'service' => $row['service'],
-                    'serviceType' => $row['serviceType'] ?? 'N/A', // Campo que agregamos en la Query
+                    'serviceType' => $row['serviceType'] ?? 'N/A',
                     'barber' => $row['barber'],
-                    'price' => number_format((float)$price, 2, '.', ','), // Nuevo campo
+                    'barberPhoto' => $photoUrl ? $baseUrl . $photoUrl : null,
+                    'price' => number_format((float)$price, 2, '.', ','),
                     'percentage' => number_format($percentage, 2, '.', ','),
                     'quantity' => $quantity,
                     'total' => number_format((float)$price * $quantity, 2, '.', ','),
