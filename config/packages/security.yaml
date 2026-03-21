@@ -49,6 +49,7 @@ security:
     # Note: Only the *first* access control that matches will be used
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
+        - { path: ^/api/(select-context|current-context), roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/appointments/book, roles: PUBLIC_ACCESS }
         - { path: ^/api/company/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }
