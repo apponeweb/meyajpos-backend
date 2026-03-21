@@ -11,6 +11,7 @@ use App\Form\Type\CashBoxOpeningType;
 use App\Form\Type\CashBoxClosingType;
 use App\Repository\CashBoxSessionRepository;
 use App\Service\CashBoxMovementService;
+use App\Service\ContextService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,7 +25,8 @@ class CashBoxSessionController extends AbstractController
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private Security               $security
+        private Security               $security,
+        private ContextService         $contextService
     )
     {
     }
@@ -34,11 +36,26 @@ class CashBoxSessionController extends AbstractController
     {
         $user = $this->security->getUser();
 
-        // 1. Validar si el usuario YA tiene alguna sesión abierta
-        $activeSessionForUser = $repo->findOneBy([
-            'user' => $user,
-            'status' => CashBoxSessionStatus::OPEN
-        ]);
+        // 0. Validar que el usuario tiene contexto de sucursal seleccionado
+        if (!$this->contextService->hasContext()) {
+            return $this->json([
+                'message' => 'Debe seleccionar una sucursal antes de abrir caja',
+                'errors' => ['context' => 'No hay sucursal seleccionada']
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $currentBranchId = $this->contextService->getCurrentBranchId();
+
+        // 1. Validar si el usuario YA tiene alguna sesión abierta en esta sucursal
+        $activeSessionForUser = $repo->createQueryBuilder('s')
+            ->where('s.user = :user')
+            ->andWhere('s.status = :status')
+            ->andWhere('s.branch = :branch')
+            ->setParameter('user', $user)
+            ->setParameter('status', CashBoxSessionStatus::OPEN)
+            ->setParameter('branch', $currentBranchId)
+            ->getQuery()
+            ->getOneOrNullResult();
 
         if ($activeSessionForUser) {
             return $this->json([
@@ -59,6 +76,20 @@ class CashBoxSessionController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $cashBox = $session->getCashBox();
+
+            // Validar que la caja pertenece a la sucursal seleccionada
+            if ($cashBox->getBranch()->getId() !== $currentBranchId) {
+                return $this->json([
+                    'message' => 'Validación fallida',
+                    'errors' => [
+                        'children' => [
+                            'cashBox' => [
+                                'errors' => ['Esta caja no pertenece a la sucursal seleccionada.']
+                            ]
+                        ]
+                    ]
+                ], Response::HTTP_BAD_REQUEST);
+            }
 
             // 2. Validar si la CAJA ya está siendo usada por otro usuario
             $activeSessionForBox = $repo->findOneBy([
@@ -184,18 +215,27 @@ class CashBoxSessionController extends AbstractController
     public function status(CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
+        $currentBranchId = $this->contextService->getCurrentBranchId();
 
-        $session = $repo->findOneBy([
+        // Buscar sesión abierta del usuario en la sucursal actual
+        $criteria = [
             'user' => $user,
             'status' => CashBoxSessionStatus::OPEN
-        ]);
+        ];
+
+        if ($currentBranchId) {
+            $criteria['branch'] = $currentBranchId;
+        }
+
+        $session = $repo->findOneBy($criteria);
 
         if (!$session) {
             return $this->json([
                 'message' => 'No hay sesión activa',
                 'data' => [
                     'isOpen' => false,
-                    'session' => null
+                    'session' => null,
+                    'hasContext' => $this->contextService->hasContext()
                 ]
             ], Response::HTTP_OK);
         }
@@ -204,13 +244,17 @@ class CashBoxSessionController extends AbstractController
             'message' => 'Sesión activa encontrada',
             'data' => [
                 'isOpen' => true,
+                'hasContext' => true,
                 'session' => [
                     'id' => $session->getId(),
                     'cashBoxId' => $session->getCashBox()->getId(),
                     'cashBoxName' => $session->getCashBox()->getName(),
                     'openingDate' => $session->getOpeningDate()->format('Y-m-d H:i:s'),
                     'initialAmount' => $session->getInitialAmount(),
-                    'branchName' => $session->getBranch()->getName()
+                    'branchId' => $session->getBranch()->getId(),
+                    'branchName' => $session->getBranch()->getName(),
+                    'companyId' => $session->getBranch()->getCompany()?->getId(),
+                    'companyName' => $session->getBranch()->getCompany()?->getName()
                 ]
             ]
         ], Response::HTTP_OK);
