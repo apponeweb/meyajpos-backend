@@ -60,7 +60,15 @@ class AppointmentBookingController extends BaseController
         $this->entityManager->beginTransaction();
 
         try {
-            // 1. Manejar Cliente
+            // 1. Manejar Sucursal
+            $branchId = $data['branch']['id'];
+            $branch = $this->entityManager->getRepository(Branch::class)->find($branchId);
+            
+            if (!$branch) {
+                throw new \Exception("Sucursal no encontrada: " . $branchId);
+            }
+
+            // 2. Manejar Cliente
             $customerData = $data['customer'];
             $customer = $this->customerRepository->findOneBy(['email' => $customerData['email']]);
             
@@ -73,16 +81,9 @@ class AppointmentBookingController extends BaseController
             $customer->setPhone($customerData['phone']);
             $customer->setCountryCode($customerData['countryCode']);
             $customer->setNotes($customerData['notes']);
+            $customer->setBranch($branch);
             
             $this->entityManager->persist($customer);
-
-            // 2. Manejar Sucursal
-            $branchId = $data['branch']['id'];
-            $branch = $this->entityManager->getRepository(Branch::class)->find($branchId);
-            
-            if (!$branch) {
-                throw new \Exception("Sucursal no encontrada: " . $branchId);
-            }
 
             // 3. Crear Cita (Appointment)
             $appointment = new Appointment();
@@ -90,7 +91,7 @@ class AppointmentBookingController extends BaseController
             $appointment->setBranch($branch);
             $appointment->setTotalAmount((string)$data['summary']['totalAmount']);
             $appointment->setCurrency($data['summary']['currency']);
-            $appointment->setStatus(AppointmentStatus::CONFIRMED);
+            $appointment->setStatus(AppointmentStatus::PENDING);
             
             $this->entityManager->persist($appointment);
 

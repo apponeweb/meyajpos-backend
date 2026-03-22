@@ -58,6 +58,7 @@ class XReportController extends AbstractController
                     'declaredTotal' => number_format((float) $report['declaredTotal'], 2, '.', ','),
                     'difference' => number_format((float) $report['difference'], 2, '.', ','),
                     'observations' => $report['observations'],
+                    'cashBox' => $report['cashBoxName'],
                     // Semáforo visual para el frontend: si hay diferencia negativa o positiva
                     'hasDifference' => abs((float) $report['difference']) > 0.01
                 ];

@@ -135,7 +135,7 @@ final class SaleController extends BaseController
         $sale->setCashBox($activeSession->getCashBox());
         $sale->setCashBoxSession($activeSession);
         $sale->setSaleDate($now);
-        $newFolio = $this->generateDailyFolio($now);
+        $newFolio = $this->generateDailyFolio($now, $activeSession->getCashBox());
         $sale->setFolio($newFolio);
         $sale->setCreatedAt($now);
         $sale->setUpdatedAt($now);
@@ -235,18 +235,20 @@ final class SaleController extends BaseController
     }
 
 
-    private function generateDailyFolio(\DateTime $date): string
+    private function generateDailyFolio(\DateTime $date, \App\Entity\CashBox $cashBox): string
     {
         $repository = $this->entityManager->getRepository(Sale::class);
 
-        // Prefijo del día actual para buscar el máximo consecutivo
-        $datePrefix = 'V-' . $date->format('Ymd') . '-';
+        // Prefijo del día actual y ID de caja para buscar el máximo consecutivo
+        $datePrefix = 'V-' . $date->format('Ymd') . '-' . $cashBox->getId() . '-';
 
-        // Obtener el folio máximo del día actual
+        // Obtener el folio máximo del día actual PARA ESTA CAJA
         $maxFolio = $repository->createQueryBuilder('s')
             ->select('MAX(s.folio)')
             ->where('s.folio LIKE :prefix')
+            ->andWhere('s.cashBox = :cashBox')
             ->setParameter('prefix', $datePrefix . '%')
+            ->setParameter('cashBox', $cashBox)
             ->getQuery()
             ->getSingleScalarResult();
 
@@ -259,8 +261,8 @@ final class SaleController extends BaseController
             $nextNumber = 1;
         }
 
-        // Formato: V-AÑO-MES-DIA-CONSECUTIVO (con ceros a la izquierda)
-        // Ejemplo: V-20260126-0001
+        // Formato: V-AÑO-MES-DIA-IDCAJA-CONSECUTIVO (con ceros a la izquierda)
+        // Ejemplo: V-20260126-1-0001
         return sprintf('%s%04d', $datePrefix, $nextNumber);
     }
 

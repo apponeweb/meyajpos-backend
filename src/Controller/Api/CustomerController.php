@@ -43,6 +43,7 @@ class CustomerController extends BaseController
         $current = $request->query->get('current', 1);
         $pageSize = $request->query->get('pageSize', 10);
         $search = $request->query->get('search');
+        $branchId = $request->query->get('branchId');
 
         $queryBuilder = $this->entityManager->getRepository(Customer::class)
             ->createQueryBuilder('c')
@@ -51,6 +52,11 @@ class CustomerController extends BaseController
         if ($search) {
             $queryBuilder->andWhere('c.name LIKE :search OR c.email LIKE :search')
                 ->setParameter('search', '%' . $search . '%');
+        }
+
+        if ($branchId) {
+            $queryBuilder->andWhere('c.branch = :branchId')
+                ->setParameter('branchId', $branchId);
         }
 
         $total = count($queryBuilder->getQuery()->getResult());
@@ -85,7 +91,11 @@ class CustomerController extends BaseController
                 'lastVisit' => $lastVisitDate,
                 'segmentation' => $segmentation,
                 'appointmentCount' => $appointmentCount,
-                'isActive' => $customer->isActive()
+                'isActive' => $customer->isActive(),
+                'branch' => $customer->getBranch() ? [
+                    'id' => $customer->getBranch()->getId(),
+                    'name' => $customer->getBranch()->getName()
+                ] : null
             ];
         }
 

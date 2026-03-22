@@ -29,11 +29,11 @@ class DailyReport
     #[ORM\Column(name: 'service_type_id', type: Types::INTEGER)]
     private int $serviceTypeId;
 
-    #[ORM\Column(name: 'barber_name', type: Types::STRING, length: 255)]
-    private string $barberName;
+    #[ORM\Column(name: 'barber_name', type: Types::STRING, length: 255, nullable: true)]
+    private ?string $barberName = null;
 
-    #[ORM\Column(name: 'barber_id', type: Types::INTEGER)]
-    private int $barberId;
+    #[ORM\Column(name: 'barber_id', type: Types::INTEGER, nullable: true)]
+    private ?int $barberId = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2)]
     private string $quantity;
@@ -53,14 +53,17 @@ class DailyReport
     #[ORM\Column(name: 'cash_change', type: Types::DECIMAL, precision: 10, scale: 2)]
     private string $cashChange;
 
-    #[ORM\Column(name: 'payment_method', type: Types::STRING, length: 255)]
-    private string $paymentMethod;
+    #[ORM\Column(name: 'payment_method', type: Types::STRING, length: 255, nullable: true)]
+    private ?string $paymentMethod = null;
 
-    #[ORM\Column(name: 'payment_method_id', type: Types::INTEGER)]
-    private int $paymentMethodId;
+    #[ORM\Column(name: 'payment_method_id', type: Types::INTEGER, nullable: true)]
+    private ?int $paymentMethodId = null;
 
     #[ORM\Column(name: 'formatted_sale_date', type: Types::STRING, length: 50)]
     private string $formattedSaleDate;
+
+    #[ORM\Column(name: 'cash_box_name', type: Types::STRING, length: 255, nullable: true)]
+    private ?string $cashBoxName = null;
 
     #[ORM\Column(name: 'sale_date', type: Types::DATETIME_MUTABLE)]
     private \DateTimeInterface $saleDate;
@@ -73,6 +76,16 @@ class DailyReport
     public function setId(int $id): void
     {
         $this->id = $id;
+    }
+
+    public function getCashBoxName(): ?string
+    {
+        return $this->cashBoxName;
+    }
+
+    public function setCashBoxName(?string $cashBoxName): void
+    {
+        $this->cashBoxName = $cashBoxName;
     }
 
     public function getTicketFolio(): string
@@ -125,22 +138,22 @@ class DailyReport
         $this->serviceTypeId = $serviceTypeId;
     }
 
-    public function getBarberName(): string
+    public function getBarberName(): ?string
     {
         return $this->barberName;
     }
 
-    public function setBarberName(string $barberName): void
+    public function setBarberName(?string $barberName): void
     {
         $this->barberName = $barberName;
     }
 
-    public function getBarberId(): int
+    public function getBarberId(): ?int
     {
         return $this->barberId;
     }
 
-    public function setBarberId(int $barberId): void
+    public function setBarberId(?int $barberId): void
     {
         $this->barberId = $barberId;
     }
@@ -205,22 +218,22 @@ class DailyReport
         $this->cashChange = $cashChange;
     }
 
-    public function getPaymentMethod(): string
+    public function getPaymentMethod(): ?string
     {
         return $this->paymentMethod;
     }
 
-    public function setPaymentMethod(string $paymentMethod): void
+    public function setPaymentMethod(?string $paymentMethod): void
     {
         $this->paymentMethod = $paymentMethod;
     }
 
-    public function getPaymentMethodId(): int
+    public function getPaymentMethodId(): ?int
     {
         return $this->paymentMethodId;
     }
 
-    public function setPaymentMethodId(int $paymentMethodId): void
+    public function setPaymentMethodId(?int $paymentMethodId): void
     {
         $this->paymentMethodId = $paymentMethodId;
     }

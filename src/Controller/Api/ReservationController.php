@@ -18,6 +18,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\SecurityBundle\Security;
+use Doctrine\ORM\Tools\Pagination\Paginator;
+
 
 #[Route('/reservation')]
 class ReservationController extends BaseController
@@ -81,12 +83,17 @@ class ReservationController extends BaseController
                 ->setParameter('search', '%' . $search . '%');
         }
 
-        $total = count($queryBuilder->getQuery()->getResult());
+        // Exclude cancelled appointments to match calendar behavior
+        $queryBuilder->andWhere('a.status != :cancelled')
+            ->setParameter('cancelled', AppointmentStatus::CANCELLED);
 
         $queryBuilder->setFirstResult(($current - 1) * $pageSize)
             ->setMaxResults($pageSize);
 
-        $appointments = $queryBuilder->getQuery()->getResult();
+        $paginator = new Paginator($queryBuilder->getQuery(), true);
+        $total = count($paginator);
+        $appointments = $paginator->getIterator();
+
         $results = [];
 
         $configs = $this->getStatusConfigs();

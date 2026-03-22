@@ -35,9 +35,9 @@ class DailyReportRepository extends ServiceEntityRepository
                 'SUM(r.unitPrice) as sumUnitPrice',
                 'SUM(r.total) as sumTotal',
                 'SUM(r.tipAmount) as sumTips',
-                "SUM(CASE WHEN r.paymentMethodId = 1 THEN r.paymentAmount ELSE 0 END) as totalCash",
+                "SUM(CASE WHEN r.paymentMethodId = 3 THEN r.paymentAmount ELSE 0 END) as totalCash",
                 "SUM(CASE WHEN r.paymentMethodId = 2 THEN r.paymentAmount ELSE 0 END) as totalCard",
-                "SUM(CASE WHEN r.paymentMethodId = 3 THEN r.paymentAmount ELSE 0 END) as totalTransfer"
+                "SUM(CASE WHEN r.paymentMethodId = 1 THEN r.paymentAmount ELSE 0 END) as totalTransfer"
             );
 
         // Aplicamos los mismos filtros compartidos

@@ -34,6 +34,10 @@ class Customer extends BaseEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $preferences = null;
 
+    #[ORM\ManyToOne(targetEntity: Branch::class)]
+    #[ORM\JoinColumn(name: 'branch_id', referencedColumnName: 'id', nullable: true)]
+    private ?Branch $branch = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -102,6 +106,17 @@ class Customer extends BaseEntity
     public function setPreferences(?string $preferences): self
     {
         $this->preferences = $preferences;
+        return $this;
+    }
+
+    public function getBranch(): ?Branch
+    {
+        return $this->branch;
+    }
+
+    public function setBranch(?Branch $branch): self
+    {
+        $this->branch = $branch;
         return $this;
     }
 }

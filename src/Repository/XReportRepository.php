@@ -41,10 +41,12 @@ class XReportRepository extends BaseRepository
                 'x.difference',
                 'x.observations',
                 'u.name as userName',
-                'cs.id as sessionId'
+                'cs.id as sessionId',
+                'cb.name as cashBoxName'
             )
             ->join('x.user', 'u')
-            ->join('x.cashSession', 'cs');
+            ->join('x.cashSession', 'cs')
+            ->join('cs.cashBox', 'cb');
 
         if (!empty($filters['startDate']) && !empty($filters['endDate'])) {
             $qb->andWhere('x.xReportDate BETWEEN :start AND :end')

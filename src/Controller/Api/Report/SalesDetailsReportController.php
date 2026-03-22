@@ -80,7 +80,8 @@ class SalesDetailsReportController extends AbstractController
                     'total' => number_format((float)$row->getTotal(), 2, '.', ','),
                     'tip' => number_format((float)$row->getTipAmount(), 2, '.', ','),
                     'cashChange' => number_format((float)$row->getCashChange(), 2, '.', ','),
-                    'date' => $row->getFormattedSaleDate()
+                    'date' => $row->getFormattedSaleDate(),
+                    'cashBox' => $row->getCashBoxName()
                 ];
             }
 
@@ -131,12 +132,13 @@ class SalesDetailsReportController extends AbstractController
             $handle = fopen('php://output', 'w+');
             fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF)); // UTF-8 BOM
 
-            fputcsv($handle, ['TICKET', 'PRODUCTO/SERVICIO', 'TIPO DE SERVICIO', 'BARBERO', 'CANTIDAD', 'PRECIO UNITARIO', 'PROPINA', 'METODO DE PAGO', 'MONTO PAGADO', 'CAMBIO', 'TOTAL', 'FECHA'], ';');
+            fputcsv($handle, ['TICKET', 'CAJA', 'PRODUCTO/SERVICIO', 'TIPO DE SERVICIO', 'BARBERO', 'CANTIDAD', 'PRECIO UNITARIO', 'PROPINA', 'METODO DE PAGO', 'MONTO PAGADO', 'CAMBIO', 'TOTAL', 'FECHA'], ';');
 
             /** @var DailyReport $row */
             foreach ($data as $row) {
                 fputcsv($handle, [
                     $row->getTicketFolio(),
+                    $row->getCashBoxName(),
                     $row->getProductServiceName(),
                     $row->getServiceTypeName(),
                     $row->getBarberName(),

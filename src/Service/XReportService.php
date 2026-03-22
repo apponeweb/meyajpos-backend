@@ -54,7 +54,7 @@ class XReportService
 
         $salesCount = $this->saleRepo->count(['cashBoxSession' => $session->getId()]);
         if ($salesCount === 0 && $mode == null) {
-            throw new \Exception('No se puede generar un corte X por no haber ventas realizadas en esta sesión.', 400);
+            //throw new \Exception('No se puede generar un corte X por no haber ventas realizadas en esta sesión.', 400);
         }
 
         $allPaymentTypes = $this->entityManager->getRepository(PaymentType::class)->findBy(['isActive' => true]);
