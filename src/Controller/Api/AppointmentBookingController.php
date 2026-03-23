@@ -107,7 +107,9 @@ class AppointmentBookingController extends BaseController
                 }
                 
                 $scheduledDateTimeStr = $serviceData['scheduledDateTime'];
-                $scheduledDateTime = \DateTime::createFromFormat('Y-m-d h:i A', $scheduledDateTimeStr);
+                // If format is "YYYY-MM-DD HH:mm A - HH:mm A", extract only the start part
+                $cleanDateTimeStr = explode(' - ', $scheduledDateTimeStr)[0];
+                $scheduledDateTime = \DateTime::createFromFormat('Y-m-d h:i A', $cleanDateTimeStr);
                 
                 if (!$scheduledDateTime) {
                     throw new \Exception("Formato de fecha inválido: " . $scheduledDateTimeStr);

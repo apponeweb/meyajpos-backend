@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\AppointmentService;
 use App\Entity\BarberProfile;
 use App\Entity\BarberSchedule;
 use App\Entity\BarberService;
@@ -444,19 +445,28 @@ final class BarberController extends BaseController
             if ($slotEnd > $endTime) break;
 
             $isOccupied = false;
-            foreach ($occupiedRanges as $range) {
-                // Check for overlap
-                $maxStart = max($slotStart->getTimestamp(), $range['start']->getTimestamp());
-                $minEnd = min($slotEnd->getTimestamp(), $range['end']->getTimestamp());
-                
-                if ($maxStart < $minEnd) {
-                    $isOccupied = true;
-                    break;
+
+            // 1. Check AppointmentService overlap
+            if ($barberProfile && $this->entityManager->getRepository(AppointmentService::class)->hasOverlap($barberProfile->getId(), $slotStart, $turnDuration)) {
+                $isOccupied = true;
+            }
+
+            if (!$isOccupied) {
+                // 2. Check Sales/TimeOff overlaps
+                foreach ($occupiedRanges as $range) {
+                    $maxStart = max($slotStart->getTimestamp(), $range['start']->getTimestamp());
+                    $minEnd = min($slotEnd->getTimestamp(), $range['end']->getTimestamp());
+                    
+                    if ($maxStart < $minEnd) {
+                        $isOccupied = true;
+                        break;
+                    }
                 }
             }
 
             if (!$isOccupied) {
-                $slots[] = $slotStart->format('h:i A');
+                // Format: 11:00 AM - 11:30 AM
+                $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
             }
 
             $currentTime->modify("+{$slotMinutes} minutes");
@@ -470,7 +480,9 @@ final class BarberController extends BaseController
         ];
 
         foreach ($slots as $timeStr) {
-            $time = \DateTime::createFromFormat('h:i A', $timeStr);
+            // Use the start time of the range for grouping (before the " - ")
+            $startTimeStr = explode(' - ', $timeStr)[0];
+            $time = \DateTime::createFromFormat('h:i A', $startTimeStr);
             $hour = (int)$time->format('H');
             
             if ($hour < 12) {

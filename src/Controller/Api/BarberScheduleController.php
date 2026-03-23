@@ -40,7 +40,8 @@ final class BarberScheduleController extends BaseController
             'b.name as branchName',
             'barber.id as barberId',
             'barber.name as barberName',
-            'barber.lastName as barberLastName'
+            'barber.lastName as barberLastName',
+            'p.photoUrl as barberPhoto'
         ];
     }
 
@@ -48,6 +49,7 @@ final class BarberScheduleController extends BaseController
     {
         $qb->leftJoin('u.branch', 'b');
         $qb->leftJoin('u.barber', 'barber');
+        $qb->leftJoin('barber.profile', 'p');
 
         if ($branchId = $request->query->get('branchId')) {
             $qb->andWhere('b.id = :branchId')

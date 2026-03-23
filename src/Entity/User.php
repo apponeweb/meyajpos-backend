@@ -50,6 +50,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\JoinColumn(name: 'commission_id', referencedColumnName: 'id', nullable: true)]
     private ?Commission $commission = null;
 
+    #[ORM\OneToOne(mappedBy: 'user', targetEntity: BarberProfile::class)]
+    private ?BarberProfile $profile = null;
+
     public function getId(): ?int
     {
         return $this->id;
