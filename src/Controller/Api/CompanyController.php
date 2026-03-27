@@ -124,27 +124,26 @@ final class CompanyController extends BaseController
     }
 
     #[Rest\Get('/company/{id}')]
-    public function get(Company $id): mixed
+    public function get(int $id, CompanyRepository $repository): JsonResponse
     {
-        // 1. Llamamos al método base para obtener la respuesta original
-        $response = $this->getDetails($id);
+        $qb = $repository->createQueryBuilder('u')
+            ->select($this->getListSelectFields())
+            ->where('u.id = :id')
+            ->setParameter('id', $id)
+            ->andWhere('u.deletedAt IS NULL');
 
-        // 2. Si la respuesta no es un éxito (ej. 404 o 500), la retornamos tal cual
-        if ($response->getStatusCode() !== JsonResponse::HTTP_OK) {
-            return $response;
+        $result = $qb->getQuery()->getOneOrNullResult(\Doctrine\ORM\Query::HYDRATE_ARRAY);
+
+        if (!$result) {
+            return $this->json(['message' => 'Empresa no encontrada'], Response::HTTP_NOT_FOUND);
         }
 
-        // 3. Decodificamos el contenido para manipularlo
-        $data = json_decode($response->getContent(), true);
-
-        // 4. Ajuste puntual: renombramos 'active' a 'isActive' si existe
-        if (isset($data['active']) && !isset($data['isActive'])) {
-            $data['isActive'] = $data['active'];
-            unset($data['active']);
+        // Renombramos 'active' a 'isActive' si existe (aunque en HYDRATE_ARRAY ya debería venir como isActive si está en selectFields)
+        if (isset($result['active']) && !isset($result['isActive'])) {
+            $result['isActive'] = $result['active'];
         }
 
-        // 6. Retornamos la respuesta ya corregida
-        return new JsonResponse($data, $response->getStatusCode());
+        return $this->json($result, Response::HTTP_OK);
     }
 
     #[Rest\Put('/company/{id}/policy')]

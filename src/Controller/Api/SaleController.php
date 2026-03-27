@@ -288,38 +288,76 @@ final class SaleController extends BaseController
     }
 
     #[Rest\Get('/sale/{id}')]
-    public function get(Sale $id): JsonResponse
+    public function get(int $id, SaleRepository $repository): JsonResponse
     {
-        $response = $this->getDetails($id);
-        if ($response->getStatusCode() !== Response::HTTP_OK) {
-            return $response;
-        }
-        $data = json_decode($response->getContent(), true);
-
-        $data['subtotal'] = $this->moneyFormat($data['subtotal'] ?? 0);
-        $data['totalTax'] = $this->moneyFormat($data['totalTax'] ?? 0);
-        $data['total'] = $this->moneyFormat($data['total'] ?? 0);
-        $data['change'] = $this->moneyFormat($data['change'] ?? 0);
-
-        // Detalles de la venta
-        if (isset($data['details'])) {
-            foreach ($data['details'] as &$item) {
-                $item['subtotal'] = $this->moneyFormat($item['subtotal'] ?? 0);
-                $item['tax'] = $this->moneyFormat($item['tax'] ?? 0);
-                $item['tip'] = $this->moneyFormat(($item['total'] ?? 0) - ($item['unitPrice'] ?? 0));
-                $item['unitPrice'] = $this->moneyFormat($item['unitPrice'] ?? 0);
-                $item['total'] = $this->moneyFormat($item['total'] ?? 0);
-            }
+        $sale = $repository->find($id);
+        if (!$sale) {
+            return $this->json(['message' => 'Venta no encontrada'], Response::HTTP_NOT_FOUND);
         }
 
-        // Pagos
-        if (isset($data['payments'])) {
-            foreach ($data['payments'] as &$pay) {
-                $pay['amountReceived'] = $this->moneyFormat($pay['amountReceived'] ?? 0);
-                $pay['amountLocalCurrency'] = $this->moneyFormat($pay['amountLocalCurrency'] ?? 0);
-                $pay['exchangeRateUsed'] = number_format((float)($pay['exchangeRateUsed'] ?? 1), 2, '.', ',');
-            }
+        $data = [
+            'id' => $sale->getId(),
+            'folio' => $sale->getFolio(),
+            'saleDate' => $sale->getSaleDate()?->format('d/m/Y H:i:s'),
+            'createdAt' => $sale->getCreatedAt()?->format('d/m/Y H:i:s'),
+            'subtotal' => $this->moneyFormat($sale->getSubtotal()),
+            'totalTax' => $this->moneyFormat($sale->getTotalTax()),
+            'total' => $this->moneyFormat($sale->getTotal()),
+            'change' => $this->moneyFormat($sale->getChange()),
+            'status' => $sale->getStatus()->value,
+            'user' => $sale->getUser() ? [
+                'id' => $sale->getUser()->getId(),
+                'name' => $sale->getUser()->getName(),
+                'lastName' => $sale->getUser()->getLastName(),
+            ] : null,
+            'cashBox' => $sale->getCashBox() ? [
+                'id' => $sale->getCashBox()->getId(),
+                'name' => $sale->getCashBox()->getName(),
+            ] : null,
+            'details' => [],
+            'payments' => []
+        ];
+
+        foreach ($sale->getDetails() as $detail) {
+            $data['details'][] = [
+                'id' => $detail->getId(),
+                'itemLine' => $detail->getItemLine(),
+                'quantity' => $detail->getQuantity(),
+                'unitPrice' => $this->moneyFormat($detail->getUnitPrice()),
+                'subtotal' => $this->moneyFormat($detail->getSubtotal()),
+                'tax' => $this->moneyFormat($detail->getTax()),
+                'total' => $this->moneyFormat($detail->getTotal()),
+                'isCourtesy' => $detail->isCourtesy(),
+                'product' => $detail->getProduct() ? [
+                    'id' => $detail->getProduct()->getId(),
+                    'name' => $detail->getProduct()->getName(),
+                ] : null,
+                'serviceProvider' => $detail->getServiceProvider() ? [
+                    'id' => $detail->getServiceProvider()->getId(),
+                    'name' => $detail->getServiceProvider()->getName(),
+                    'lastName' => $detail->getServiceProvider()->getLastName(),
+                ] : null,
+                'tip' => $this->moneyFormat((float)$detail->getTotal() - (float)$detail->getUnitPrice())
+            ];
         }
+
+        foreach ($sale->getPayments() as $payment) {
+            $data['payments'][] = [
+                'id' => $payment->getId(),
+                'amountReceived' => $this->moneyFormat($payment->getAmountReceived()),
+                'amountLocalCurrency' => $this->moneyFormat($payment->getAmountLocalCurrency()),
+                'exchangeRateUsed' => number_format((float)($payment->getExchangeRateUsed() ?? 1), 2, '.', ','),
+                'paymentType' => $payment->getPaymentType() ? [
+                    'id' => $payment->getPaymentType()->getId(),
+                    'name' => $payment->getPaymentType()->getName(),
+                ] : null,
+                'currency' => $payment->getCurrency() ? [
+                    'id' => $payment->getCurrency()->getId(),
+                    'name' => $payment->getCurrency()->getName(),
+                ] : null,
+            ];
+        }
+
         return $this->json($data, Response::HTTP_OK);
     }
 
