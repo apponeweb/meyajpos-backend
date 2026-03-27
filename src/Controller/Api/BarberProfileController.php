@@ -58,8 +58,23 @@ final class BarberProfileController extends BaseController
     }
 
     #[Rest\Post('/barber-profile')]
-    public function create(Request $request): JsonResponse
+    public function create(Request $request, BarberProfileRepository $repository): JsonResponse
     {
+        $data = json_decode($request->getContent(), true);
+        $userId = $data['user'] ?? null;
+
+        if ($userId) {
+            $existing = $repository->findOneBy(['user' => $userId]);
+            if ($existing) {
+                // Si existe y tiene campos de borrado, lo reactivamos
+                if (method_exists($existing, 'setDeletedAt')) $existing->setDeletedAt(null);
+                if (method_exists($existing, 'setDeletedBy')) $existing->setDeletedBy(null);
+                if (method_exists($existing, 'setIsActive')) $existing->setIsActive(true);
+
+                return $this->handleSave($request, $existing);
+            }
+        }
+
         return $this->handleSave($request, new BarberProfile());
     }
 
@@ -84,13 +99,22 @@ final class BarberProfileController extends BaseController
     }
 
     #[Rest\Get('/barber-profile/{userId}')]
-    public function getProfile(int $userId, BarberProfileRepository $repository): mixed
+    public function getProfile(int $userId, BarberProfileRepository $repository): JsonResponse
     {
-        $id = $repository->findOneBy(['user' => $userId]);
-        if (!$id) {
+        $qb = $repository->createQueryBuilder('u')
+            ->select($this->getListSelectFields())
+            ->leftJoin('u.user', 'usr')
+            ->where('usr.id = :userId')
+            ->setParameter('userId', $userId)
+            ->andWhere('u.deletedAt IS NULL');
+
+        $result = $qb->getQuery()->getOneOrNullResult(\Doctrine\ORM\Query::HYDRATE_ARRAY);
+
+        if (!$result) {
             return $this->json(['message' => 'Profile not found'], Response::HTTP_NOT_FOUND);
         }
-        return $this->getDetails($id);
+
+        return $this->json($result, Response::HTTP_OK);
     }
 
     private function handleSave(Request $request, BarberProfile $entity): JsonResponse
