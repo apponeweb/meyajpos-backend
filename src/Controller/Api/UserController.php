@@ -156,8 +156,9 @@ final class UserController extends AbstractFOSRestController
 
     #[Rest\Get('/user/list/barbers')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function getBarbers(UserRepository $userRepository): array
+    public function getBarbers(Request $request, UserRepository $userRepository): array
     {
-        return $userRepository->findAllBarbers();
+        $excludeTimeOffToday = $request->query->getBoolean('excludeTimeOffToday', false);
+        return $userRepository->findAllBarbers($excludeTimeOffToday);
     }
 }

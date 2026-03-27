@@ -70,20 +70,27 @@ class AppointmentBookingController extends BaseController
 
             // 2. Manejar Cliente
             $customerData = $data['customer'];
-            $customer = $this->customerRepository->findOneBy(['email' => $customerData['email']]);
+            
+            $qb = $this->customerRepository->createQueryBuilder('c')
+                ->where('c.email = :email')
+                ->orWhere('c.phone = :phone')
+                ->setParameter('email', $customerData['email'])
+                ->setParameter('phone', $customerData['phone'])
+                ->setMaxResults(1);
+            
+            $customer = $qb->getQuery()->getOneOrNullResult();
             
             if (!$customer) {
                 $customer = new Customer();
                 $customer->setEmail($customerData['email']);
+                $customer->setName($customerData['name']);
+                $customer->setPhone($customerData['phone']);
+                $customer->setCountryCode($customerData['countryCode'] ?? null);
+                $customer->setNotes($customerData['notes'] ?? null);
+                $customer->setBranch($branch);
+                
+                $this->entityManager->persist($customer);
             }
-            
-            $customer->setName($customerData['name']);
-            $customer->setPhone($customerData['phone']);
-            $customer->setCountryCode($customerData['countryCode']);
-            $customer->setNotes($customerData['notes']);
-            $customer->setBranch($branch);
-            
-            $this->entityManager->persist($customer);
 
             // 3. Crear Cita (Appointment)
             $appointment = new Appointment();

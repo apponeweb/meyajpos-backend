@@ -83,8 +83,14 @@ class CashBoxMovementRepository extends BaseRepository
 
             // Filtros opcionales
             if (!empty($search['date'])) {
-                $start = new \DateTime($search['date'] . ' 00:00:00');
-                $end = new \DateTime($search['date'] . ' 23:59:59');
+                if (str_contains($search['date'], ',')) {
+                    [$startStr, $endStr] = explode(',', $search['date']);
+                    $start = new \DateTime($startStr . ' 00:00:00');
+                    $end = new \DateTime($endStr . ' 23:59:59');
+                } else {
+                    $start = new \DateTime($search['date'] . ' 00:00:00');
+                    $end = new \DateTime($search['date'] . ' 23:59:59');
+                }
                 $qb->andWhere('m.movementDate BETWEEN :start AND :end')
                     ->setParameter('start', $start)
                     ->setParameter('end', $end);

@@ -69,8 +69,14 @@ class ReservationController extends BaseController
             }
             
             if ($date) {
-                $dateStart = new \DateTime($date . ' 00:00:00');
-                $dateEnd = new \DateTime($date . ' 23:59:59');
+                if (str_contains($date, ',')) {
+                    [$startStr, $endStr] = explode(',', $date);
+                    $dateStart = new \DateTime($startStr . ' 00:00:00');
+                    $dateEnd = new \DateTime($endStr . ' 23:59:59');
+                } else {
+                    $dateStart = new \DateTime($date . ' 00:00:00');
+                    $dateEnd = new \DateTime($date . ' 23:59:59');
+                }
                 $queryBuilder->andWhere('srv.scheduledDateTime >= :dateStart')
                              ->andWhere('srv.scheduledDateTime <= :dateEnd')
                              ->setParameter('dateStart', $dateStart)

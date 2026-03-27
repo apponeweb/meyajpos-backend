@@ -58,18 +58,28 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         return $queryBuilder->getQuery()->getResult();
     }
 
-    public function findAllBarbers(): array
+    public function findAllBarbers($excludeTimeOffToday = false): array
     {
-        return $this->createQueryBuilder('u')
+        $qb = $this->createQueryBuilder('u')
             ->select('u.id', 'u.name', 'u.lastName', 'p.photoUrl AS photoUrl')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
             ->where('u.barberSn = :barberSn')
             ->andWhere('u.enabled = :enabled')
             ->setParameter('enabled', true)
             ->setParameter('barberSn', true)
-            ->orderBy('u.name', 'ASC')
-            ->getQuery()
-            ->getResult();
+            ->orderBy('u.name', 'ASC');
+
+        if ($excludeTimeOffToday) {
+            $todayStart = new \DateTime('today 00:00:00');
+            $todayEnd = new \DateTime('today 23:59:59');
+
+            $qb->leftJoin('App\Entity\BarberTimeOff', 't', 'WITH', 't.barber = u AND (t.startAtLocal <= :todayEnd AND t.endAtLocal >= :todayStart)')
+               ->andWhere('t.id IS NULL')
+               ->setParameter('todayStart', $todayStart)
+               ->setParameter('todayEnd', $todayEnd);
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     public function getBarbersWithPagination(?string $search = null, ?string $classification = null, ?string $experience = null)
