@@ -16,7 +16,7 @@ class XReportDetail extends BaseEntity
     #[ORM\Column(type: Types::BIGINT)]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: XReport::class)]
+    #[ORM\ManyToOne(targetEntity: XReport::class, inversedBy: 'details')]
     #[ORM\JoinColumn(name: 'x_report_id', referencedColumnName: 'id', nullable: false,
         onDelete: 'CASCADE')]
     private ?XReport $xReport = null;

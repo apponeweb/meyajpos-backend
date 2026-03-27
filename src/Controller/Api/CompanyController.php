@@ -124,26 +124,9 @@ final class CompanyController extends BaseController
     }
 
     #[Rest\Get('/company/{id}')]
-    public function get(int $id, CompanyRepository $repository): JsonResponse
+    public function get(Company $id): JsonResponse
     {
-        $qb = $repository->createQueryBuilder('u')
-            ->select($this->getListSelectFields())
-            ->where('u.id = :id')
-            ->setParameter('id', $id)
-            ->andWhere('u.deletedAt IS NULL');
-
-        $result = $qb->getQuery()->getOneOrNullResult(\Doctrine\ORM\Query::HYDRATE_ARRAY);
-
-        if (!$result) {
-            return $this->json(['message' => 'Empresa no encontrada'], Response::HTTP_NOT_FOUND);
-        }
-
-        // Renombramos 'active' a 'isActive' si existe (aunque en HYDRATE_ARRAY ya debería venir como isActive si está en selectFields)
-        if (isset($result['active']) && !isset($result['isActive'])) {
-            $result['isActive'] = $result['active'];
-        }
-
-        return $this->json($result, Response::HTTP_OK);
+        return $this->json($id, Response::HTTP_OK);
     }
 
     #[Rest\Put('/company/{id}/policy')]

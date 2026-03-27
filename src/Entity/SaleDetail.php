@@ -13,14 +13,14 @@ use Symfony\Component\Serializer\Annotation\Ignore;
 #[ORM\Table(name: 'tbd_sale_detail')]
 #[UniqueEntity(fields: ['itemLine'], message: 'Ya existe un registro con este itemLine.')]
 #[ORM\HasLifecycleCallbacks]
-class SaleDetail extends Base
+class SaleDetail extends BaseEntity
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column(type: Types::BIGINT)]
     private ?int $id = null;
     #[Ignore]
-    #[ORM\ManyToOne(targetEntity: Sale::class)]
+    #[ORM\ManyToOne(targetEntity: Sale::class, inversedBy: 'details')]
     #[ORM\JoinColumn(name: 'sale_id', referencedColumnName: 'id', nullable: false,
         onDelete: 'CASCADE')]
     private ?Sale $sale = null;
