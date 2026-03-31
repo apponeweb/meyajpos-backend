@@ -401,8 +401,8 @@ class Sale extends BaseEntity
             foreach ($payment->getTips() as $tip) {
                 $paymentData['tips'][] = [
                     'amount' => $tip->getAmount(),
-                    'paymentType' => $tip->getPaymentType()->getId(),
-                    'description' => $tip->getDescription() // Ajustar según campos de tu entidad Tip
+                    'paymentType' => $tip->getPaymentType()?->getId(),
+                    'userId' => $tip->getUser()?->getId()
                 ];
             }
 
