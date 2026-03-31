@@ -52,6 +52,13 @@ final class MasterProductController extends BaseController
             $qb->andWhere('u.isInventoriable = :isInvent')
                 ->setParameter('isInvent', $value);
         }
+
+        // Filtro por si esta activo (?isActive=true)
+        if ($request->query->has('isActive')) {
+            $value = $request->query->getBoolean('isActive');
+            $qb->andWhere('u.isActive = :isActive')
+                ->setParameter('isActive', $value);
+        }
     }
 
     /**
