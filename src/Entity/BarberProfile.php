@@ -26,7 +26,7 @@ class BarberProfile extends BaseEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $bio = null;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, options: ['default' => 0])]
+    #[ORM\Column(type: Types::DECIMAL, precision: 4, scale: 2, options: ['default' => 0])]
     private ?string $avgRating = '0.00';
 
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 0])]
