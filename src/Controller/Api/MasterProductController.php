@@ -254,8 +254,8 @@ final class MasterProductController extends BaseController
         }
 
         $qb = $this->entityManager->getRepository(MasterProduct::class)->createQueryBuilder('mp');
-        $qb->select('DISTINCT mp.id', 'mp.name', 'st.name as category', 'mp.description', 'mp.price', 'mp.image')
-            ->addSelect('bs.durationOverrideMinutes')
+        $qb->select('mp.id', 'mp.name', 'st.name as category', 'mp.description', 'mp.price', 'mp.image')
+            ->addSelect('COALESCE(AVG(bs.durationOverrideMinutes), 40) as avgDuration')
             ->join(ServiceType::class, 'st', 'WITH', 'mp.serviceType = st.id')
             ->join(BarberService::class, 'bs', 'WITH', 'bs.product = mp.id')
             ->join(BarberSchedule::class, 'bsch', 'WITH', 'bsch.barber = bs.barber')
@@ -264,8 +264,11 @@ final class MasterProductController extends BaseController
             ->andWhere('mp.deletedAt IS NULL')
             ->andWhere('bs.isActive = :active')
             ->andWhere('bs.deletedAt IS NULL')
+            ->andWhere('mp.isInventoriable = :notInventoriable')
             ->setParameter('branchId', $branchId)
-            ->setParameter('active', true);
+            ->setParameter('active', true)
+            ->setParameter('notInventoriable', false)
+            ->groupBy('mp.id, mp.name, st.name, mp.description, mp.price, mp.image');
 
         $services = $qb->getQuery()->getResult();
 
@@ -275,7 +278,7 @@ final class MasterProductController extends BaseController
             'name' => $s['name'],
             'category' => $s['category'],
             'description' => $s['description'],
-            'duration' => $s['durationOverrideMinutes'] ?? 40, // Default duration if not specified
+            'duration' => (int) round((float) $s['avgDuration']),
             'price' => number_format((float)$s['price'], 2, '.', ','),
             'image' => $s['image'] ? $baseUrl . $s['image'] : $baseUrl . '/uploads/products/placeholder.png',
             'popular' => false,
