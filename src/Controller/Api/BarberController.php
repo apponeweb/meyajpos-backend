@@ -223,11 +223,11 @@ final class BarberController extends BaseController
             if (in_array($barberId, $addedBarberIds)) {
                 continue;
             }
-            
+
             // 3. Check for Time Off ...
             $shiftStart = clone $date;
             $shiftStart->setTime((int)$barberData['openTime']->format('H'), (int)$barberData['openTime']->format('i'), (int)$barberData['openTime']->format('s'));
-            
+
             $shiftEnd = clone $date;
             $shiftEnd->setTime((int)$barberData['closeTime']->format('H'), (int)$barberData['closeTime']->format('i'), (int)$barberData['closeTime']->format('s'));
 
@@ -323,7 +323,7 @@ final class BarberController extends BaseController
             $slots = [];
             $currentTime = clone $date;
             $currentTime->setTime((int)$branchHourOpen->getOpenTime()->format('H'), (int)$branchHourOpen->getOpenTime()->format('i'));
-            
+
             $endTime = clone $date;
             $endTime->setTime((int)$branchHourOpen->getCloseTime()->format('H'), (int)$branchHourOpen->getCloseTime()->format('i'));
 
@@ -341,7 +341,7 @@ final class BarberController extends BaseController
             foreach ($slots as $timeStr) {
                 $time = \DateTime::createFromFormat('h:i A', $timeStr);
                 $hour = (int)$time->format('H');
-                
+
                 if ($hour < 12) {
                     $groups[0]['times'][] = $timeStr;
                 } elseif ($hour < 17) {
@@ -434,7 +434,7 @@ final class BarberController extends BaseController
         $slots = [];
         $currentTime = clone $date;
         $currentTime->setTime((int)$barberSchedule->getOpenTime()->format('H'), (int)$barberSchedule->getOpenTime()->format('i'));
-        
+
         $endTime = clone $date;
         $endTime->setTime((int)$barberSchedule->getCloseTime()->format('H'), (int)$barberSchedule->getCloseTime()->format('i'));
 
@@ -456,7 +456,7 @@ final class BarberController extends BaseController
                 foreach ($occupiedRanges as $range) {
                     $maxStart = max($slotStart->getTimestamp(), $range['start']->getTimestamp());
                     $minEnd = min($slotEnd->getTimestamp(), $range['end']->getTimestamp());
-                    
+
                     if ($maxStart < $minEnd) {
                         $isOccupied = true;
                         break;
@@ -484,7 +484,7 @@ final class BarberController extends BaseController
             $startTimeStr = explode(' - ', $timeStr)[0];
             $time = \DateTime::createFromFormat('h:i A', $startTimeStr);
             $hour = (int)$time->format('H');
-            
+
             if ($hour < 12) {
                 $groups[0]['times'][] = $timeStr;
             } elseif ($hour < 17) {
@@ -543,7 +543,6 @@ final class BarberController extends BaseController
                 'specialties' => $specialtiesList,
             ];
         }
-
         return $this->json($result, Response::HTTP_OK);
     }
 }
