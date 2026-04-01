@@ -138,10 +138,19 @@ final class BarberController extends BaseController
 
 
     #[Rest\Get('/barbers/all')]
-    #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function all(UserRepository $userRepository)
+    public function all(Request $request, UserRepository $userRepository): JsonResponse
     {
-        return $userRepository->getAllBarbersToSelect();
+        $barbers = $userRepository->getAllBarbersToSelect();
+        $baseUrl = $request->getSchemeAndHttpHost();
+
+        $result = array_map(function ($barber) use ($baseUrl) {
+            $barber['photoUrl'] = !empty($barber['photoUrl'])
+                ? $baseUrl . $barber['photoUrl']
+                : null;
+            return $barber;
+        }, $barbers);
+
+        return $this->json($result);
     }
 
     #[Rest\Get('/barber/available-list')]

@@ -9,7 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: ReviewRepository::class)]
 #[ORM\Table(name: 'tbd_review')]
 #[ORM\HasLifecycleCallbacks]
-class Review
+class Review extends BaseEntity
 {
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
@@ -32,15 +32,6 @@ class Review
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'barber_id', referencedColumnName: 'id', nullable: true)]
     private ?User $barber = null;
-
-    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    private \DateTimeInterface $createdAt;
-
-    #[ORM\PrePersist]
-    public function onPrePersist(): void
-    {
-        $this->createdAt = new \DateTime();
-    }
 
     public function getId(): ?int
     {
@@ -100,10 +91,5 @@ class Review
     {
         $this->barber = $barber;
         return $this;
-    }
-
-    public function getCreatedAt(): \DateTimeInterface
-    {
-        return $this->createdAt;
     }
 }

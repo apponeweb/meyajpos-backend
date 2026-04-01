@@ -3,10 +3,9 @@
 namespace App\Repository;
 
 use App\Entity\Review;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-class ReviewRepository extends ServiceEntityRepository
+class ReviewRepository extends BaseRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
