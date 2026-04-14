@@ -13,3 +13,10 @@ api:
         namespace: App\Controller\Api
     type: attribute
     prefix: /api
+
+api_license:
+    resource:
+        path: ../src/License/Controller/
+        namespace: App\License\Controller
+    type: attribute
+    prefix: /api

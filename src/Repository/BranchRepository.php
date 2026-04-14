@@ -15,5 +15,16 @@ class BranchRepository extends BaseRepository
         parent::__construct($registry, Branch::class);
     }
 
-
+    public function countByCompany(int $companyId): int
+    {
+        return (int)$this->createQueryBuilder('b')
+            ->select('COUNT(b.id)')
+            ->join('b.company', 'c')
+            ->where('c.id = :companyId')
+            ->andWhere('b.deletedAt IS NULL')
+            ->andWhere('b.isActive = true')
+            ->setParameter('companyId', $companyId)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

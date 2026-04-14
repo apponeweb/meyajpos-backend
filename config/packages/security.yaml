@@ -13,6 +13,7 @@ security:
     role_hierarchy:
         ROLE_CASHIER: [ ROLE_USER ]
         ROLE_ADMIN: [ ROLE_CASHIER ]
+        ROLE_LICENSE_ADMIN: [ ROLE_USER ]
 
     firewalls:
         dev:
@@ -48,6 +49,9 @@ security:
     # Easy way to control access for large sections of your site
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
+        - { path: ^/api/license/activate, roles: PUBLIC_ACCESS }
+        - { path: ^/api/license/validate, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/license, roles: ROLE_LICENSE_ADMIN }
         - { path: ^/api/appointments/book, roles: PUBLIC_ACCESS }
         - { path: ^/api/company/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }

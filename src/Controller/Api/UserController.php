@@ -4,11 +4,13 @@ namespace App\Controller\Api;
 
 use App\Entity\User;
 use App\Form\Type\UserFormType;
+use App\License\Service\LicenseValidatorService;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use FOS\RestBundle\Controller\AbstractFOSRestController;
 use FOS\RestBundle\Controller\Annotations as Rest;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -38,7 +40,8 @@ final class UserController extends AbstractFOSRestController
             'total' => count($paginator),
             'results' => $paginator->getIterator()->getArrayCopy(),
             'current' => $current,
-            'pageSize' => $pageSize
+            'pageSize' => $pageSize,
+            'barberCount' => $userRepository->countBarbers()
         ];
     }
 
@@ -69,11 +72,25 @@ final class UserController extends AbstractFOSRestController
 
     #[Rest\Post('/user')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher): JsonResponse|User|FormInterface
+    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher, LicenseValidatorService $licenseValidator, Security $security): JsonResponse|User|FormInterface
     {
+        // Validar límite de barberos si el nuevo usuario será barbero
+        $data = json_decode($request->getContent(), true) ?? [];
+        $isBarber = isset($data['barberSn']) && $data['barberSn'] === true;
+
+        if ($isBarber) {
+            $currentUser = $security->getUser();
+            if ($currentUser instanceof User) {
+                $check = $licenseValidator->canCreateBarber($currentUser);
+                if (!$check['allowed']) {
+                    return $this->json(['message' => $check['reason']], 400);
+                }
+            }
+        }
+
         $user = new User();
         $form = $this->createForm(UserFormType::class, $user);
-        $form->handleRequest($request);
+        $form->submit($data);
 
         $exist = $userRepository->findOneBy(['email' => $user->getEmail()]);
         if (!empty($exist)) {
@@ -100,7 +117,8 @@ final class UserController extends AbstractFOSRestController
     {
         $user = $id;
         $form = $this->createForm(UserFormType::class, $user);
-        $form->handleRequest($request);
+        $data = json_decode($request->getContent(), true) ?? [];
+        $form->submit($data, false);
 
         $exist = $userRepository->findOneBy(['email' => $user->getEmail()]);
         if (!empty($exist) && $exist->getId() != $user->getId()) {

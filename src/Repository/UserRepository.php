@@ -37,7 +37,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function getWithPagination($search = null): Query
     {
         $queryBuilder = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.name', 'u.lastName', 'u.barberSn')
+            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.name', 'u.lastName', 'u.barberSn', 'u.photoUrl')
             ->leftJoin('u.commission', 'b')
             ->addSelect('b.id AS commission_id', 'b.name AS commission_name')
             ->orderBy('u.id', 'ASC');
@@ -61,7 +61,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function findAllBarbers($excludeTimeOffToday = false): array
     {
         $qb = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.name', 'u.lastName', 'p.photoUrl AS photoUrl')
+            ->select('u.id', 'u.name', 'u.lastName', 'COALESCE(p.photoUrl, u.photoUrl) AS photoUrl')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
             ->where('u.barberSn = :barberSn')
             ->andWhere('u.enabled = :enabled')
@@ -85,7 +85,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function getBarbersWithPagination(?string $search = null, ?string $classification = null, ?string $experience = null)
     {
         $qb = $this->createQueryBuilder('u')
-            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled', 'p.photoUrl', 'p.avgRating', 'p.ratingCount', 'p.slotMinutes', 'p.classification', 'p.experience')
+            ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled, u.photoUrl as userPhotoUrl', 'p.photoUrl', 'p.avgRating', 'p.ratingCount', 'p.slotMinutes', 'p.classification', 'p.experience')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
             ->andWhere('u.barberSn = :isBarber')
             ->setParameter('isBarber', true);
@@ -112,11 +112,40 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     {
         $queryBuilder = $this->createQueryBuilder('u')
             ->select('u.id', 'u.name')
-            ->addSelect('p.photoUrl')
+            ->addSelect('COALESCE(p.photoUrl, u.photoUrl) as photoUrl')
             ->leftJoin('u.profile', 'p')
             ->andWhere('u.barberSn = :isBarber')
             ->setParameter('isBarber', true)
             ->orderBy('u.name', 'ASC');
         return $queryBuilder->getQuery()->getResult();
+    }
+
+    public function countBarbers(?int $companyId = null): int
+    {
+        $qb = $this->createQueryBuilder('u')
+            ->select('COUNT(DISTINCT u.id)')
+            ->where('u.barberSn = :barberSn')
+            ->andWhere('u.enabled = true')
+            ->setParameter('barberSn', true);
+
+        if ($companyId !== null) {
+            $qb->leftJoin(\App\Entity\BarberSchedule::class, 'bs', 'WITH', 'bs.barber = u')
+               ->leftJoin('bs.branch', 'br')
+               ->andWhere('br.company = :companyId')
+               ->setParameter('companyId', $companyId);
+        }
+
+        return (int)$qb->getQuery()->getSingleScalarResult();
+    }
+
+    public function getAllForLicense(): array
+    {
+        return $this->createQueryBuilder('u')
+            ->select('u.id', 'u.name', 'u.lastName', 'u.email', 'COALESCE(p.photoUrl, u.photoUrl) as photoUrl')
+            ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
+            ->where('u.enabled = true')
+            ->orderBy('u.name', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 }
