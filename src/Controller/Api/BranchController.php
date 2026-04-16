@@ -8,7 +8,6 @@ use App\Entity\CashBox;
 use App\Entity\Sale;
 use App\Entity\User;
 use App\Form\Type\BranchFormType;
-use App\License\Service\LicenseValidatorService;
 use App\Repository\BranchRepository;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
@@ -178,16 +177,8 @@ final class BranchController extends BaseController
     }
 
     #[Rest\Post('/branch')]
-    public function create(Request $request, LicenseValidatorService $licenseValidator): JsonResponse
+    public function create(Request $request): JsonResponse
     {
-        /** @var User|null $user */
-        $user = $this->security->getUser();
-        if ($user instanceof User) {
-            $check = $licenseValidator->canCreateBranch($user);
-            if (!$check['allowed']) {
-                return $this->json(['message' => $check['reason']], Response::HTTP_BAD_REQUEST);
-            }
-        }
         return $this->handleSave($request, new Branch(), "Sucursal creada correctamente");
     }
 

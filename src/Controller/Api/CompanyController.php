@@ -6,7 +6,6 @@ use App\Entity\Company;
 use App\Form\Type\CompanyFormType;
 use App\Form\Type\CompanyPolicyFormType;
 use App\Repository\CompanyRepository;
-use App\License\Service\LicenseService;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,7 +19,6 @@ final class CompanyController extends BaseController
     public function __construct(
         protected EntityManagerInterface $entityManager,
         protected Security               $security,
-        private readonly LicenseService  $licenseService,
     ) {
         parent::__construct($this->entityManager, $this->security);
     }
@@ -178,21 +176,6 @@ final class CompanyController extends BaseController
 
     private function handleSave(Request $request, Company $entity, string $successMessage): JsonResponse
     {
-        // Bloqueo si el usuario tiene licencia activa y YA TIENE una compañía
-        if ($entity->getId() === null) {
-            $user = $this->security->getUser();
-            if ($user && method_exists($user, 'getEmail')) { 
-                $activeLicense = $this->licenseService->getActiveLicenseForUser($user);
-                
-                // Si la licencia ya tiene una compañía configurada, bloqueamos
-                if ($activeLicense && $activeLicense->getCompany() && $activeLicense->getCompany()->getRfc()) {
-                    return $this->json([
-                        'message' => 'Su licencia ya está vinculada a una compañía activa. Use la compañía existente en lugar de crear una nueva.'
-                    ], Response::HTTP_BAD_REQUEST);
-                }
-            }
-        }
-
         $this->normalizeAddress($request, 'taxAddress');
         $this->normalizeAddress($request, 'socialNetworks');
 

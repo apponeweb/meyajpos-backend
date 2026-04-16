@@ -4,7 +4,6 @@ namespace App\Controller\Api;
 
 use App\Entity\User;
 use App\Form\Type\UserFormType;
-use App\License\Service\LicenseValidatorService;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
@@ -72,21 +71,9 @@ final class UserController extends AbstractFOSRestController
 
     #[Rest\Post('/user')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher, LicenseValidatorService $licenseValidator, Security $security): JsonResponse|User|FormInterface
+    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher): JsonResponse|User|FormInterface
     {
-        // Validar límite de barberos si el nuevo usuario será barbero
         $data = json_decode($request->getContent(), true) ?? [];
-        $isBarber = isset($data['barberSn']) && $data['barberSn'] === true;
-
-        if ($isBarber) {
-            $currentUser = $security->getUser();
-            if ($currentUser instanceof User) {
-                $check = $licenseValidator->canCreateBarber($currentUser);
-                if (!$check['allowed']) {
-                    return $this->json(['message' => $check['reason']], 400);
-                }
-            }
-        }
 
         $user = new User();
         $form = $this->createForm(UserFormType::class, $user);
