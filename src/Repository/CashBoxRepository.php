@@ -16,4 +16,17 @@ class CashBoxRepository extends BaseRepository
     }
 
 
+    public function getAllToSelectByBranch(int $branchId): array
+    {
+        return $this->createQueryBuilder('u')
+            ->select(['u.id', 'u.name'])
+            ->where('u.isActive = :active')
+            ->andWhere('u.deletedAt IS NULL')
+            ->andWhere('u.branch = :branchId')
+            ->setParameter('active', true)
+            ->setParameter('branchId', $branchId)
+            ->orderBy('u.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

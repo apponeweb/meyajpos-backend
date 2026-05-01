@@ -33,6 +33,7 @@ class CommissionReportController extends AbstractController
                 'search' => $request->query->get('search'),
                 'serviceTypeId' => $request->query->get('serviceTypeId'),
                 'barberId' => $request->query->get('barberId'),
+                'branchId' => $request->query->get('branchId'),
             ];
 
             $current = $request->query->getInt('current', 1);
@@ -116,6 +117,7 @@ class CommissionReportController extends AbstractController
             'search' => $request->query->get('search'),
             'serviceTypeId' => $request->query->get('serviceTypeId'),
             'barberId' => $request->query->get('barberId'),
+            'branchId' => $request->query->get('branchId'),
         ];
 
         // Obtenemos los datos (Asegúrate de que getExportData use la misma lógica que getReportQuery)

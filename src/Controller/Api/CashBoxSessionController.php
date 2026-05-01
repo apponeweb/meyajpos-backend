@@ -181,14 +181,21 @@ class CashBoxSessionController extends AbstractController
     }
 
     #[Rest\Get('/cash-session/status', name: 'api_cash_status', methods: ['GET'])]
-    public function status(CashBoxSessionRepository $repo): JsonResponse
+    public function status(Request $request, CashBoxSessionRepository $repo): JsonResponse
     {
         $user = $this->security->getUser();
+        $branchId = $request->query->get('branchId') ?? $request->attributes->get('activeBranchId');
 
-        $session = $repo->findOneBy([
+        $criteria = [
             'user' => $user,
             'status' => CashBoxSessionStatus::OPEN
-        ]);
+        ];
+
+        if ($branchId) {
+            $criteria['branch'] = $branchId;
+        }
+
+        $session = $repo->findOneBy($criteria);
 
         if (!$session) {
             return $this->json([
@@ -210,7 +217,8 @@ class CashBoxSessionController extends AbstractController
                     'cashBoxName' => $session->getCashBox()->getName(),
                     'openingDate' => $session->getOpeningDate()->format('Y-m-d H:i:s'),
                     'initialAmount' => $session->getInitialAmount(),
-                    'branchName' => $session->getBranch()->getName()
+                    'branchName' => $session->getBranch()->getName(),
+                    'branchId' => $session->getBranch()->getId()
                 ]
             ]
         ], Response::HTTP_OK);

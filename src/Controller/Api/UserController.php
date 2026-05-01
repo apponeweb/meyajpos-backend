@@ -2,13 +2,17 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\Branch;
 use App\Entity\User;
+use App\Entity\UserBranch;
 use App\Form\Type\UserFormType;
+use App\Repository\UserBranchRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use FOS\RestBundle\Controller\AbstractFOSRestController;
 use FOS\RestBundle\Controller\Annotations as Rest;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -22,11 +26,12 @@ final class UserController extends AbstractFOSRestController
     public function index(Request $request, UserRepository $userRepository): array
     {
         $search = $request->query->get('search');
+        $branch = $request->query->get('branch');
         $current = $request->query->getInt('current', 1);
         $pageSize = $request->query->getInt('pageSize', 10);
 
 
-        $query = $userRepository->getWithPagination($search);
+        $query = $userRepository->getWithPagination($search, $branch);
         $query->setFirstResult(($current - 1) * $pageSize)
             ->setMaxResults($pageSize);
 
@@ -49,7 +54,7 @@ final class UserController extends AbstractFOSRestController
         return $userRepository->getAllToSelect();
     }
 
-    #[Rest\Get('/user/{id}')]
+    #[Rest\Get('/user/{id}', requirements: ['id' => '\d+'])]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function getUserById(User $id): User
     {
@@ -94,7 +99,7 @@ final class UserController extends AbstractFOSRestController
     }
 
 
-    #[Rest\Post('/user/{id}')]
+    #[Rest\Post('/user/{id}', requirements: ['id' => '\d+'])]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function updateUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, User $id): User|FormInterface
     {
@@ -116,7 +121,7 @@ final class UserController extends AbstractFOSRestController
     }
 
 
-    #[Rest\Delete('/user/{id}')]
+    #[Rest\Delete('/user/{id}', requirements: ['id' => '\d+'])]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function removeUser(EntityManagerInterface $entityManager, User $id): JsonResponse
     {
@@ -130,7 +135,7 @@ final class UserController extends AbstractFOSRestController
     }
 
 
-    #[Rest\Post('/user/lock/unlock/{id}')]
+    #[Rest\Post('/user/lock/unlock/{id}', requirements: ['id' => '\d+'])]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function userLockUnlock(EntityManagerInterface $entityManager, User $id): JsonResponse
     {
@@ -160,5 +165,67 @@ final class UserController extends AbstractFOSRestController
     {
         $excludeTimeOffToday = $request->query->getBoolean('excludeTimeOffToday', false);
         return $userRepository->findAllBarbers($excludeTimeOffToday);
+    }
+
+    #[Rest\Get('/user/my-branches')]
+    public function myBranches(Security $security, UserBranchRepository $userBranchRepository): JsonResponse
+    {
+        /** @var User $user */
+        $user = $security->getUser();
+        $rows = $userBranchRepository->findByUser($user->getId());
+
+        $result = array_map(fn(UserBranch $ub) => [
+            'id'        => $ub->getBranch()->getId(),
+            'name'      => $ub->getBranch()->getName(),
+            'isDefault' => $ub->isDefault(),
+        ], $rows);
+
+        return $this->json($result);
+    }
+
+    #[Rest\Get('/user/{id}/branches', requirements: ['id' => '\d+'])]
+    public function getUserBranches(User $id, UserBranchRepository $userBranchRepository): JsonResponse
+    {
+        $rows = $userBranchRepository->findByUser($id->getId());
+
+        $result = array_map(fn(UserBranch $ub) => [
+            'id'        => $ub->getBranch()->getId(),
+            'name'      => $ub->getBranch()->getName(),
+            'isDefault' => $ub->isDefault(),
+        ], $rows);
+
+        return $this->json($result);
+    }
+
+    #[Rest\Post('/user/{id}/branches', requirements: ['id' => '\d+'])]
+    public function assignBranches(
+        User $id,
+        Request $request,
+        EntityManagerInterface $em,
+        UserBranchRepository $userBranchRepository
+    ): JsonResponse {
+        $data = json_decode($request->getContent(), true);
+        $branches   = $data['branches']   ?? [];
+        $defaultId  = $data['defaultId']  ?? null;
+
+        // Eliminar asignaciones anteriores
+        foreach ($userBranchRepository->findByUser($id->getId()) as $existing) {
+            $em->remove($existing);
+        }
+        $em->flush();
+
+        foreach ($branches as $branchId) {
+            $branch = $em->getRepository(Branch::class)->find($branchId);
+            if (!$branch) continue;
+
+            $ub = new UserBranch();
+            $ub->setUser($id);
+            $ub->setBranch($branch);
+            $ub->setIsDefault((int)$branchId === (int)$defaultId);
+            $em->persist($ub);
+        }
+        $em->flush();
+
+        return $this->json(['message' => 'Sucursales asignadas correctamente']);
     }
 }

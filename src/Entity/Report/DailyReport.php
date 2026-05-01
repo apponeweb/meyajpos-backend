@@ -68,6 +68,12 @@ class DailyReport
     #[ORM\Column(name: 'sale_date', type: Types::DATETIME_MUTABLE)]
     private \DateTimeInterface $saleDate;
 
+    #[ORM\Column(name: 'branch_id', type: Types::INTEGER, nullable: true)]
+    private ?int $branchId = null;
+
+    #[ORM\Column(name: 'branch_name', type: Types::STRING, length: 255, nullable: true)]
+    private ?string $branchName = null;
+
     public function getId(): int
     {
         return $this->id;
@@ -256,6 +262,26 @@ class DailyReport
     public function setSaleDate(\DateTimeInterface $saleDate): void
     {
         $this->saleDate = $saleDate;
+    }
+
+    public function getBranchId(): ?int
+    {
+        return $this->branchId;
+    }
+
+    public function setBranchId(?int $branchId): void
+    {
+        $this->branchId = $branchId;
+    }
+
+    public function getBranchName(): ?string
+    {
+        return $this->branchName;
+    }
+
+    public function setBranchName(?string $branchName): void
+    {
+        $this->branchName = $branchName;
     }
 
 }

@@ -83,11 +83,14 @@ final class DashboardController extends AbstractController
         $qbSales = $this->em->createQueryBuilder()
             ->select('SUM(s.total) as totalReal, COUNT(s.id) as countSales')
             ->from(Sale::class, 's')
+            ->join('s.cashBox', 'cb')
             ->where('s.saleDate >= :start AND s.saleDate <= :end')
             ->andWhere('s.status = :statusPaid');
-        
-        // We might need to filter branch by CashBox or User. Let's ignore branch on Sales for now or assume subqueries if needed.
-        
+
+        if ($branchId) {
+            $qbSales->andWhere('cb.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $qbSales->setParameter('start', $todayStart)
             ->setParameter('end', $todayEnd)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
@@ -108,9 +111,15 @@ final class DashboardController extends AbstractController
         $qb7Days = $this->em->createQueryBuilder()
             ->select('s.saleDate as dt, s.total as totalDia')
             ->from(Sale::class, 's')
+            ->join('s.cashBox', 'cb7')
             ->where('s.saleDate >= :start AND s.saleDate <= :end')
-            ->andWhere('s.status = :statusPaid')
-            ->setParameter('start', $sevenDaysAgo)
+            ->andWhere('s.status = :statusPaid');
+
+        if ($branchId) {
+            $qb7Days->andWhere('cb7.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
+        $qb7Days->setParameter('start', $sevenDaysAgo)
             ->setParameter('end', $todayEnd)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
             
@@ -139,13 +148,18 @@ final class DashboardController extends AbstractController
             ->from(SaleDetail::class, 'sd')
             ->join('sd.sale', 's')
             ->join('sd.product', 'p')
+            ->join('s.cashBox', 'cbts')
             ->where('s.saleDate >= :startMonth AND s.status = :statusPaid')
             ->groupBy('p.id')
             ->orderBy('cantidad', 'DESC')
             ->setMaxResults(5)
             ->setParameter('startMonth', $monthStart)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
+
+        if ($branchId) {
+            $qbTopServices->andWhere('cbts.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $topServicios = $qbTopServices->getQuery()->getResult();
         
         // ------------------------------
@@ -180,6 +194,7 @@ final class DashboardController extends AbstractController
             ->from(SaleDetail::class, 'sd')
             ->join('sd.serviceProvider', 'u')
             ->join('sd.sale', 's')
+            ->join('s.cashBox', 'cbr')
             ->leftJoin(BarberProfile::class, 'bp', \Doctrine\ORM\Query\Expr\Join::WITH, 'bp.user = u')
             ->where('s.saleDate >= :startMonth')
             ->andWhere('s.status = :statusPaid')
@@ -188,7 +203,11 @@ final class DashboardController extends AbstractController
             ->setMaxResults(5)
             ->setParameter('startMonth', $monthStart)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
+
+        if ($branchId) {
+            $qbRanking->andWhere('cbr.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $rankingBarberos = $qbRanking->getQuery()->getResult();
 
         // ------------------------------

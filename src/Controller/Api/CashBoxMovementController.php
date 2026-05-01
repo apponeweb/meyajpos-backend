@@ -51,7 +51,8 @@ class CashBoxMovementController extends AbstractController
         $filters = [
             'date' => $request->query->get('date'),
             'type' => $request->query->get('type'),
-            'concept' => $request->query->get('concept')
+            'concept' => $request->query->get('concept'),
+            'branch' => $request->query->get('branch')
         ];
 
         $currentUser = $userRepository->find($this->getUser());
@@ -71,11 +72,13 @@ class CashBoxMovementController extends AbstractController
                 ]);
             }
 
-            $activeSession = $sessionRepo->findOneBy([
-                'user' => $user,
-                'status' => CashBoxSessionStatus::OPEN
-            ]);
             $filters['session'] = $activeSession;
+        } else {
+            // Admin: filtrar por sucursal activa enviada en el header X-Branch-Id
+            $activeBranchId = $request->attributes->get('activeBranchId');
+            if ($activeBranchId) {
+                $filters['branch'] = $activeBranchId;
+            }
         }
 
 

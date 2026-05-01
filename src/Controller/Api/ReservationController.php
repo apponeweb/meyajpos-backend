@@ -53,11 +53,17 @@ class ReservationController extends BaseController
         $search = $request->query->get('search');
         $date = $request->query->get('date');
         $barberId = $request->query->get('barberId');
+        $branchId = $request->query->get('branchId');
 
         $queryBuilder = $this->entityManager->getRepository(Appointment::class)
             ->createQueryBuilder('a')
             ->leftJoin('a.customer', 'c')
             ->orderBy('a.createdAt', 'DESC');
+
+        if ($branchId) {
+            $queryBuilder->andWhere('a.branch = :branchId')
+                         ->setParameter('branchId', $branchId);
+        }
 
         if ($date || $barberId) {
             $queryBuilder->leftJoin('a.services', 'srv');
@@ -153,6 +159,7 @@ class ReservationController extends BaseController
         $startStr = $request->query->get('start'); // Format: 2026-03-01T00:00:00Z
         $endStr = $request->query->get('end');
         $barberId = $request->query->get('barberId');
+        $branchId = $request->query->get('branchId');
         
         $start = new \DateTime($startStr);
         $end = new \DateTime($endStr);
@@ -173,6 +180,11 @@ class ReservationController extends BaseController
             $servicesQuery->join('s.barber', 'b')
                           ->andWhere('b.user = :barberId')
                           ->setParameter('barberId', $barberId);
+        }
+
+        if ($branchId) {
+            $servicesQuery->andWhere('a.branch = :branchId')
+                          ->setParameter('branchId', $branchId);
         }
 
         $services = $servicesQuery->getQuery()->getResult();
@@ -210,6 +222,11 @@ class ReservationController extends BaseController
         if ($barberId) {
             $blocksQuery->andWhere('b.barber = :barberId')
                         ->setParameter('barberId', $barberId);
+        }
+
+        if ($branchId) {
+            $blocksQuery->andWhere('b.branch = :branchId OR b.branch IS NULL')
+                        ->setParameter('branchId', $branchId);
         }
 
         $blocks = $blocksQuery->getQuery()->getResult();

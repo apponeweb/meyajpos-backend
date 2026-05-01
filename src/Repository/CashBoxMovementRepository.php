@@ -105,6 +105,12 @@ class CashBoxMovementRepository extends BaseRepository
                 $qb->andWhere('m.concept = :concept')
                     ->setParameter('concept', $search['concept']);
             }
+
+            if (!empty($search['branch'])) {
+                $qb->innerJoin('m.cashBoxSession', 's')
+                    ->andWhere('s.branch = :branch')
+                    ->setParameter('branch', $search['branch']);
+            }
         }
 
         return $qb->getQuery();

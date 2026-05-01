@@ -41,8 +41,9 @@ final class BarberController extends BaseController
             $search = $request->query->get('search');
             $classification = $request->query->get('classification');
             $experience = $request->query->get('experience');
+            $branch = $request->query->get('branch');
 
-            $data = $userRepository->getBarbersWithPagination($search, $classification, $experience)->getQuery()->getResult();
+            $data = $userRepository->getBarbersWithPagination($search, $classification, $experience, $branch)->getQuery()->getResult();
 
             $response = new StreamedResponse(function () use ($data) {
                 $handle = fopen('php://output', 'w+');
@@ -103,10 +104,11 @@ final class BarberController extends BaseController
             $search = $request->query->get('search');
             $classification = $request->query->get('classification');
             $experience = $request->query->get('experience');
+            $branch = $request->query->get('branch');
             $current = $request->query->getInt('current', 1);
             $pageSize = $request->query->getInt('pageSize', 10);
 
-            $qb = $userRepository->getBarbersWithPagination($search, $classification, $experience);
+            $qb = $userRepository->getBarbersWithPagination($search, $classification, $experience, $branch);
 
             // 1. Conteo eficiente (clonando el QueryBuilder)
             $countQb = clone $qb;
