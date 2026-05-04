@@ -199,7 +199,7 @@ final class DashboardController extends AbstractController
             ->where('s.saleDate >= :startMonth')
             ->andWhere('s.status = :statusPaid')
             ->groupBy('u.id')
-            ->orderBy('totalGenerado', 'DESC')
+            ->orderBy('serviciosRealizados', 'DESC')
             ->setMaxResults(5)
             ->setParameter('startMonth', $monthStart)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
