@@ -124,6 +124,12 @@ php bin/console debug:router
 php bin/console debug:container
 ```
 
+# Notas para AJUSTES NO ESTANDAR
+update_vw_daily_report.sql
+create_user_branch.sql
+php bin/console doctrine:schema:update --force
+assign_admin_branches.sql
+
 ## Notas
 
 - No sobrescribas el `.env` del servidor con el de desarrollo.
