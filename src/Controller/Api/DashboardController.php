@@ -32,13 +32,22 @@ final class DashboardController extends AbstractController
     public function summary(Request $request): JsonResponse
     {
         $branchId = $request->query->get('branchId');
-        
-        $todayStart = new \DateTime('today');
-        $todayEnd = clone $todayStart;
-        $todayEnd->modify('+1 day')->modify('-1 second');
-        
-        $monthStart = new \DateTime('first day of this month 00:00:00');
-        
+
+        // Rango de fechas: si vienen dateFrom/dateTo los usamos, sino el día de hoy
+        $dateFromRaw = $request->query->get('dateFrom');
+        $dateToRaw   = $request->query->get('dateTo');
+
+        $todayStart = $dateFromRaw
+            ? new \DateTime($dateFromRaw . ' 00:00:00')
+            : new \DateTime('today');
+
+        $todayEnd = $dateToRaw
+            ? new \DateTime($dateToRaw . ' 23:59:59')
+            : (clone $todayStart)->modify('+1 day')->modify('-1 second');
+
+        // Para queries que usaban "mes actual" usamos el inicio del rango
+        $monthStart = clone $todayStart;
+
         $dayOfWeek = (int)(new \DateTime())->format('N'); // 1 (Mon) - 7 (Sun)
         
         // ------------------------------
@@ -104,10 +113,11 @@ final class DashboardController extends AbstractController
         // 2. Gráficos
         // ------------------------------
         
-        // Ingresos últimos 7 días
-        $sevenDaysAgo = clone $todayStart;
-        $sevenDaysAgo->modify('-6 days');
-        
+        // Ingresos por día dentro del rango seleccionado
+        // Si no hay filtro, mostrar los últimos 7 días
+        $chartStart = $dateFromRaw ? clone $todayStart : (clone $todayStart)->modify('-6 days');
+        $chartEnd   = clone $todayEnd;
+
         $qb7Days = $this->em->createQueryBuilder()
             ->select('s.saleDate as dt, s.total as totalDia')
             ->from(Sale::class, 's')
@@ -119,20 +129,21 @@ final class DashboardController extends AbstractController
             $qb7Days->andWhere('cb7.branch = :branchId')->setParameter('branchId', $branchId);
         }
 
-        $qb7Days->setParameter('start', $sevenDaysAgo)
-            ->setParameter('end', $todayEnd)
+        $qb7Days->setParameter('start', $chartStart)
+            ->setParameter('end', $chartEnd)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
+
         $rawSales = $qb7Days->getQuery()->getResult();
+
+        // Construir mapa de todos los días del rango con valor 0
         $ingresos7DiasMap = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $d = clone $todayStart;
-            $d->modify("-{$i} days");
-            $ingresos7DiasMap[$d->format('Y-m-d')] = 0;
+        $cursor = clone $chartStart;
+        while ($cursor <= $chartEnd) {
+            $ingresos7DiasMap[$cursor->format('Y-m-d')] = 0;
+            $cursor->modify('+1 day');
         }
         foreach ($rawSales as $rs) {
-            $dt = clone $rs['dt'];
-            $dateStr = $dt->format('Y-m-d');
+            $dateStr = (clone $rs['dt'])->format('Y-m-d');
             if (isset($ingresos7DiasMap[$dateStr])) {
                 $ingresos7DiasMap[$dateStr] += (float)$rs['totalDia'];
             }
