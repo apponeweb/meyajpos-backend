@@ -11,7 +11,7 @@
 -- FROM user u
 -- CROSS JOIN tbn_branch b
 -- WHERE JSON_CONTAINS(u.roles, '"ROLE_ADMIN"')
---   AND u.deleted_at IS NULL
+--   AND u.enabled = 1
 --   AND b.deleted_at IS NULL
 -- ORDER BY u.id, b.id;
 -- =============================================================================
@@ -32,7 +32,7 @@ SELECT
 FROM user u
 CROSS JOIN tbn_branch b
 WHERE JSON_CONTAINS(u.roles, '"ROLE_ADMIN"')
-  AND u.deleted_at IS NULL
+  AND u.enabled = 1
   AND b.deleted_at IS NULL
 ON DUPLICATE KEY UPDATE
-    updated_at = NOW();
+    is_default = VALUES(is_default);
