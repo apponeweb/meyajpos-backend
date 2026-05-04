@@ -16,3 +16,8 @@
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
 /public/uploads/
+response-rdb-stop.json
+response-start.json
+response-start-lightsail.json
+response-stop-lightsail.json
+response-stop.json
