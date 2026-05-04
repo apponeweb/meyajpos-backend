@@ -21,3 +21,4 @@ response-start.json
 response-start-lightsail.json
 response-stop-lightsail.json
 response-stop.json
+.DS_Store
