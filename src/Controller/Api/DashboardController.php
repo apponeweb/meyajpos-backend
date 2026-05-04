@@ -118,39 +118,77 @@ final class DashboardController extends AbstractController
         $chartStart = $dateFromRaw ? clone $todayStart : (clone $todayStart)->modify('-6 days');
         $chartEnd   = clone $todayEnd;
 
-        $qb7Days = $this->em->createQueryBuilder()
+        // Determinar agrupación según la duración del rango
+        $diff = $chartStart->diff($chartEnd)->days;
+        $grouping = 'day';
+        if ($diff > 60) {
+            $grouping = 'month';
+        } elseif ($diff > 14) {
+            $grouping = 'week';
+        }
+
+        $qbChart = $this->em->createQueryBuilder()
             ->select('s.saleDate as dt, s.total as totalDia')
             ->from(Sale::class, 's')
-            ->join('s.cashBox', 'cb7')
+            ->join('s.cashBox', 'cbChart')
             ->where('s.saleDate >= :start AND s.saleDate <= :end')
             ->andWhere('s.status = :statusPaid');
 
         if ($branchId) {
-            $qb7Days->andWhere('cb7.branch = :branchId')->setParameter('branchId', $branchId);
+            $qbChart->andWhere('cbChart.branch = :branchId')->setParameter('branchId', $branchId);
         }
 
-        $qb7Days->setParameter('start', $chartStart)
+        $qbChart->setParameter('start', $chartStart)
             ->setParameter('end', $chartEnd)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
 
-        $rawSales = $qb7Days->getQuery()->getResult();
+        $rawSales = $qbChart->getQuery()->getResult();
 
-        // Construir mapa de todos los días del rango con valor 0
-        $ingresos7DiasMap = [];
+        // Construir mapa de agrupación con valor 0
+        $ingresosChartMap = [];
         $cursor = clone $chartStart;
+        
         while ($cursor <= $chartEnd) {
-            $ingresos7DiasMap[$cursor->format('Y-m-d')] = 0;
-            $cursor->modify('+1 day');
-        }
-        foreach ($rawSales as $rs) {
-            $dateStr = (clone $rs['dt'])->format('Y-m-d');
-            if (isset($ingresos7DiasMap[$dateStr])) {
-                $ingresos7DiasMap[$dateStr] += (float)$rs['totalDia'];
+            if ($grouping === 'month') {
+                $key = $cursor->format('Y-m-01');
+                if (!isset($ingresosChartMap[$key])) $ingresosChartMap[$key] = 0;
+                $cursor->modify('first day of next month');
+            } elseif ($grouping === 'week') {
+                $wCursor = clone $cursor;
+                if ($wCursor->format('N') != 1) {
+                    $wCursor->modify('last monday');
+                }
+                $key = $wCursor->format('Y-m-d');
+                if (!isset($ingresosChartMap[$key])) $ingresosChartMap[$key] = 0;
+                $cursor->modify('+1 week');
+            } else {
+                $key = $cursor->format('Y-m-d');
+                $ingresosChartMap[$key] = 0;
+                $cursor->modify('+1 day');
             }
         }
-        $ingresos7Dias = [];
-        foreach ($ingresos7DiasMap as $k => $v) {
-            $ingresos7Dias[] = ['dt' => $k, 'totalDia' => $v];
+
+        foreach ($rawSales as $rs) {
+            $date = clone $rs['dt'];
+            if ($grouping === 'month') {
+                $dateStr = $date->format('Y-m-01');
+            } elseif ($grouping === 'week') {
+                if ($date->format('N') != 1) {
+                    $date->modify('last monday');
+                }
+                $dateStr = $date->format('Y-m-d');
+            } else {
+                $dateStr = $date->format('Y-m-d');
+            }
+            
+            if (isset($ingresosChartMap[$dateStr])) {
+                $ingresosChartMap[$dateStr] += (float)$rs['totalDia'];
+            }
+        }
+
+        $ingresosChart = [];
+        foreach ($ingresosChartMap as $k => $v) {
+            $ingresosChart[] = ['dt' => $k, 'totalDia' => $v];
         }
         
         // Top 5 Servicios del mes
@@ -255,7 +293,8 @@ final class DashboardController extends AbstractController
                 'ticketPromedio' => $ticketPromedio
             ],
             'charts' => [
-                'ingresos7Dias' => $ingresos7Dias,
+                'ingresos' => $ingresosChart,
+                'grouping' => $grouping,
                 'topServicios'  => $topServicios
             ],
             'lists' => [
