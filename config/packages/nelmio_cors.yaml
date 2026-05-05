@@ -1,7 +1,7 @@
 nelmio_cors:
     defaults:
-        origin_regex: true
-        allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+        origin_regex: false
+        allow_origin: ['https://pos.tiosbarber.com', 'https://www.tiosbarber.com', 'https://api.tiosbarber.com']
         allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
         allow_headers: ['Content-Type', 'Authorization', 'Mc-Validation-Verify', 'X-Branch-Id']
         expose_headers: ['Link']
