@@ -18,18 +18,41 @@ final class BranchProductController extends AbstractFOSRestController
     #[Rest\Get('/branch/{id}/products', requirements: ['id' => '\d+'])]
     public function getProducts(
         Branch $id,
+        Request $request,
         BranchProductRepository $branchProductRepository,
         MasterProductRepository $masterProductRepository
     ): JsonResponse {
+        $current  = max(1, (int) $request->query->get('current', 1));
+        $pageSize = max(1, (int) $request->query->get('pageSize', 10));
+        $search   = trim($request->query->get('search', ''));
+
         $assigned = $branchProductRepository->findByBranch($id->getId());
         $assignedMap = [];
         foreach ($assigned as $bp) {
             $assignedMap[$bp->getProduct()->getId()] = $bp;
         }
 
-        $allProducts = $masterProductRepository->findBy(['isActive' => true], ['name' => 'ASC']);
+        $qb = $masterProductRepository->createQueryBuilder('p')
+            ->where('p.isActive = true')
+            ->orderBy('p.name', 'ASC');
 
-        $result = array_map(function (MasterProduct $p) use ($assignedMap) {
+        if ($search !== '') {
+            $qb->andWhere('p.name LIKE :search OR p.sku LIKE :search')
+               ->setParameter('search', '%' . $search . '%');
+        }
+
+        $total = (int) (clone $qb)
+            ->select('COUNT(p.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $allProducts = $qb
+            ->setFirstResult(($current - 1) * $pageSize)
+            ->setMaxResults($pageSize)
+            ->getQuery()
+            ->getResult();
+
+        $results = array_map(function (MasterProduct $p) use ($assignedMap) {
             $bp = $assignedMap[$p->getId()] ?? null;
             return [
                 'id'            => $p->getId(),
@@ -43,7 +66,12 @@ final class BranchProductController extends AbstractFOSRestController
             ];
         }, $allProducts);
 
-        return $this->json($result);
+        return $this->json([
+            'results'  => $results,
+            'total'    => $total,
+            'current'  => $current,
+            'pageSize' => $pageSize,
+        ]);
     }
 
     #[Rest\Post('/branch/{id}/products', requirements: ['id' => '\d+'])]

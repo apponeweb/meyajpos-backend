@@ -97,7 +97,9 @@ final class MasterProductController extends BaseController
         $baseUrl = $request->getSchemeAndHttpHost();
 
         // Obtener precios override por sucursal si viene X-Branch-Id
-        $branchId = $request->attributes->get('activeBranchId');
+        // Si el cliente envía ignoreBranch=true (vistas de administración), no filtrar
+        $ignoreBranch = $request->query->getBoolean('ignoreBranch', false);
+        $branchId = !$ignoreBranch ? $request->attributes->get('activeBranchId') : null;
         $priceOverrideMap = [];
         $enabledIds = null;
 
