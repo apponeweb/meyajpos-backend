@@ -91,9 +91,13 @@ final class BranchController extends BaseController
     public function all(BranchRepository $branchRepository)
     {
         $user = $this->security->getUser();
-        
-        // Si el usuario tiene ROL_SUPER_ADMIN o similar, quizás deba ver todas.
-        // Pero el requerimiento es "listen solo las sucursales asignadas al usuario autenticado".
+
+        // Si el usuario es Administrador, mostrar todas las sucursales activas
+        if ($user && $this->security->isGranted('ROLE_ADMIN')) {
+            return $branchRepository->getAllToSelect();
+        }
+
+        // Para usuarios no administradores, mostrar solo las sucursales asignadas
         if ($user) {
             return $branchRepository->getAllToSelectByUser($user->getId());
         }

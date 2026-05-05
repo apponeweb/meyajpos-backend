@@ -164,7 +164,11 @@ final class UserController extends AbstractFOSRestController
     public function getBarbers(Request $request, UserRepository $userRepository): array
     {
         $excludeTimeOffToday = $request->query->getBoolean('excludeTimeOffToday', false);
-        return $userRepository->findAllBarbers($excludeTimeOffToday);
+        $branchId = $request->query->get('branch');
+        error_log("[DEBUG] getBarbers called with branchId: " . ($branchId ?? 'NULL'));
+        $result = $userRepository->findAllBarbers($excludeTimeOffToday, $branchId);
+        error_log("[DEBUG] getBarbers returned " . count($result) . " records");
+        return $result;
     }
 
     #[Rest\Get('/user/my-branches')]

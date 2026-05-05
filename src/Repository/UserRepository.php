@@ -69,16 +69,22 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         return $queryBuilder->getQuery()->getResult();
     }
 
-    public function findAllBarbers($excludeTimeOffToday = false): array
+    public function findAllBarbers($excludeTimeOffToday = false, $branchId = null): array
     {
         $qb = $this->createQueryBuilder('u')
             ->select('u.id', 'u.name', 'u.lastName', 'p.photoUrl AS photoUrl')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
+            ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u')
             ->where('u.barberSn = :barberSn')
             ->andWhere('u.enabled = :enabled')
             ->setParameter('enabled', true)
             ->setParameter('barberSn', true)
             ->orderBy('u.name', 'ASC');
+
+        if ($branchId) {
+            $qb->andWhere('ub.branch = :branchId')
+                ->setParameter('branchId', $branchId);
+        }
 
         if ($excludeTimeOffToday) {
             $todayStart = new \DateTime('today 00:00:00');
