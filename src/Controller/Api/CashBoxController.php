@@ -80,8 +80,12 @@ final class CashBoxController extends BaseController
 
     #[Rest\Get('/cash_box/all')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function all(CashBoxRepository $cashBoxRepository)
+    public function all(Request $request, CashBoxRepository $cashBoxRepository)
     {
+        $branchId = $request->query->get('branchId');
+        if ($branchId) {
+            return $cashBoxRepository->getAllToSelectByBranch($branchId);
+        }
         return $cashBoxRepository->getAllToSelect();
     }
 

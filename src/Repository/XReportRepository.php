@@ -46,7 +46,8 @@ class XReportRepository extends BaseRepository
             )
             ->join('x.user', 'u')
             ->join('x.cashSession', 'cs')
-            ->join('cs.cashBox', 'cb');
+            ->join('cs.cashBox', 'cb')
+            ->leftJoin('cb.branch', 'br');
 
         if (!empty($filters['startDate']) && !empty($filters['endDate'])) {
             $qb->andWhere('x.xReportDate BETWEEN :start AND :end')
@@ -57,6 +58,11 @@ class XReportRepository extends BaseRepository
         if (!empty($filters['search'])) {
             $qb->andWhere('u.name LIKE :search OR x.reportNumber LIKE :search')
                 ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+
+        if (!empty($filters['branch'])) {
+            $qb->andWhere('br.id = :branchId')
+               ->setParameter('branchId', $filters['branch']);
         }
 
         $qb->orderBy('x.reportNumber', 'DESC');

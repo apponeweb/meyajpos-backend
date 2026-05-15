@@ -27,4 +27,19 @@ class BranchRepository extends BaseRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function getAllToSelectByUser(int $userId): array
+    {
+        return $this->createQueryBuilder('u')
+            ->select(['u.id', 'u.name'])
+            ->innerJoin('App\Entity\UserBranch', 'ub', 'WITH', 'ub.branch = u.id')
+            ->where('u.isActive = :active')
+            ->andWhere('u.deletedAt IS NULL')
+            ->andWhere('ub.user = :userId')
+            ->setParameter('active', true)
+            ->setParameter('userId', $userId)
+            ->orderBy('u.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

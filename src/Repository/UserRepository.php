@@ -2,7 +2,9 @@
 
 namespace App\Repository;
 
+use App\Entity\Branch;
 use App\Entity\User;
+use App\Entity\UserBranch;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\Query;
 use Doctrine\Persistence\ManagerRegistry;
@@ -34,18 +36,27 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         $this->getEntityManager()->flush();
     }
 
-    public function getWithPagination($search = null): Query
+    public function getWithPagination($search = null, $branchId = null): Query
     {
         $queryBuilder = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.name', 'u.lastName', 'u.barberSn', 'u.photoUrl')
+            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.lastName', 'u.barberSn', 'u.photoUrl')
             ->leftJoin('u.commission', 'b')
             ->addSelect('b.id AS commission_id', 'b.name AS commission_name')
+            ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u AND ub.isDefault = true')
+            ->leftJoin('ub.branch', 'br')
+            ->addSelect('br.name AS branch_name')
             ->orderBy('u.id', 'ASC');
 
         if ($search) {
             $queryBuilder->andWhere('u.name LIKE :val or u.email LIKE :val');
             $queryBuilder->setParameter('val', '%' . $search . '%');
         }
+
+        if ($branchId) {
+            $queryBuilder->andWhere('ub.branch = :branchId')
+                ->setParameter('branchId', $branchId);
+        }
+
         return $queryBuilder->getQuery();
     }
 
@@ -58,16 +69,22 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         return $queryBuilder->getQuery()->getResult();
     }
 
-    public function findAllBarbers($excludeTimeOffToday = false): array
+    public function findAllBarbers($excludeTimeOffToday = false, $branchId = null): array
     {
         $qb = $this->createQueryBuilder('u')
             ->select('u.id', 'u.name', 'u.lastName', 'COALESCE(p.photoUrl, u.photoUrl) AS photoUrl')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
+            ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u')
             ->where('u.barberSn = :barberSn')
             ->andWhere('u.enabled = :enabled')
             ->setParameter('enabled', true)
             ->setParameter('barberSn', true)
             ->orderBy('u.name', 'ASC');
+
+        if ($branchId) {
+            $qb->andWhere('ub.branch = :branchId')
+                ->setParameter('branchId', $branchId);
+        }
 
         if ($excludeTimeOffToday) {
             $todayStart = new \DateTime('today 00:00:00');
@@ -82,11 +99,14 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         return $qb->getQuery()->getResult();
     }
 
-    public function getBarbersWithPagination(?string $search = null, ?string $classification = null, ?string $experience = null)
+    public function getBarbersWithPagination(?string $search = null, ?string $classification = null, ?string $experience = null, $branchId = null)
     {
         $qb = $this->createQueryBuilder('u')
             ->select('u.id, u.name, u.lastName, u.email, u.phone, u.enabled, u.photoUrl as userPhotoUrl', 'p.photoUrl', 'p.avgRating', 'p.ratingCount', 'p.slotMinutes', 'p.classification', 'p.experience')
+            ->addSelect('br.name AS branch_name')
             ->leftJoin('App\Entity\BarberProfile', 'p', 'WITH', 'p.user = u')
+            ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u AND ub.isDefault = true')
+            ->leftJoin('ub.branch', 'br')
             ->andWhere('u.barberSn = :isBarber')
             ->setParameter('isBarber', true);
 
@@ -103,6 +123,11 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         if ($experience) {
             $qb->andWhere('p.experience LIKE :experience')
                 ->setParameter('experience', '%' . $experience . '%');
+        }
+
+        if ($branchId) {
+            $qb->andWhere('ub.branch = :branchId')
+                ->setParameter('branchId', $branchId);
         }
 
         return $qb;

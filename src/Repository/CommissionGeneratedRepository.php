@@ -32,6 +32,9 @@ class CommissionGeneratedRepository extends BaseRepository
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
             ->join('cg.user', 'u')
+            ->join('sd.sale', 's')
+            ->join('s.cashBox', 'cb')
+            ->join('cb.branch', 'b')
             ->leftJoin('mp.serviceType', 'st')
             /* Agrupamos por campos lógicos.
                Nota: serviceDate se usa para separar registros por día si es necesario.
@@ -64,6 +67,12 @@ class CommissionGeneratedRepository extends BaseRepository
                 ->setParameter('barberId', $filters['barberId']);
         }
 
+        // --- FILTRO POR SUCURSAL ---
+        if (!empty($filters['branchId'])) {
+            $qb->andWhere('b.id = :branchId')
+                ->setParameter('branchId', $filters['branchId']);
+        }
+
 
         // --- BÚSQUEDA GENERAL ---
         if (!empty($filters['search'])) {
@@ -84,6 +93,9 @@ class CommissionGeneratedRepository extends BaseRepository
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
             ->join('cg.user', 'u')
+            ->join('sd.sale', 's')
+            ->join('s.cashBox', 'cb')
+            ->join('cb.branch', 'b')
             ->leftJoin('mp.serviceType', 'st');
 
         // Reutilizar lógica de filtros aquí o mediante un Helper
@@ -108,6 +120,12 @@ class CommissionGeneratedRepository extends BaseRepository
                 ->setParameter('barberId', $filters['barberId']);
         }
 
+        // --- FILTRO POR SUCURSAL ---
+        if (!empty($filters['branchId'])) {
+            $qb->andWhere('b.id = :branchId')
+                ->setParameter('branchId', $filters['branchId']);
+        }
+
 
         // --- BÚSQUEDA GENERAL ---
         if (!empty($filters['search'])) {
@@ -130,6 +148,9 @@ class CommissionGeneratedRepository extends BaseRepository
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')
             ->join('cg.user', 'u')
+            ->join('sd.sale', 's')
+            ->join('s.cashBox', 'cb')
+            ->join('cb.branch', 'b')
             ->groupBy('service', 'barber', 'serviceDate')
             ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
@@ -146,6 +167,11 @@ class CommissionGeneratedRepository extends BaseRepository
         if (!empty($filters['search'])) {
             $qb->andWhere('mp.name LIKE :search OR u.name LIKE :search')
                 ->setParameter('search', '%' . $filters['search'] . '%');
+        }
+
+        if (!empty($filters['branchId'])) {
+            $qb->andWhere('b.id = :branchId')
+                ->setParameter('branchId', $filters['branchId']);
         }
 
         return $qb->getQuery()->getScalarResult();

@@ -31,7 +31,14 @@ final class BranchController extends BaseController
     // Sobrescribimos para añadir el Join y un filtro extra
     protected function configureListQuery(QueryBuilder $qb, Request $request): void
     {
-        $qb->leftJoin('u.company', 'c'); // 'u' siempre es la entidad principal
+        $qb->leftJoin('u.company', 'c')
+           ->innerJoin('App\Entity\UserBranch', 'ub', 'WITH', 'ub.branch = u.id');
+
+        $user = $this->security->getUser();
+        if ($user) {
+            $qb->andWhere('ub.user = :userId')
+               ->setParameter('userId', $user->getId());
+        }
 
         // Ejemplo: Filtro opcional por compañía si viene en la URL (?companyId=1)
         if ($companyId = $request->query->get('companyId')) {
@@ -84,6 +91,18 @@ final class BranchController extends BaseController
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function all(BranchRepository $branchRepository)
     {
+        $user = $this->security->getUser();
+
+        // Si el usuario es Administrador, mostrar todas las sucursales activas
+        if ($user && $this->security->isGranted('ROLE_ADMIN')) {
+            return $branchRepository->getAllToSelect();
+        }
+
+        // Para usuarios no administradores, mostrar solo las sucursales asignadas
+        if ($user) {
+            return $branchRepository->getAllToSelectByUser($user->getId());
+        }
+
         return $branchRepository->getAllToSelect();
     }
 

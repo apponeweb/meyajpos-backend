@@ -47,7 +47,14 @@ final class SaleController extends BaseController
     {
         // 'u' es la entidad Sale
         $qb->leftJoin('u.cashBox', 'cb')
-            ->leftJoin('u.user', 'usr');
+            ->leftJoin('u.user', 'usr')
+            ->leftJoin('cb.branch', 'br');
+
+        // Filtro por Sucursal
+        if ($branchId = $request->query->get('branch')) {
+            $qb->andWhere('br.id = :branchId')
+                ->setParameter('branchId', $branchId);
+        }
 
         // Filtro por Folio
         if ($folio = $request->query->get('folio')) {

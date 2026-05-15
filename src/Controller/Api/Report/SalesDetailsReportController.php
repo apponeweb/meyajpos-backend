@@ -38,6 +38,7 @@ class SalesDetailsReportController extends AbstractController
                 'barberId' => $request->query->get('barberId'),
                 'serviceTypeId' => $request->query->get('serviceTypeId'),
                 'paymentTypeId' => $request->query->get('paymentTypeId'),
+                'branchId' => $request->query->get('branchId'),
                 'search' => $request->query->get('search'),
             ];
 
@@ -122,6 +123,7 @@ class SalesDetailsReportController extends AbstractController
             'barberId' => $request->query->get('barberId'),
             'serviceTypeId' => $request->query->get('serviceTypeId'),
             'paymentTypeId' => $request->query->get('paymentTypeId'),
+            'branchId' => $request->query->get('branchId'),
             'search' => $request->query->get('search'),
         ];
 

@@ -51,6 +51,12 @@ class SaleRepository extends BaseRepository
                 ->setParameter('search', '%' . $filters['search'] . '%');
         }
 
+        if (!empty($filters['branch'])) {
+            $qb->leftJoin('cb.branch', 'br')
+               ->andWhere('br.id = :branchId')
+               ->setParameter('branchId', $filters['branch']);
+        }
+
         $qb->orderBy('s.id', 'DESC');
 
         return $qb->getQuery();

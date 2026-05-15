@@ -39,22 +39,18 @@ class XReportController extends AbstractController
     }
 
     #[Route('/preview', name: 'app_x_report_preview', methods: ['GET'])]
-    public function preview(XReportService $reportService): JsonResponse
+    public function preview(Request $request, XReportService $reportService): JsonResponse
     {
         try {
-            $data = $reportService->getPreviewData();
+            $activeBranchId = $request->attributes->get('activeBranchId');
+            $data = $reportService->getPreviewData(null, $activeBranchId ? (int)$activeBranchId : null);
             return $this->json([
                 'status' => 'success',
                 'data' => $data
             ]);
         } catch (\Exception $e) {
-            $statusCode = in_array($e->getCode(), [400, 404]) ? $e->getCode() : 500;
-            if ($statusCode === 404) {
-                return $this->json(['error' => $e->getMessage()], 404);
-            }
-            return $this->json([
-                'message' => $e->getMessage()
-            ], $statusCode);
+            $statusCode = in_array($e->getCode(), [400, 404, 409]) ? $e->getCode() : 500;
+            return $this->json(['message' => $e->getMessage()], $statusCode);
         }
     }
 
@@ -79,6 +75,11 @@ class XReportController extends AbstractController
 
         if (!$session) {
             return $this->json(['error' => 'No tiene una sesión de la caja activa'], 404);
+        }
+
+        $activeBranchId = $request->attributes->get('activeBranchId');
+        if ($activeBranchId && $session->getCashBox()->getBranch()->getId() !== (int)$activeBranchId) {
+            return $this->json(['error' => 'La sesión activa no corresponde a la sucursal seleccionada'], 409);
         }
 
         $report = new XReport();

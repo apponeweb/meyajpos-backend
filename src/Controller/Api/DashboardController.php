@@ -32,13 +32,22 @@ final class DashboardController extends AbstractController
     public function summary(Request $request): JsonResponse
     {
         $branchId = $request->query->get('branchId');
-        
-        $todayStart = new \DateTime('today');
-        $todayEnd = clone $todayStart;
-        $todayEnd->modify('+1 day')->modify('-1 second');
-        
-        $monthStart = new \DateTime('first day of this month 00:00:00');
-        
+
+        // Rango de fechas: si vienen dateFrom/dateTo los usamos, sino el día de hoy
+        $dateFromRaw = $request->query->get('dateFrom');
+        $dateToRaw   = $request->query->get('dateTo');
+
+        $todayStart = $dateFromRaw
+            ? new \DateTime($dateFromRaw . ' 00:00:00')
+            : new \DateTime('today');
+
+        $todayEnd = $dateToRaw
+            ? new \DateTime($dateToRaw . ' 23:59:59')
+            : (clone $todayStart)->modify('+1 day')->modify('-1 second');
+
+        // Para queries que usaban "mes actual" usamos el inicio del rango
+        $monthStart = clone $todayStart;
+
         $dayOfWeek = (int)(new \DateTime())->format('N'); // 1 (Mon) - 7 (Sun)
         
         // ------------------------------
@@ -83,11 +92,14 @@ final class DashboardController extends AbstractController
         $qbSales = $this->em->createQueryBuilder()
             ->select('SUM(s.total) as totalReal, COUNT(s.id) as countSales')
             ->from(Sale::class, 's')
+            ->join('s.cashBox', 'cb')
             ->where('s.saleDate >= :start AND s.saleDate <= :end')
             ->andWhere('s.status = :statusPaid');
-        
-        // We might need to filter branch by CashBox or User. Let's ignore branch on Sales for now or assume subqueries if needed.
-        
+
+        if ($branchId) {
+            $qbSales->andWhere('cb.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $qbSales->setParameter('start', $todayStart)
             ->setParameter('end', $todayEnd)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
@@ -101,36 +113,82 @@ final class DashboardController extends AbstractController
         // 2. Gráficos
         // ------------------------------
         
-        // Ingresos últimos 7 días
-        $sevenDaysAgo = clone $todayStart;
-        $sevenDaysAgo->modify('-6 days');
-        
-        $qb7Days = $this->em->createQueryBuilder()
+        // Ingresos por día dentro del rango seleccionado
+        // Si no hay filtro, mostrar los últimos 7 días
+        $chartStart = $dateFromRaw ? clone $todayStart : (clone $todayStart)->modify('-6 days');
+        $chartEnd   = clone $todayEnd;
+
+        // Determinar agrupación según la duración del rango
+        $diff = $chartStart->diff($chartEnd)->days;
+        $grouping = 'day';
+        if ($diff > 60) {
+            $grouping = 'month';
+        } elseif ($diff > 14) {
+            $grouping = 'week';
+        }
+
+        $qbChart = $this->em->createQueryBuilder()
             ->select('s.saleDate as dt, s.total as totalDia')
             ->from(Sale::class, 's')
+            ->join('s.cashBox', 'cbChart')
             ->where('s.saleDate >= :start AND s.saleDate <= :end')
-            ->andWhere('s.status = :statusPaid')
-            ->setParameter('start', $sevenDaysAgo)
-            ->setParameter('end', $todayEnd)
-            ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
-        $rawSales = $qb7Days->getQuery()->getResult();
-        $ingresos7DiasMap = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $d = clone $todayStart;
-            $d->modify("-{$i} days");
-            $ingresos7DiasMap[$d->format('Y-m-d')] = 0;
+            ->andWhere('s.status = :statusPaid');
+
+        if ($branchId) {
+            $qbChart->andWhere('cbChart.branch = :branchId')->setParameter('branchId', $branchId);
         }
-        foreach ($rawSales as $rs) {
-            $dt = clone $rs['dt'];
-            $dateStr = $dt->format('Y-m-d');
-            if (isset($ingresos7DiasMap[$dateStr])) {
-                $ingresos7DiasMap[$dateStr] += (float)$rs['totalDia'];
+
+        $qbChart->setParameter('start', $chartStart)
+            ->setParameter('end', $chartEnd)
+            ->setParameter('statusPaid', SaleStatus::PAID->value);
+
+        $rawSales = $qbChart->getQuery()->getResult();
+
+        // Construir mapa de agrupación con valor 0
+        $ingresosChartMap = [];
+        $cursor = clone $chartStart;
+        
+        while ($cursor <= $chartEnd) {
+            if ($grouping === 'month') {
+                $key = $cursor->format('Y-m-01');
+                if (!isset($ingresosChartMap[$key])) $ingresosChartMap[$key] = 0;
+                $cursor->modify('first day of next month');
+            } elseif ($grouping === 'week') {
+                $wCursor = clone $cursor;
+                if ($wCursor->format('N') != 1) {
+                    $wCursor->modify('last monday');
+                }
+                $key = $wCursor->format('Y-m-d');
+                if (!isset($ingresosChartMap[$key])) $ingresosChartMap[$key] = 0;
+                $cursor->modify('+1 week');
+            } else {
+                $key = $cursor->format('Y-m-d');
+                $ingresosChartMap[$key] = 0;
+                $cursor->modify('+1 day');
             }
         }
-        $ingresos7Dias = [];
-        foreach ($ingresos7DiasMap as $k => $v) {
-            $ingresos7Dias[] = ['dt' => $k, 'totalDia' => $v];
+
+        foreach ($rawSales as $rs) {
+            $date = clone $rs['dt'];
+            if ($grouping === 'month') {
+                $dateStr = $date->format('Y-m-01');
+            } elseif ($grouping === 'week') {
+                if ($date->format('N') != 1) {
+                    $date->modify('last monday');
+                }
+                $dateStr = $date->format('Y-m-d');
+            } else {
+                $dateStr = $date->format('Y-m-d');
+            }
+            
+            if (isset($ingresosChartMap[$dateStr])) {
+                $ingresosChartMap[$dateStr] += (float)$rs['totalDia'];
+            }
+        }
+
+        $ingresosChart = [];
+        foreach ($ingresosChartMap as $k => $v) {
+            $ingresosChart[] = ['dt' => $k, 'totalDia' => $v];
         }
         
         // Top 5 Servicios del mes
@@ -139,13 +197,18 @@ final class DashboardController extends AbstractController
             ->from(SaleDetail::class, 'sd')
             ->join('sd.sale', 's')
             ->join('sd.product', 'p')
+            ->join('s.cashBox', 'cbts')
             ->where('s.saleDate >= :startMonth AND s.status = :statusPaid')
             ->groupBy('p.id')
             ->orderBy('cantidad', 'DESC')
             ->setMaxResults(5)
             ->setParameter('startMonth', $monthStart)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
+
+        if ($branchId) {
+            $qbTopServices->andWhere('cbts.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $topServicios = $qbTopServices->getQuery()->getResult();
         
         // ------------------------------
@@ -180,15 +243,20 @@ final class DashboardController extends AbstractController
             ->from(SaleDetail::class, 'sd')
             ->join('sd.serviceProvider', 'u')
             ->join('sd.sale', 's')
+            ->join('s.cashBox', 'cbr')
             ->leftJoin(BarberProfile::class, 'bp', \Doctrine\ORM\Query\Expr\Join::WITH, 'bp.user = u')
             ->where('s.saleDate >= :startMonth')
             ->andWhere('s.status = :statusPaid')
             ->groupBy('u.id')
-            ->orderBy('totalGenerado', 'DESC')
+            ->orderBy('serviciosRealizados', 'DESC')
             ->setMaxResults(5)
             ->setParameter('startMonth', $monthStart)
             ->setParameter('statusPaid', SaleStatus::PAID->value);
-            
+
+        if ($branchId) {
+            $qbRanking->andWhere('cbr.branch = :branchId')->setParameter('branchId', $branchId);
+        }
+
         $rankingBarberos = $qbRanking->getQuery()->getResult();
 
         // ------------------------------
@@ -225,7 +293,8 @@ final class DashboardController extends AbstractController
                 'ticketPromedio' => $ticketPromedio
             ],
             'charts' => [
-                'ingresos7Dias' => $ingresos7Dias,
+                'ingresos' => $ingresosChart,
+                'grouping' => $grouping,
                 'topServicios'  => $topServicios
             ],
             'lists' => [

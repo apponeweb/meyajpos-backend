@@ -31,6 +31,7 @@ class XReportController extends AbstractController
                 'startDate' => $request->query->get('startDate'),
                 'endDate' => $request->query->get('endDate'),
                 'search' => $request->query->get('search'),
+                'branch' => $request->query->get('branch'),
             ];
 
             $current = $request->query->getInt('current', 1);

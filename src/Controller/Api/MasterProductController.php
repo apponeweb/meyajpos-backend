@@ -4,9 +4,11 @@ namespace App\Controller\Api;
 
 use App\Entity\BarberSchedule;
 use App\Entity\BarberService;
+use App\Entity\BranchProduct;
 use App\Entity\MasterProduct;
 use App\Entity\ServiceType;
 use App\Form\Type\MasterProductFormType;
+use App\Repository\BranchProductRepository;
 use App\Repository\MasterProductRepository;
 use Doctrine\ORM\QueryBuilder;
 use FOS\RestBundle\Controller\Annotations as Rest;
@@ -88,21 +90,43 @@ final class MasterProductController extends BaseController
         return ['u.name', 'u.description', 'u.barcode'];
     }
 
-    public function list(Request $request, $repository): JsonResponse
+    public function list(Request $request, $repository, ?BranchProductRepository $branchProductRepository = null): JsonResponse
     {
-        // 1. Llamamos al método list del padre para obtener la respuesta original
         $response = parent::list($request, $repository);
-
-        // 2. Decodificamos el contenido para manipular los datos
         $data = json_decode($response->getContent(), true);
-
         $baseUrl = $request->getSchemeAndHttpHost();
 
-        // 3. Formateamos el precio y la imagen en los resultados
+        // Obtener precios override por sucursal si viene X-Branch-Id
+        // Si el cliente envía ignoreBranch=true (vistas de administración), no filtrar
+        $ignoreBranch = $request->query->getBoolean('ignoreBranch', false);
+        $branchId = !$ignoreBranch ? $request->attributes->get('activeBranchId') : null;
+        $priceOverrideMap = [];
+        $enabledIds = null;
+
+        if ($branchId && $branchProductRepository) {
+            $bps = $branchProductRepository->findByBranch((int)$branchId);
+            foreach ($bps as $bp) {
+                $pid = (string) $bp->getProduct()->getId();
+                $priceOverrideMap[$pid] = $bp->getPriceOverride();
+                if ($bp->isEnabled()) {
+                    $enabledIds[$pid] = true;
+                }
+            }
+            // Siempre filtrar por sucursal: si no hay nada configurado, lista vacía
+            $data['results'] = array_values(array_filter(
+                $data['results'] ?? [],
+                fn($item) => isset($enabledIds[(string)$item['id']])
+            ));
+            $data['total'] = count($data['results']);
+        }
+
         if (isset($data['results'])) {
-            $data['results'] = array_map(function ($item) use ($baseUrl) {
-                if (isset($item['price'])) {
-                    // Aplicamos el formato: 1,000.00
+            $data['results'] = array_map(function ($item) use ($baseUrl, $priceOverrideMap) {
+                // Aplicar precio override si existe para esta sucursal
+                $pid = (string) $item['id'];
+                if (isset($priceOverrideMap[$pid]) && $priceOverrideMap[$pid] !== null) {
+                    $item['price'] = number_format((float)$priceOverrideMap[$pid], 2, '.', ',');
+                } elseif (isset($item['price'])) {
                     $item['price'] = number_format((float)$item['price'], 2, '.', ',');
                 }
                 if (isset($item['image']) && $item['image']) {
@@ -114,14 +138,13 @@ final class MasterProductController extends BaseController
             }, $data['results']);
         }
 
-        // 4. Retornamos la nueva respuesta con los datos formateados
         return new JsonResponse($data, $response->getStatusCode());
     }
 
     #[Rest\Get('/master_product')]
-    public function index(Request $request, MasterProductRepository $repository): JsonResponse
+    public function index(Request $request, MasterProductRepository $repository, BranchProductRepository $branchProductRepository): JsonResponse
     {
-        return $this->list($request, $repository);
+        return $this->list($request, $repository, $branchProductRepository);
     }
 
     #[Rest\Get('/master_product/all')]
@@ -295,7 +318,7 @@ final class MasterProductController extends BaseController
     }
 
     #[Rest\Get('/master_product/barcode/{barcode}')]
-    public function getByBarcode(string $barcode, MasterProductRepository $repository): JsonResponse
+    public function getByBarcode(string $barcode, Request $request, MasterProductRepository $repository, BranchProductRepository $branchProductRepository): JsonResponse
     {
         $product = $repository->findDetailsByBarcode($barcode);
 
@@ -306,6 +329,22 @@ final class MasterProductController extends BaseController
             ], JsonResponse::HTTP_NOT_FOUND);
         }
 
+        // Aplicar precio override y verificar habilitación por sucursal
+        $branchId = $request->attributes->get('activeBranchId');
+        if ($branchId) {
+            $bp = $branchProductRepository->findOneByBranchAndProduct((int)$branchId, (int)$product['id']);
+            if ($bp !== null) {
+                if (!$bp->isEnabled()) {
+                    return $this->json([
+                        'message' => 'Producto no disponible en esta sucursal',
+                        'data' => null
+                    ], JsonResponse::HTTP_NOT_FOUND);
+                }
+                if ($bp->getPriceOverride() !== null) {
+                    $product['price'] = number_format((float)$bp->getPriceOverride(), 2, '.', ',');
+                }
+            }
+        }
 
         return $this->json([
             'message' => 'Producto recuperado con éxito',

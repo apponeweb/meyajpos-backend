@@ -77,5 +77,10 @@ class DailyReportRepository extends ServiceEntityRepository
             $qb->andWhere('r.ticketFolio LIKE :search OR r.productServiceName LIKE :search')
                 ->setParameter('search', '%' . $filters['search'] . '%');
         }
+
+        if (!empty($filters['branchId'])) {
+            $qb->andWhere('r.branchId = :branchId')
+                ->setParameter('branchId', $filters['branchId']);
+        }
     }
 }

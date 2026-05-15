@@ -37,9 +37,8 @@ class XReportService
     ) {
     }
 
-    public function getPreviewData($mode = null): array
+    public function getPreviewData($mode = null, ?int $activeBranchId = null): array
     {
-        // Obtenemos el usuario autenticado directamente desde el componente Security
         $user = $this->security->getUser();
 
         if (!$user) {
@@ -50,6 +49,10 @@ class XReportService
 
         if (!$session) {
             throw new \Exception('No tiene una sesión de la caja activa', 404);
+        }
+
+        if ($activeBranchId && $session->getCashBox()->getBranch()->getId() !== $activeBranchId) {
+            throw new \Exception('La sesión activa no corresponde a la sucursal seleccionada', 409);
         }
 
         $salesCount = $this->saleRepo->count(['cashBoxSession' => $session->getId()]);
