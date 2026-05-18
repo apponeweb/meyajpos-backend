@@ -169,7 +169,9 @@ final class DashboardController extends AbstractController
         }
 
         foreach ($rawSales as $rs) {
-            $date = clone $rs['dt'];
+            $date = $rs['dt'] instanceof \DateTimeInterface
+                ? clone $rs['dt']
+                : new \DateTime((string)$rs['dt']);
             if ($grouping === 'month') {
                 $dateStr = $date->format('Y-m-01');
             } elseif ($grouping === 'week') {
@@ -180,7 +182,7 @@ final class DashboardController extends AbstractController
             } else {
                 $dateStr = $date->format('Y-m-d');
             }
-            
+
             if (isset($ingresosChartMap[$dateStr])) {
                 $ingresosChartMap[$dateStr] += (float)$rs['totalDia'];
             }
@@ -264,7 +266,7 @@ final class DashboardController extends AbstractController
         // ------------------------------
         
         $qbTopClientes = $this->em->createQueryBuilder()
-            ->select('c.name as customerName, c.phone as customerPhone, COUNT(DISTINCT a.id) as citas, SUM(asrv.price) as totalGastado')
+            ->select('c.name as customerName, c.phone as customerPhone, COUNT(DISTINCT a.id) as citas, COALESCE(SUM(asrv.price), 0) as totalGastado')
             ->from(AppointmentService::class, 'asrv')
             ->join('asrv.appointment', 'a')
             ->join('a.customer', 'c')
