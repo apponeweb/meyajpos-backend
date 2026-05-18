@@ -32,19 +32,21 @@ class BarberScheduleRepository extends BaseRepository
             ->andWhere('s.dayOfWeek = :dayOfWeek')
             ->andWhere('s.openTime < :closeTime')
             ->andWhere('s.closeTime > :openTime')
-            // Date range overlap logic:
-            // (s.validFrom <= :validTo OR :validTo IS NULL) AND (s.validTo >= :validFrom OR s.validTo IS NULL)
-            ->andWhere('(:validTo IS NULL OR s.validFrom <= :validTo)')
             ->andWhere('(s.validTo IS NULL OR s.validTo >= :validFrom)')
+            ->andWhere('s.deletedAt IS NULL')
             ->setParameter('barberId', $barberId)
             ->setParameter('dayOfWeek', $dayOfWeek)
             ->setParameter('openTime', $openTime)
             ->setParameter('closeTime', $closeTime)
-            ->setParameter('validFrom', $validFrom)
-            ->setParameter('validTo', $validTo)
-            ->andWhere('s.deletedAt IS NULL');
+            ->setParameter('validFrom', $validFrom);
 
-        if ($excludeId) {
+        // Si validTo tiene valor, restringimos además que s.validFrom <= validTo
+        if ($validTo !== null) {
+            $qb->andWhere('s.validFrom <= :validTo')
+                ->setParameter('validTo', $validTo);
+        }
+
+        if ($excludeId !== null) {
             $qb->andWhere('s.id != :excludeId')
                 ->setParameter('excludeId', $excludeId);
         }
