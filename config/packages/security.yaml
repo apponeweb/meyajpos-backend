@@ -19,6 +19,10 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
+        license_provision:
+            pattern: ^/api/license/provision
+            security: false
+
         api:
             pattern: ^/api
             stateless: true
@@ -48,6 +52,7 @@ security:
     # Easy way to control access for large sections of your site
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
+        - { path: ^/api/license/provision, roles: PUBLIC_ACCESS }
         - { path: ^/api/appointments/book, roles: PUBLIC_ACCESS }
         - { path: ^/api/company/public-list, roles: PUBLIC_ACCESS }
         - { path: ^/api/branch/public-list, roles: PUBLIC_ACCESS }
