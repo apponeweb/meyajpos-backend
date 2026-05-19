@@ -77,7 +77,7 @@ final class UserController extends AbstractFOSRestController
 
     #[Rest\Post('/user')]
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
-    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher): JsonResponse|User|FormInterface
+    public function createUser(Request $request, EntityManagerInterface $entityManager, UserRepository $userRepository, UserPasswordHasherInterface $passwordHasher, Security $security): JsonResponse|User|FormInterface
     {
         $user = new User();
         $form = $this->createForm(UserFormType::class, $user);
@@ -94,6 +94,13 @@ final class UserController extends AbstractFOSRestController
                 $user->getPassword()
             );
             $user->setPassword($hashedPassword);
+
+            /** @var User|null $creator */
+            $creator = $security->getUser();
+            if ($creator instanceof User) {
+                $user->setLicenseEmail($creator->getLicenseEmail() ?? $creator->getEmail());
+            }
+
             $entityManager->persist($user);
             $entityManager->flush();
             return $user;

@@ -57,6 +57,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $photoUrl = null;
 
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $licenseEmail = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -214,5 +217,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->photoUrl = $photoUrl;
 
         return $this;
+    }
+
+    public function getLicenseEmail(): ?string
+    {
+        return $this->licenseEmail;
+    }
+
+    public function setLicenseEmail(?string $licenseEmail): void
+    {
+        $this->licenseEmail = $licenseEmail;
     }
 }

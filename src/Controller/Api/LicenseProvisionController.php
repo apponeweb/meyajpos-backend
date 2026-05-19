@@ -59,6 +59,7 @@ final class LicenseProvisionController extends AbstractController
         $user->setRoles([$this->defaultRole]);
         $user->setEnabled(true);
         $user->setBarberSn(false);
+        $user->setLicenseEmail($email);
         $user->setPassword($this->passwordHasher->hashPassword($user, $this->defaultPassword));
 
         try {

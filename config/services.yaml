@@ -27,6 +27,10 @@ services:
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 5 }
 
+    App\EventListener\JWTCreatedListener:
+        tags:
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_created, method: onJWTCreated }
+
     App\Controller\Api\LicenseProvisionController:
         arguments:
             $provisionToken: '%app.license_provision_token%'

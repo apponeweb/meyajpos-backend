@@ -43,7 +43,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             : 'ub.user = u AND ub.isDefault = true';
 
         $queryBuilder = $this->createQueryBuilder('u')
-            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.lastName', 'u.barberSn')
+            ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.lastName', 'u.barberSn', 'u.licenseEmail')
             ->leftJoin('u.commission', 'b')
             ->addSelect('b.id AS commission_id', 'b.name AS commission_name')
             ->leftJoin(UserBranch::class, 'ub', 'WITH', $joinCondition)
