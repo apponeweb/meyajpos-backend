@@ -39,11 +39,14 @@ final class UserController extends AbstractFOSRestController
         $paginator = new Paginator($query, true);
         $paginator->setUseOutputWalkers(false);
 
+        $barberCount = $userRepository->countBarbers();
+
         return [
             'total' => count($paginator),
             'results' => $paginator->getIterator()->getArrayCopy(),
             'current' => $current,
-            'pageSize' => $pageSize
+            'pageSize' => $pageSize,
+            'barberCount' => $barberCount,
         ];
     }
 
@@ -125,13 +128,59 @@ final class UserController extends AbstractFOSRestController
     #[Rest\View(serializerEnableMaxDepthChecks: true)]
     public function removeUser(EntityManagerInterface $entityManager, User $id): JsonResponse
     {
-        try {
-            $entityManager->remove($id);
-            $entityManager->flush();
-            return $this->json(['message' => "Usuario eliminado"]);
-        } catch (\Exception $e) {
-            return $this->json(['message' => "Error al eliminar usuario"], 400);
+        $conn = $entityManager->getConnection();
+        $uid = $id->getId();
+
+        // 1. Nullear FKs opcionales
+        $conn->executeStatement('UPDATE tbd_review SET barber_id = NULL WHERE barber_id = :uid', ['uid' => $uid]);
+        $conn->executeStatement('UPDATE tbd_sale_detail SET service_provider_id = NULL WHERE service_provider_id = :uid', ['uid' => $uid]);
+        $conn->executeStatement('UPDATE tbd_cash_box_session SET closing_user_id = NULL WHERE closing_user_id = :uid', ['uid' => $uid]);
+
+        // 2. Sesiones de caja propias del usuario
+        $sessionIds = $conn->fetchFirstColumn(
+            'SELECT id FROM tbd_cash_box_session WHERE user_id = :uid',
+            ['uid' => $uid]
+        );
+
+        if (!empty($sessionIds)) {
+            $ph = implode(',', array_fill(0, count($sessionIds), '?'));
+
+            // XReport de las sesiones → ZReport (tbd_z_report_detail en CASCADE), XReportDetail en CASCADE
+            $xIds = $conn->fetchFirstColumn("SELECT id FROM tbd_x_report WHERE cash_session_id IN ($ph)", $sessionIds);
+            if (!empty($xIds)) {
+                $xPh = implode(',', array_fill(0, count($xIds), '?'));
+                $conn->executeStatement("DELETE FROM tbd_z_report WHERE x_report_id IN ($xPh)", $xIds);
+            }
+            // ZReport que referencian la sesión directamente
+            $conn->executeStatement("DELETE FROM tbd_z_report WHERE cash_box_session_id IN ($ph)", $sessionIds);
+            if (!empty($xIds)) {
+                $xPh = implode(',', array_fill(0, count($xIds), '?'));
+                $conn->executeStatement("DELETE FROM tbd_x_report WHERE id IN ($xPh)", $xIds);
+            }
+
+            // Sales de las sesiones: Tips (via tbr_sale_payment), luego Sale (SaleDetail + CommissionGenerated en CASCADE)
+            $saleIds = $conn->fetchFirstColumn("SELECT id FROM tbd_sale WHERE cash_box_session_id IN ($ph)", $sessionIds);
+            if (!empty($saleIds)) {
+                $sPh = implode(',', array_fill(0, count($saleIds), '?'));
+                $conn->executeStatement("DELETE FROM tbd_tip WHERE sale_payment_id IN (SELECT id FROM tbr_sale_payment WHERE sale_id IN ($sPh))", $saleIds);
+                $conn->executeStatement("DELETE FROM tbd_sale WHERE id IN ($sPh)", $saleIds);
+            }
+
+            $conn->executeStatement("DELETE FROM tbd_cash_box_movement WHERE cash_box_session_id IN ($ph)", $sessionIds);
+            $conn->executeStatement("DELETE FROM tbd_cash_box_session WHERE id IN ($ph)", $sessionIds);
         }
+
+        // 3. Tips directos al usuario sin sesión
+        $conn->executeStatement('DELETE FROM tbd_tip WHERE user_id = :uid', ['uid' => $uid]);
+
+        // 4. Comisiones generadas al usuario sin sesión
+        $conn->executeStatement('DELETE FROM tbd_commission_generated WHERE user_id = :uid', ['uid' => $uid]);
+
+        // 5. Eliminar el usuario (BarberProfile, BarberSchedule, BarberService, BarberSpecialty, BarberTimeOff, UserBranch tienen onDelete CASCADE en la DB)
+        $entityManager->remove($id);
+        $entityManager->flush();
+
+        return $this->json(['message' => "Usuario eliminado"]);
     }
 
 

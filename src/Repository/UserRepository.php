@@ -38,18 +38,22 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
 
     public function getWithPagination($search = null, $branchId = null): Query
     {
+        $joinCondition = $branchId
+            ? 'ub.user = u AND ub.branch = :branchId'
+            : 'ub.user = u AND ub.isDefault = true';
+
         $queryBuilder = $this->createQueryBuilder('u')
             ->select('u.id', 'u.email', 'u.roles', 'u.name', 'u.enabled', 'u.phone', 'u.lastName', 'u.barberSn')
             ->leftJoin('u.commission', 'b')
             ->addSelect('b.id AS commission_id', 'b.name AS commission_name')
-            ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u AND ub.isDefault = true')
+            ->leftJoin(UserBranch::class, 'ub', 'WITH', $joinCondition)
             ->leftJoin('ub.branch', 'br')
             ->addSelect('br.name AS branch_name')
             ->orderBy('u.id', 'ASC');
 
         if ($search) {
-            $queryBuilder->andWhere('u.name LIKE :val or u.email LIKE :val');
-            $queryBuilder->setParameter('val', '%' . $search . '%');
+            $queryBuilder->andWhere('u.name LIKE :val OR u.email LIKE :val')
+                ->setParameter('val', '%' . $search . '%');
         }
 
         if ($branchId) {
@@ -60,6 +64,18 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         return $queryBuilder->getQuery();
     }
 
+
+    public function countBarbers(): int
+    {
+        return (int) $this->createQueryBuilder('u')
+            ->select('COUNT(u.id)')
+            ->where('u.barberSn = :isBarber')
+            ->andWhere('u.enabled = :enabled')
+            ->setParameter('isBarber', true)
+            ->setParameter('enabled', true)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 
     public function getAllToSelect()
     {
@@ -108,7 +124,9 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->leftJoin(UserBranch::class, 'ub', 'WITH', 'ub.user = u AND ub.isDefault = true')
             ->leftJoin('ub.branch', 'br')
             ->andWhere('u.barberSn = :isBarber')
-            ->setParameter('isBarber', true);
+            ->andWhere('u.enabled = :enabled')
+            ->setParameter('isBarber', true)
+            ->setParameter('enabled', true);
 
         if ($search) {
             $qb->andWhere('u.name LIKE :search OR u.lastName LIKE :search OR u.email LIKE :search OR CONCAT(u.name, \' \', u.lastName) LIKE :search')
