@@ -88,7 +88,7 @@ final class BranchProductController extends AbstractFOSRestController
             $productId   = (int) ($item['id'] ?? 0);
             $assigned    = (bool) ($item['assigned'] ?? false);
             $enabled     = (bool) ($item['enabled'] ?? true);
-            $priceOverride = isset($item['priceOverride']) && $item['priceOverride'] !== '' && $item['priceOverride'] !== null
+            $priceOverride = ($item['priceOverride'] ?? null) !== null && $item['priceOverride'] !== ''
                 ? (string) $item['priceOverride']
                 : null;
 
