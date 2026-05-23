@@ -41,7 +41,9 @@ final class BranchProductController extends AbstractFOSRestController
                ->setParameter('search', '%' . $search . '%');
         }
 
-        $total = (int) (clone $qb)
+        $countQb = clone $qb;
+        $countQb->resetDQLPart('orderBy');
+        $total = (int) $countQb
             ->select('COUNT(p.id)')
             ->getQuery()
             ->getSingleScalarResult();
