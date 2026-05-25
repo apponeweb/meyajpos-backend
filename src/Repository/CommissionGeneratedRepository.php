@@ -39,7 +39,12 @@ class CommissionGeneratedRepository extends BaseRepository
             /* Agrupamos por campos lógicos.
                Nota: serviceDate se usa para separar registros por día si es necesario.
             */
-            ->groupBy('mp.id', 'u.id', 'cg.percentage')
+            ->groupBy('mp.id')
+            ->addGroupBy('mp.name')
+            ->addGroupBy('u.id')
+            ->addGroupBy('u.name')
+            ->addGroupBy('st.name')
+            ->addGroupBy('cg.percentage')
             ->addGroupBy('serviceDate')
             ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
@@ -151,7 +156,11 @@ class CommissionGeneratedRepository extends BaseRepository
             ->join('sd.sale', 's')
             ->join('s.cashBox', 'cb')
             ->join('cb.branch', 'b')
-            ->groupBy('service', 'barber', 'serviceDate')
+            ->groupBy('mp.id')
+            ->addGroupBy('mp.name')
+            ->addGroupBy('u.id')
+            ->addGroupBy('u.name')
+            ->addGroupBy('serviceDate')
             ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
 
