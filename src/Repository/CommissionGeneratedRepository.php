@@ -45,8 +45,6 @@ class CommissionGeneratedRepository extends BaseRepository
             ->addGroupBy('u.name')
             ->addGroupBy('st.name')
             ->addGroupBy('cg.percentage')
-            ->addGroupBy('serviceDate')
-            ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
 
         // --- FILTROS DE FECHA ---
@@ -160,8 +158,6 @@ class CommissionGeneratedRepository extends BaseRepository
             ->addGroupBy('mp.name')
             ->addGroupBy('u.id')
             ->addGroupBy('u.name')
-            ->addGroupBy('serviceDate')
-            ->addSelect("SUBSTRING(cg.createdAt, 1, 10) as HIDDEN serviceDate")
             ->orderBy('date', 'DESC');
 
         // Aplicar los mismos filtros que el reporte normal
