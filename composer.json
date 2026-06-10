@@ -22,7 +22,7 @@
         "stof/doctrine-extensions-bundle": "^1.15",
         "symfony/console": "7.3.*",
         "symfony/dotenv": "7.3.*",
-        "symfony/flex": "^2",
+        "symfony/flex": "^2.11",
         "symfony/form": "7.3.*",
         "symfony/framework-bundle": "7.3.*",
         "symfony/http-client": "7.3.*",
@@ -35,11 +35,11 @@
         "symfony/validator": "7.3.*",
         "symfony/yaml": "7.3.*",
         "twig/extra-bundle": "^2.12|^3.0",
-        "twig/twig": "^2.12|^3.0"
+        "twig/twig": "^2.12|^3.27.1"
     },
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3",
-        "symfony/maker-bundle": "^1.64"
+        "symfony/maker-bundle": "^1.67"
     },
     "config": {
         "allow-plugins": {
