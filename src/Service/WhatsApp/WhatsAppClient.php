@@ -6,7 +6,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final class WhatsAppClient
 {
-    private const GRAPH_API_VERSION = 'v20.0';
+    private const GRAPH_API_VERSION = 'v25.0';
 
     public function __construct(
         private readonly HttpClientInterface $httpClient,
