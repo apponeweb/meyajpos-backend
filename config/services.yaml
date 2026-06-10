@@ -8,6 +8,12 @@ parameters:
     app.license_default_password: '%env(LICENSE_DEFAULT_PASSWORD)%'
     app.license_default_role: '%env(LICENSE_DEFAULT_ROLE)%'
 
+    app.whatsapp_verify_token: '%env(WHATSAPP_VERIFY_TOKEN)%'
+    app.whatsapp_access_token: '%env(WHATSAPP_ACCESS_TOKEN)%'
+    app.whatsapp_phone_number_id: '%env(WHATSAPP_PHONE_NUMBER_ID)%'
+    app.whatsapp_business_account_id: '%env(WHATSAPP_BUSINESS_ACCOUNT_ID)%'
+    app.openai_api_key: '%env(OPENAI_API_KEY)%'
+
 services:
     # default configuration for services in *this* file
     _defaults:
@@ -36,6 +42,20 @@ services:
             $provisionToken: '%app.license_provision_token%'
             $defaultPassword: '%app.license_default_password%'
             $defaultRole: '%app.license_default_role%'
+
+
+    App\Controller\Api\WhatsApp\WhatsAppWebhookController:
+        arguments:
+            $whatsappVerifyToken: '%app.whatsapp_verify_token%'
+
+    App\Service\WhatsApp\WhatsAppClient:
+        arguments:
+            $whatsappAccessToken: '%app.whatsapp_access_token%'
+            $whatsappPhoneNumberId: '%app.whatsapp_phone_number_id%'
+
+    App\Service\WhatsApp\AiResponseService:
+        arguments:
+            $openAiApiKey: '%app.openai_api_key%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

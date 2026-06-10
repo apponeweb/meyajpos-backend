@@ -2,6 +2,7 @@ security:
     # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
     password_hashers:
         Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
     # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
     providers:
         # used to reload user from session & other features (e.g. switch_user)
@@ -23,13 +24,17 @@ security:
             pattern: ^/api/license/provision
             security: false
 
+        whatsapp_webhook:
+            pattern: ^/api/whatsapp/webhook
+            security: false
+
         api:
             pattern: ^/api
             stateless: true
             entry_point: jwt
             user_checker: App\Security\UserChecker
             json_login:
-                check_path: /api/login_check # or, if you have defined a route for your login path, the route name you used
+                check_path: /api/login_check
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
             jwt: ~
@@ -52,6 +57,7 @@ security:
     # Easy way to control access for large sections of your site
     access_control:
         - { path: ^/api/(login_check|token/refresh), roles: PUBLIC_ACCESS }
+        - { path: ^/api/whatsapp/webhook, roles: PUBLIC_ACCESS }
         - { path: ^/api/license/provision, roles: PUBLIC_ACCESS }
         - { path: ^/api/appointments/book, roles: PUBLIC_ACCESS }
         - { path: ^/api/company/public-list, roles: PUBLIC_ACCESS }
@@ -85,12 +91,11 @@ security:
 when@test:
     security:
         password_hashers:
-            # By default, password hashers are resource intensive and take time. This is
-            # important to generate secure password hashes. In tests however, secure hashes
-            # are not important, waste resources and increase test times. The following
-            # reduces the work factor to the lowest possible values.
+            # By default, password hashers are resource intensive and take time.
+            # In tests however, secure hashes are not important, waste resources
+            # and increase test times.
             Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
                 algorithm: auto
-                cost: 4 # Lowest possible value for bcrypt
-                time_cost: 3 # Lowest possible value for argon
-                memory_cost: 10 # Lowest possible value for argon
+                cost: 4
+                time_cost: 3
+                memory_cost: 10
