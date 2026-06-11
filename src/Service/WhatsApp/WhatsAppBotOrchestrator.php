@@ -9,9 +9,11 @@ final class WhatsAppBotOrchestrator
     public function __construct(
         private readonly WhatsAppClient $whatsAppClient,
         private readonly IntentClassifier $intentClassifier,
-        private readonly LoggerInterface $logger
+        private readonly WhatsAppCatalogService $catalogService,
+        private readonly LoggerInterface $logger,
     ) {
     }
+
 
     public function handleIncomingMessage(array $message, array $payload): void
     {
@@ -72,13 +74,7 @@ final class WhatsAppBotOrchestrator
 
     private function servicesResponse(): string
     {
-        return "Estos son algunos servicios disponibles:\n\n"
-            . "1. Corte clásico\n"
-            . "2. Corte y barba\n"
-            . "3. Arreglo de barba\n"
-            . "4. Fade / desvanecido\n"
-            . "5. Corte infantil\n\n"
-            . "Para revisar horarios escribe: agenda mañana";
+        return $this->catalogService->getServicesMenu();
     }
 
     private function agendaResponse(string $message): string
