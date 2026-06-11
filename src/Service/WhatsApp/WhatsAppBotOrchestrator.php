@@ -2,6 +2,7 @@
 
 namespace App\Service\WhatsApp;
 
+use App\Service\Appointment\AppointmentBookingService;
 use Psr\Log\LoggerInterface;
 
 final class WhatsAppBotOrchestrator
@@ -11,6 +12,7 @@ final class WhatsAppBotOrchestrator
         private readonly IntentClassifier $intentClassifier,
         private readonly WhatsAppCatalogService $catalogService,
         private readonly WhatsAppConversationStateService $conversationStateService,
+        private readonly AppointmentBookingService $appointmentBookingService,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -138,6 +140,11 @@ final class WhatsAppBotOrchestrator
                 'message' => $message,
                 'trace' => $exception->getTraceAsString(),
             ]);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Tuve un problema procesando tu mensaje.\n\nPor favor intenta de nuevo o escribe *agenda* para comenzar otra vez."
+            );
         }
     }
 
@@ -565,7 +572,7 @@ final class WhatsAppBotOrchestrator
         $this->whatsAppClient->sendTextMessage(
             $from,
             sprintf(
-                "Correo registrado: *%s*.\n\nAhora escribe tu *teléfono a 10 dígitos*.\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número o escribir otro.",
+                "Correo registrado: %s.\n\nAhora escribe tu *teléfono a 10 dígitos*.\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número o escribir otro.",
                 $email,
                 $suggestedPhone
             )
@@ -630,23 +637,57 @@ final class WhatsAppBotOrchestrator
     private function handleBookingConfirmation(string $from, string $normalizedBody, array $state): void
     {
         if (in_array($normalizedBody, ['confirmar', 'confirmo', 'si', 'sí', 'ok'], true)) {
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                "Perfecto. Ya tengo todos los datos para crear la cita.\n\nEl siguiente paso técnico será conectar este flujo con la reserva final del sistema."
-            );
+            try {
+                $result = $this->appointmentBookingService->bookFromWhatsAppState($state);
 
-            return;
-        }
+                $this->conversationStateService->clear($from);
 
-        if (in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true)) {
-            $this->conversationStateService->clear($from);
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    sprintf(
+                        "Tu cita quedó reservada con éxito.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nTe esperamos.",
+                        (string) ($result['appointmentId'] ?? ''),
+                        (string) ($state['branch_name'] ?? ''),
+                        (string) ($state['service_name'] ?? ''),
+                        (string) ($state['barber_name'] ?? ''),
+                        (string) ($state['date'] ?? ''),
+                        (string) ($state['time_label'] ?? '')
+                    )
+                );
 
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                "Listo, cancelé este flujo de agenda.\n\nPuedes escribir *agenda* cuando quieras comenzar de nuevo."
-            );
+                return;
+            } catch (\InvalidArgumentException $exception) {
+                $this->logger->warning('Datos incompletos para reservar cita desde WhatsApp', [
+                    'wa_id' => $from,
+                    'detail' => $exception->getMessage(),
+                    'state' => $state,
+                ]);
 
-            return;
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "Me falta información para crear la cita:\n\n"
+                    . $exception->getMessage()
+                    . "\n\nEscribe *agenda* para iniciar de nuevo."
+                );
+
+                return;
+            } catch (\Throwable $exception) {
+                $this->logger->error('Error creando cita desde WhatsApp', [
+                    'wa_id' => $from,
+                    'detail' => $exception->getMessage(),
+                    'state' => $state,
+                    'trace' => $exception->getTraceAsString(),
+                ]);
+
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "No pude crear la cita.\n\n"
+                    . "Detalle: " . $exception->getMessage()
+                    . "\n\nPuede que el horario se haya ocupado. Escribe *agenda* para elegir otro horario."
+                );
+
+                return;
+            }
         }
 
         $this->whatsAppClient->sendTextMessage(
@@ -660,7 +701,7 @@ final class WhatsAppBotOrchestrator
         $notes = trim((string) ($state['customer_notes'] ?? ''));
 
         return sprintf(
-            "Confirma los datos de tu cita:\n\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\nNombre: *%s*\nCorreo: *%s*\nTeléfono: *%s*\nNotas: *%s*\n\nResponde *CONFIRMAR* para reservar o *CANCELAR* para salir.",
+            "Confirma los datos de tu cita:\n\nSucursal: %s\nServicio: %s\nBarbero: %s\nFecha: %s\nHorario: %s\nNombre: %s\nCorreo: %s\nTeléfono: %s\nNotas: %s\n\nResponde *CONFIRMAR* para reservar o *CANCELAR* para salir.",
             (string) ($state['branch_name'] ?? ''),
             (string) ($state['service_name'] ?? ''),
             (string) ($state['barber_name'] ?? ''),
