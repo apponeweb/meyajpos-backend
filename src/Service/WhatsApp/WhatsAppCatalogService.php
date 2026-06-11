@@ -192,28 +192,7 @@ class WhatsAppCatalogService
             return [];
         }
 
-        $branchIsOpen = $this->connection->fetchOne(
-            <<<SQL
-            SELECT 1
-            FROM tbd_branch_hours bh
-            WHERE bh.branch_id = :branchId
-              AND bh.day_of_week = :dayOfWeek
-              AND bh.valid_from <= :date
-              AND (bh.valid_to IS NULL OR bh.valid_to >= :date)
-            LIMIT 1
-            SQL,
-            [
-                'branchId' => $branchId,
-                'dayOfWeek' => $dayOfWeek,
-                'date' => $date,
-            ],
-            [
-                'branchId' => ParameterType::INTEGER,
-                'dayOfWeek' => ParameterType::INTEGER,
-            ]
-        );
-
-        if (!$branchIsOpen) {
+        if (!$this->isBranchOpen($branchId, $date, $dayOfWeek)) {
             return [];
         }
 
@@ -343,6 +322,385 @@ class WhatsAppCatalogService
         $lines[] = 'Responde con el número del barbero.';
 
         return implode("\n", $lines);
+    }
+
+    public function getAvailableSlots(int $barberId, int $branchId, string $date, int $productId): array
+    {
+        $dayOfWeek = $this->getDayOfWeek($date);
+
+        if ($dayOfWeek === null) {
+            return [];
+        }
+
+        if (!$this->isBranchOpen($branchId, $date, $dayOfWeek)) {
+            return [];
+        }
+
+        $barberService = $this->connection->fetchAssociative(
+            <<<SQL
+            SELECT
+                id,
+                COALESCE(duration_override_minutes, 60) AS duration
+            FROM tbr_barber_service
+            WHERE barber_user_id = :barberId
+              AND product_id = :productId
+              AND is_active = true
+            LIMIT 1
+            SQL,
+            [
+                'barberId' => $barberId,
+                'productId' => $productId,
+            ],
+            [
+                'barberId' => ParameterType::INTEGER,
+                'productId' => ParameterType::INTEGER,
+            ]
+        );
+
+        if ($barberService === false) {
+            return [];
+        }
+
+        $schedule = $this->connection->fetchAssociative(
+            <<<SQL
+            SELECT
+                open_time,
+                close_time,
+                COALESCE(slot_minutes, 30) AS slot_minutes,
+                COALESCE(turn_duration, :defaultDuration) AS turn_duration
+            FROM tbd_barber_schedules
+            WHERE barber_user_id = :barberId
+              AND branch_id = :branchId
+              AND day_of_week = :dayOfWeek
+              AND valid_from <= :date
+              AND (valid_to IS NULL OR valid_to >= :date)
+            ORDER BY id ASC
+            LIMIT 1
+            SQL,
+            [
+                'barberId' => $barberId,
+                'branchId' => $branchId,
+                'dayOfWeek' => $dayOfWeek,
+                'date' => $date,
+                'defaultDuration' => (int) $barberService['duration'],
+            ],
+            [
+                'barberId' => ParameterType::INTEGER,
+                'branchId' => ParameterType::INTEGER,
+                'dayOfWeek' => ParameterType::INTEGER,
+                'defaultDuration' => ParameterType::INTEGER,
+            ]
+        );
+
+        if ($schedule === false) {
+            return [];
+        }
+
+        $slotMinutes = (int) ($schedule['slot_minutes'] ?? 30);
+        $turnDuration = (int) ($schedule['turn_duration'] ?? $barberService['duration'] ?? 60);
+
+        if ($slotMinutes <= 0) {
+            $slotMinutes = 30;
+        }
+
+        if ($turnDuration <= 0) {
+            $turnDuration = 60;
+        }
+
+        $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration);
+
+        $slots = $this->generateSlots(
+            $date,
+            (string) $schedule['open_time'],
+            (string) $schedule['close_time'],
+            $slotMinutes,
+            $turnDuration,
+            $occupiedRanges
+        );
+
+        return $this->groupSlots($slots);
+    }
+
+    public function getSlotByOption(int $barberId, int $branchId, string $date, int $productId, int $option): ?array
+    {
+        $slotGroups = $this->getAvailableSlots($barberId, $branchId, $date, $productId);
+        $slots = $this->flattenSlotGroups($slotGroups);
+
+        return $slots[$option - 1] ?? null;
+    }
+
+    public function flattenSlotGroups(array $slotGroups): array
+    {
+        $slots = [];
+
+        foreach ($slotGroups as $group) {
+            foreach (($group['times'] ?? []) as $timeLabel) {
+                $slots[] = [
+                    'group' => (string) ($group['id'] ?? ''),
+                    'time' => (string) $timeLabel,
+                ];
+            }
+        }
+
+        return $slots;
+    }
+
+    public function formatAvailableSlotsMenu(string $barberName, string $date, array $slotGroups): string
+    {
+        $slots = $this->flattenSlotGroups($slotGroups);
+
+        if ($slots === []) {
+            return sprintf(
+                "Por el momento no encontré horarios disponibles con *%s* el *%s*.\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
+                $barberName,
+                $date
+            );
+        }
+
+        $lines = [
+            sprintf(
+                'Estos horarios están disponibles con *%s* el *%s*:',
+                $barberName,
+                $date
+            ),
+            '',
+        ];
+
+        foreach ($slots as $index => $slot) {
+            $lines[] = sprintf(
+                '%d. %s',
+                $index + 1,
+                (string) $slot['time']
+            );
+        }
+
+        $lines[] = '';
+        $lines[] = 'Responde con el número del horario.';
+
+        return implode("\n", $lines);
+    }
+
+    public function buildScheduledDateTime(string $date, string $timeLabel): string
+    {
+        return sprintf('%s %s', $date, $timeLabel);
+    }
+
+    private function isBranchOpen(int $branchId, string $date, int $dayOfWeek): bool
+    {
+        $branchIsOpen = $this->connection->fetchOne(
+            <<<SQL
+            SELECT 1
+            FROM tbd_branch_hours bh
+            WHERE bh.branch_id = :branchId
+              AND bh.day_of_week = :dayOfWeek
+              AND bh.valid_from <= :date
+              AND (bh.valid_to IS NULL OR bh.valid_to >= :date)
+            LIMIT 1
+            SQL,
+            [
+                'branchId' => $branchId,
+                'dayOfWeek' => $dayOfWeek,
+                'date' => $date,
+            ],
+            [
+                'branchId' => ParameterType::INTEGER,
+                'dayOfWeek' => ParameterType::INTEGER,
+            ]
+        );
+
+        return (bool) $branchIsOpen;
+    }
+
+    private function getOccupiedRanges(int $barberId, int $branchId, string $date, int $turnDuration): array
+    {
+        $occupiedRanges = [];
+
+        try {
+            $timeOffs = $this->connection->fetchAllAssociative(
+                <<<SQL
+                SELECT
+                    start_at_local,
+                    end_at_local
+                FROM tbd_barber_time_off
+                WHERE barber_user_id = :barberId
+                  AND (branch_id = :branchId OR branch_id IS NULL)
+                  AND start_at_local <= (:date::date + time '23:59:59')
+                  AND end_at_local >= (:date::date + time '00:00:00')
+                SQL,
+                [
+                    'barberId' => $barberId,
+                    'branchId' => $branchId,
+                    'date' => $date,
+                ],
+                [
+                    'barberId' => ParameterType::INTEGER,
+                    'branchId' => ParameterType::INTEGER,
+                ]
+            );
+
+            foreach ($timeOffs as $timeOff) {
+                $occupiedRanges[] = [
+                    'start' => new \DateTimeImmutable((string) $timeOff['start_at_local']),
+                    'end' => new \DateTimeImmutable((string) $timeOff['end_at_local']),
+                ];
+            }
+        } catch (\Throwable) {
+            // Si falla la lectura de bloqueos, no detenemos el flujo conversacional.
+            // El endpoint final de reserva volverá a validar traslapes.
+        }
+
+        try {
+            $sales = $this->connection->fetchAllAssociative(
+                <<<SQL
+                SELECT
+                    s.sale_date
+                FROM tbd_sale s
+                INNER JOIN tbd_sale_detail d ON d.sale_id = s.id
+                WHERE d.service_provider_id = :barberId
+                  AND s.sale_date >= :startOfDay
+                  AND s.sale_date <= :endOfDay
+                  AND s.status != :cancelledStatus
+                SQL,
+                [
+                    'barberId' => $barberId,
+                    'startOfDay' => $date . ' 00:00:00',
+                    'endOfDay' => $date . ' 23:59:59',
+                    'cancelledStatus' => 'CANCELLED',
+                ],
+                [
+                    'barberId' => ParameterType::INTEGER,
+                ]
+            );
+
+            foreach ($sales as $sale) {
+                $start = new \DateTimeImmutable((string) $sale['sale_date']);
+                $occupiedRanges[] = [
+                    'start' => $start,
+                    'end' => $start->modify(sprintf('+%d minutes', $turnDuration)),
+                ];
+            }
+        } catch (\Throwable) {
+            // La disponibilidad de citas se vuelve a validar al reservar.
+        }
+
+        try {
+            $appointments = $this->connection->fetchAllAssociative(
+                <<<SQL
+                SELECT
+                    aps.scheduled_start_at,
+                    aps.duration_minutes
+                FROM tbd_appointment_service aps
+                INNER JOIN tbd_barber_profile bp ON bp.id = aps.barber_profile_id
+                WHERE bp.barber_user_id = :barberId
+                  AND aps.scheduled_start_at >= :startOfDay
+                  AND aps.scheduled_start_at <= :endOfDay
+                SQL,
+                [
+                    'barberId' => $barberId,
+                    'startOfDay' => $date . ' 00:00:00',
+                    'endOfDay' => $date . ' 23:59:59',
+                ],
+                [
+                    'barberId' => ParameterType::INTEGER,
+                ]
+            );
+
+            foreach ($appointments as $appointment) {
+                $duration = (int) ($appointment['duration_minutes'] ?? $turnDuration);
+                $start = new \DateTimeImmutable((string) $appointment['scheduled_start_at']);
+
+                $occupiedRanges[] = [
+                    'start' => $start,
+                    'end' => $start->modify(sprintf('+%d minutes', $duration > 0 ? $duration : $turnDuration)),
+                ];
+            }
+        } catch (\Throwable) {
+            // Si las columnas de AppointmentService cambian, el endpoint final sigue protegiendo la reserva.
+        }
+
+        return $occupiedRanges;
+    }
+
+    private function generateSlots(
+        string $date,
+        string $openTime,
+        string $closeTime,
+        int $slotMinutes,
+        int $turnDuration,
+        array $occupiedRanges
+    ): array {
+        $slots = [];
+
+        $currentTime = new \DateTimeImmutable(sprintf('%s %s', $date, $openTime));
+        $endTime = new \DateTimeImmutable(sprintf('%s %s', $date, $closeTime));
+
+        while ($currentTime < $endTime) {
+            $slotStart = $currentTime;
+            $slotEnd = $currentTime->modify(sprintf('+%d minutes', $turnDuration));
+
+            if ($slotEnd > $endTime) {
+                break;
+            }
+
+            if (!$this->hasOverlap($slotStart, $slotEnd, $occupiedRanges)) {
+                $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
+            }
+
+            $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+        }
+
+        return $slots;
+    }
+
+    private function hasOverlap(\DateTimeImmutable $slotStart, \DateTimeImmutable $slotEnd, array $occupiedRanges): bool
+    {
+        foreach ($occupiedRanges as $range) {
+            $rangeStart = $range['start'];
+            $rangeEnd = $range['end'];
+
+            if (!$rangeStart instanceof \DateTimeInterface || !$rangeEnd instanceof \DateTimeInterface) {
+                continue;
+            }
+
+            if ($slotStart < $rangeEnd && $slotEnd > $rangeStart) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function groupSlots(array $slots): array
+    {
+        $groups = [
+            ['id' => 'Mañana', 'icon' => 'Sun', 'times' => []],
+            ['id' => 'Tarde', 'icon' => 'CloudSun', 'times' => []],
+            ['id' => 'Noche', 'icon' => 'Moon', 'times' => []],
+        ];
+
+        foreach ($slots as $timeLabel) {
+            $startTimeLabel = explode(' - ', $timeLabel)[0] ?? $timeLabel;
+            $time = \DateTimeImmutable::createFromFormat('h:i A', $startTimeLabel);
+
+            if (!$time) {
+                continue;
+            }
+
+            $hour = (int) $time->format('H');
+
+            if ($hour < 12) {
+                $groups[0]['times'][] = $timeLabel;
+            } elseif ($hour < 17) {
+                $groups[1]['times'][] = $timeLabel;
+            } else {
+                $groups[2]['times'][] = $timeLabel;
+            }
+        }
+
+        return array_values(array_filter(
+            $groups,
+            static fn (array $group): bool => !empty($group['times'])
+        ));
     }
 
     private function getBarberSpecialties(int $barberId): array

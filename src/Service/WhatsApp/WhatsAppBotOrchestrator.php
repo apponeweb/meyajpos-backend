@@ -60,10 +60,13 @@ final class WhatsAppBotOrchestrator
             }
 
             if ($state !== null && $state['step'] === 'selecting_time') {
-                $this->whatsAppClient->sendTextMessage(
-                    $from,
-                    "Ya tengo sucursal, servicio, fecha y barbero.\n\nEl siguiente paso será mostrarte los horarios disponibles."
-                );
+                $this->handleTimeSelection($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'collecting_customer_name') {
+                $this->handleCustomerName($from, $body, $state);
 
                 return;
             }
@@ -343,6 +346,35 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
+        $slotGroups = $this->catalogService->getAvailableSlots(
+            (int) $barber['id'],
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id']
+        );
+
+        if ($slotGroups === []) {
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_barber',
+                [
+                    'barber_id' => (int) $barber['id'],
+                    'barber_name' => (string) $barber['name'],
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Seleccionaste a *%s*, pero por el momento no encontré horarios disponibles para el *%s*.\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
+                    (string) $barber['name'],
+                    (string) $state['date']
+                )
+            );
+
+            return;
+        }
+
         $this->conversationStateService->updateState(
             $from,
             'selecting_time',
@@ -354,12 +386,120 @@ final class WhatsAppBotOrchestrator
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            sprintf(
-                "Perfecto. Seleccionaste a *%s*.\n\nResumen hasta ahora:\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nEl siguiente paso será mostrarte los horarios disponibles.",
+            $this->catalogService->formatAvailableSlotsMenu(
                 (string) $barber['name'],
+                (string) $state['date'],
+                $slotGroups
+            )
+        );
+    }
+
+    private function handleTimeSelection(string $from, string $normalizedBody, array $state): void
+    {
+        if (!ctype_digit($normalizedBody)) {
+            $slotGroups = $this->catalogService->getAvailableSlots(
+                (int) $state['barber_id'],
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Responde con el número del horario.\n\n" . $this->catalogService->formatAvailableSlotsMenu(
+                    (string) $state['barber_name'],
+                    (string) $state['date'],
+                    $slotGroups
+                )
+            );
+
+            return;
+        }
+
+        $option = (int) $normalizedBody;
+
+        $slot = $this->catalogService->getSlotByOption(
+            (int) $state['barber_id'],
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id'],
+            $option
+        );
+
+        if ($slot === null) {
+            $slotGroups = $this->catalogService->getAvailableSlots(
+                (int) $state['barber_id'],
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No encontré esa opción de horario.\n\n" . $this->catalogService->formatAvailableSlotsMenu(
+                    (string) $state['barber_name'],
+                    (string) $state['date'],
+                    $slotGroups
+                )
+            );
+
+            return;
+        }
+
+        $timeLabel = (string) $slot['time'];
+        $scheduledDateTime = $this->catalogService->buildScheduledDateTime(
+            (string) $state['date'],
+            $timeLabel
+        );
+
+        $this->conversationStateService->updateState(
+            $from,
+            'collecting_customer_name',
+            [
+                'time_label' => $timeLabel,
+                'scheduled_date_time' => $scheduledDateTime,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Perfecto. Apartamos este horario:\n\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nPara continuar, escribe tu *nombre completo*.",
                 (string) $state['branch_name'],
                 (string) $state['service_name'],
-                (string) $state['date']
+                (string) $state['barber_name'],
+                (string) $state['date'],
+                $timeLabel
+            )
+        );
+    }
+
+    private function handleCustomerName(string $from, string $body, array $state): void
+    {
+        $customerName = trim($body);
+
+        if (mb_strlen($customerName) < 3) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "El nombre parece muy corto.\n\nPor favor escribe tu *nombre completo*."
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'collecting_customer_email',
+            [
+                'customer_name' => $customerName,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Gracias, *%s*.\n\nAhora escribe tu *correo electrónico* para registrar la cita.",
+                $customerName
             )
         );
     }
