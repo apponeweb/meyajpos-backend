@@ -22,7 +22,11 @@ final class WhatsAppBotOrchestrator
 
         $normalizedBody = mb_strtolower(trim($body));
 
-        if (in_array($normalizedBody, ['agenda', 'agendar', 'cita', 'quiero una cita', 'quiero agendar'], true)) {
+        if (
+            in_array($normalizedBody, ['agenda', 'agendar', 'cita', 'quiero una cita', 'quiero agendar'], true)
+            || str_contains($normalizedBody, 'servicio')
+            || str_contains($normalizedBody, 'servicios')
+        ) {
             $state = $this->conversationStateService->start($from, 1);
             $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
 
@@ -33,6 +37,7 @@ final class WhatsAppBotOrchestrator
 
             return;
         }
+
 
         $state = $this->conversationStateService->getState($from);
 
@@ -326,11 +331,12 @@ final class WhatsAppBotOrchestrator
     {
         return "No estoy seguro de haber entendido tu mensaje.\n\n"
             . "Puedes escribir:\n"
-            . "- servicios\n"
             . "- agenda\n"
+            . "- quiero una cita\n"
+            . "- servicios\n"
             . "- barberos\n"
-            . "- reagendar\n"
             . "- productos\n"
-            . "- corte para cara redonda";
+            . "- reagendar\n"
+            . "Para consultar servicios o agendar, primero te pediré la sucursal.";
     }
 }
