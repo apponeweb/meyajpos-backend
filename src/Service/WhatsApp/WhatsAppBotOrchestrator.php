@@ -46,12 +46,18 @@ final class WhatsAppBotOrchestrator
                 'intent' => $intent,
                 'result' => $result,
             ]);
-        } catch (\Throwable $exception) {
-            $this->logger->error('Error procesando mensaje de WhatsApp', [
-                'exception' => $exception->getMessage(),
-                'message' => $message,
-            ]);
-        }
+            } catch (\Throwable $exception) {
+                $this->logger->error(sprintf(
+                    'Error procesando mensaje de WhatsApp: %s | class=%s | file=%s | line=%d',
+                    $exception->getMessage(),
+                    $exception::class,
+                    $exception->getFile(),
+                    $exception->getLine()
+                ), [
+                    'message' => $message,
+                    'trace' => $exception->getTraceAsString(),
+                ]);
+            }
     }
 
     private function mainMenu(): string
