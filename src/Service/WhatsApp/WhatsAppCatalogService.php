@@ -3,7 +3,8 @@
 namespace App\Service\WhatsApp;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\ParameterType;
+
 
 class WhatsAppCatalogService
 {
@@ -29,9 +30,9 @@ class WhatsAppCatalogService
                 LIMIT :limit
                 SQL,
                 ['limit' => $limit],
-                ['limit' => \PDO::PARAM_INT]
+                ['limit' => ParameterType::INTEGER]
             );
-        } catch (Exception) {
+        } catch (\Throwable) {
             return "Por el momento no pude consultar el catálogo de servicios.\n\nIntenta de nuevo en unos minutos o escribe *hola* para ver el menú.";
         }
 
