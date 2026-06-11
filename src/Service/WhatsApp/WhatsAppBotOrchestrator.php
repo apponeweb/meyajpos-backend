@@ -6,25 +6,119 @@ use Psr\Log\LoggerInterface;
 
 final class WhatsAppBotOrchestrator
 {
-    public function __construct(
+        public function __construct(
         private readonly WhatsAppClient $whatsAppClient,
         private readonly IntentClassifier $intentClassifier,
         private readonly WhatsAppCatalogService $catalogService,
+        private readonly WhatsAppConversationStateService $conversationStateService,
         private readonly LoggerInterface $logger,
     ) {
     }
-
 
     public function handleIncomingMessage(array $message, array $payload): void
     {
         $from = $message['from'] ?? null;
         $body = trim((string) ($message['body'] ?? ''));
 
+        $normalizedBody = mb_strtolower(trim($body));
+
+        if (in_array($normalizedBody, ['agenda', 'agendar', 'cita', 'quiero una cita', 'quiero agendar'], true)) {
+            $state = $this->conversationStateService->start($from, 1);
+            $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                $this->catalogService->formatBranchesMenu($branches)
+            );
+
+            return;
+        }
+
+        $state = $this->conversationStateService->getState($from);
+
+        if ($state !== null && $state['step'] === 'selecting_branch' && ctype_digit($normalizedBody)) {
+            $option = (int) $normalizedBody;
+            $companyId = (int) $state['company_id'];
+
+            $branch = $this->catalogService->getBranchByOption($companyId, $option);
+
+            if ($branch === null) {
+                $branches = $this->catalogService->getBranchesByCompany($companyId);
+
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "No encontré esa opción de sucursal.\n\n" . $this->catalogService->formatBranchesMenu($branches)
+                );
+
+                return;
+            }
+
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_service',
+                [
+                    'branch_id' => (int) $branch['id'],
+                    'branch_name' => (string) $branch['name'],
+                    'branch_address' => (string) ($branch['address'] ?? ''),
+                ]
+            );
+
+            $services = $this->catalogService->getServicesByBranch((int) $branch['id']);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                $this->catalogService->formatServicesMenu((string) $branch['name'], $services)
+            );
+
+            return;
+        }
+
+        if ($state !== null && $state['step'] === 'selecting_service' && ctype_digit($normalizedBody)) {
+            $option = (int) $normalizedBody;
+            $branchId = (int) $state['branch_id'];
+
+            $service = $this->catalogService->getServiceByOption($branchId, $option);
+
+            if ($service === null) {
+                $services = $this->catalogService->getServicesByBranch($branchId);
+
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "No encontré esa opción de servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+                );
+
+                return;
+            }
+
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_date',
+                [
+                    'service_id' => (int) $service['id'],
+                    'service_name' => (string) $service['name'],
+                    'service_price' => (float) $service['price'],
+                    'service_duration' => (int) $service['duration'],
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*",
+                    (string) $service['name']
+                )
+            );
+
+            return;
+        }
+
+
         if (!$from) {
             return;
         }
 
         try {
+       
             $intent = $this->intentClassifier->detect($body);
 
             $responseText = match ($intent) {
