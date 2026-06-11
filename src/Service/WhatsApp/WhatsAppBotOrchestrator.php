@@ -27,13 +27,18 @@ final class WhatsAppBotOrchestrator
         $normalizedBody = mb_strtolower(trim($body));
 
         try {
-            if ($this->shouldStartBookingFlow($normalizedBody)) {
-                $this->startBookingFlow($from);
+            $state = $this->conversationStateService->getState($from);
+
+            if ($state !== null && in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true)) {
+                $this->conversationStateService->clear($from);
+
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "Listo, cancelé este flujo de agenda.\n\nPuedes escribir *agenda* cuando quieras comenzar de nuevo."
+                );
 
                 return;
             }
-
-            $state = $this->conversationStateService->getState($from);
 
             if ($state !== null && $state['step'] === 'selecting_branch' && ctype_digit($normalizedBody)) {
                 $this->handleBranchSelection($from, $normalizedBody, $state);
@@ -67,6 +72,36 @@ final class WhatsAppBotOrchestrator
 
             if ($state !== null && $state['step'] === 'collecting_customer_name') {
                 $this->handleCustomerName($from, $body, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'collecting_customer_email') {
+                $this->handleCustomerEmail($from, $body, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'collecting_customer_phone') {
+                $this->handleCustomerPhone($from, $body, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'collecting_customer_notes') {
+                $this->handleCustomerNotes($from, $body, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'confirming_booking') {
+                $this->handleBookingConfirmation($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($this->shouldStartBookingFlow($normalizedBody)) {
+                $this->startBookingFlow($from);
 
                 return;
             }
@@ -502,6 +537,155 @@ final class WhatsAppBotOrchestrator
                 $customerName
             )
         );
+    }
+
+    private function handleCustomerEmail(string $from, string $body, array $state): void
+    {
+        $email = mb_strtolower(trim($body));
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "El correo no parece válido.\n\nPor favor escribe un correo como:\ncliente@email.com"
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'collecting_customer_phone',
+            [
+                'customer_email' => $email,
+            ]
+        );
+
+        $suggestedPhone = $this->extractPhoneFromWhatsAppId($from);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Correo registrado: *%s*.\n\nAhora escribe tu *teléfono a 10 dígitos*.\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número o escribir otro.",
+                $email,
+                $suggestedPhone
+            )
+        );
+    }
+
+    private function handleCustomerPhone(string $from, string $body, array $state): void
+    {
+        $phone = preg_replace('/\D+/', '', $body) ?? '';
+
+        if (str_starts_with($phone, '52') && strlen($phone) > 10) {
+            $phone = substr($phone, -10);
+        }
+
+        if (strlen($phone) !== 10) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "El teléfono debe tener 10 dígitos.\n\nEjemplo:\n8180201499"
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'collecting_customer_notes',
+            [
+                'customer_phone' => $phone,
+                'customer_country_code' => '+52',
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
+        );
+    }
+
+    private function handleCustomerNotes(string $from, string $body, array $state): void
+    {
+        $notes = trim($body);
+        $normalizedNotes = mb_strtolower($notes);
+
+        if ($notes === '' || in_array($normalizedNotes, ['sin notas', 'no', 'ninguna', 'nada'], true)) {
+            $notes = '';
+        }
+
+        $updatedState = $this->conversationStateService->updateState(
+            $from,
+            'confirming_booking',
+            [
+                'customer_notes' => $notes,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->formatBookingConfirmation($updatedState)
+        );
+    }
+
+    private function handleBookingConfirmation(string $from, string $normalizedBody, array $state): void
+    {
+        if (in_array($normalizedBody, ['confirmar', 'confirmo', 'si', 'sí', 'ok'], true)) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Perfecto. Ya tengo todos los datos para crear la cita.\n\nEl siguiente paso técnico será conectar este flujo con la reserva final del sistema."
+            );
+
+            return;
+        }
+
+        if (in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, cancelé este flujo de agenda.\n\nPuedes escribir *agenda* cuando quieras comenzar de nuevo."
+            );
+
+            return;
+        }
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->formatBookingConfirmation($state)
+        );
+    }
+
+    private function formatBookingConfirmation(array $state): string
+    {
+        $notes = trim((string) ($state['customer_notes'] ?? ''));
+
+        return sprintf(
+            "Confirma los datos de tu cita:\n\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\nNombre: *%s*\nCorreo: *%s*\nTeléfono: *%s*\nNotas: *%s*\n\nResponde *CONFIRMAR* para reservar o *CANCELAR* para salir.",
+            (string) ($state['branch_name'] ?? ''),
+            (string) ($state['service_name'] ?? ''),
+            (string) ($state['barber_name'] ?? ''),
+            (string) ($state['date'] ?? ''),
+            (string) ($state['time_label'] ?? ''),
+            (string) ($state['customer_name'] ?? ''),
+            (string) ($state['customer_email'] ?? ''),
+            (string) ($state['customer_phone'] ?? ''),
+            $notes !== '' ? $notes : 'Sin notas'
+        );
+    }
+
+    private function extractPhoneFromWhatsAppId(string $waId): string
+    {
+        $phone = preg_replace('/\D+/', '', $waId) ?? '';
+
+        if (str_starts_with($phone, '521') && strlen($phone) === 13) {
+            return substr($phone, 3);
+        }
+
+        if (str_starts_with($phone, '52') && strlen($phone) === 12) {
+            return substr($phone, 2);
+        }
+
+        return strlen($phone) > 10 ? substr($phone, -10) : $phone;
     }
 
     private function parseBookingDate(string $message): ?string
