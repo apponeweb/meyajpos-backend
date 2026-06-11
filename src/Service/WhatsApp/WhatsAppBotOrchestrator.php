@@ -53,6 +53,21 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            if ($state !== null && $state['step'] === 'selecting_barber') {
+                $this->handleBarberSelection($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'selecting_time') {
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    "Ya tengo sucursal, servicio, fecha y barbero.\n\nEl siguiente paso será mostrarte los horarios disponibles."
+                );
+
+                return;
+            }
+
             $intent = $this->intentClassifier->detect($body);
 
             $responseText = match ($intent) {
@@ -225,6 +240,39 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
+        $branchId = (int) $state['branch_id'];
+        $serviceId = (int) $state['service_id'];
+        $branchName = (string) $state['branch_name'];
+        $serviceName = (string) $state['service_name'];
+
+        $barbers = $this->catalogService->getAvailableBarbers(
+            $branchId,
+            $date,
+            $serviceId
+        );
+
+        if ($barbers === []) {
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_date',
+                [
+                    'date' => $date,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                $this->catalogService->formatAvailableBarbersMenu(
+                    $branchName,
+                    $serviceName,
+                    $date,
+                    $barbers
+                )
+            );
+
+            return;
+        }
+
         $this->conversationStateService->updateState(
             $from,
             'selecting_barber',
@@ -235,11 +283,83 @@ final class WhatsAppBotOrchestrator
 
         $this->whatsAppClient->sendTextMessage(
             $from,
+            $this->catalogService->formatAvailableBarbersMenu(
+                $branchName,
+                $serviceName,
+                $date,
+                $barbers
+            )
+        );
+    }
+
+    private function handleBarberSelection(string $from, string $normalizedBody, array $state): void
+    {
+        if (!ctype_digit($normalizedBody)) {
+            $barbers = $this->catalogService->getAvailableBarbers(
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Responde con el número del barbero.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
+                    (string) $state['branch_name'],
+                    (string) $state['service_name'],
+                    (string) $state['date'],
+                    $barbers
+                )
+            );
+
+            return;
+        }
+
+        $option = (int) $normalizedBody;
+
+        $barber = $this->catalogService->getAvailableBarberByOption(
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id'],
+            $option
+        );
+
+        if ($barber === null) {
+            $barbers = $this->catalogService->getAvailableBarbers(
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No encontré esa opción de barbero.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
+                    (string) $state['branch_name'],
+                    (string) $state['service_name'],
+                    (string) $state['date'],
+                    $barbers
+                )
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_time',
+            [
+                'barber_id' => (int) $barber['id'],
+                'barber_name' => (string) $barber['name'],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
             sprintf(
-                "Perfecto. Revisaré disponibilidad para:\n\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nEl siguiente paso será mostrarte los barberos disponibles.",
+                "Perfecto. Seleccionaste a *%s*.\n\nResumen hasta ahora:\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nEl siguiente paso será mostrarte los horarios disponibles.",
+                (string) $barber['name'],
                 (string) $state['branch_name'],
                 (string) $state['service_name'],
-                $date
+                (string) $state['date']
             )
         );
     }
