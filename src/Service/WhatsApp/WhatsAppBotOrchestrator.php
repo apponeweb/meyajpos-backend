@@ -6,7 +6,7 @@ use Psr\Log\LoggerInterface;
 
 final class WhatsAppBotOrchestrator
 {
-        public function __construct(
+    public function __construct(
         private readonly WhatsAppClient $whatsAppClient,
         private readonly IntentClassifier $intentClassifier,
         private readonly WhatsAppCatalogService $catalogService,
@@ -20,118 +20,47 @@ final class WhatsAppBotOrchestrator
         $from = $message['from'] ?? null;
         $body = trim((string) ($message['body'] ?? ''));
 
-        $normalizedBody = mb_strtolower(trim($body));
-
-        if (
-            in_array($normalizedBody, ['agenda', 'agendar', 'cita', 'quiero una cita', 'quiero agendar'], true)
-            || str_contains($normalizedBody, 'servicio')
-            || str_contains($normalizedBody, 'servicios')
-        ) {
-            $state = $this->conversationStateService->start($from, 1);
-            $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                $this->catalogService->formatBranchesMenu($branches)
-            );
-
-            return;
-        }
-
-
-        $state = $this->conversationStateService->getState($from);
-
-        if ($state !== null && $state['step'] === 'selecting_branch' && ctype_digit($normalizedBody)) {
-            $option = (int) $normalizedBody;
-            $companyId = (int) $state['company_id'];
-
-            $branch = $this->catalogService->getBranchByOption($companyId, $option);
-
-            if ($branch === null) {
-                $branches = $this->catalogService->getBranchesByCompany($companyId);
-
-                $this->whatsAppClient->sendTextMessage(
-                    $from,
-                    "No encontré esa opción de sucursal.\n\n" . $this->catalogService->formatBranchesMenu($branches)
-                );
-
-                return;
-            }
-
-            $this->conversationStateService->updateState(
-                $from,
-                'selecting_service',
-                [
-                    'branch_id' => (int) $branch['id'],
-                    'branch_name' => (string) $branch['name'],
-                    'branch_address' => (string) ($branch['address'] ?? ''),
-                ]
-            );
-
-            $services = $this->catalogService->getServicesByBranch((int) $branch['id']);
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                $this->catalogService->formatServicesMenu((string) $branch['name'], $services)
-            );
-
-            return;
-        }
-
-        if ($state !== null && $state['step'] === 'selecting_service' && ctype_digit($normalizedBody)) {
-            $option = (int) $normalizedBody;
-            $branchId = (int) $state['branch_id'];
-
-            $service = $this->catalogService->getServiceByOption($branchId, $option);
-
-            if ($service === null) {
-                $services = $this->catalogService->getServicesByBranch($branchId);
-
-                $this->whatsAppClient->sendTextMessage(
-                    $from,
-                    "No encontré esa opción de servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
-                );
-
-                return;
-            }
-
-            $this->conversationStateService->updateState(
-                $from,
-                'selecting_date',
-                [
-                    'service_id' => (int) $service['id'],
-                    'service_name' => (string) $service['name'],
-                    'service_price' => (float) $service['price'],
-                    'service_duration' => (int) $service['duration'],
-                ]
-            );
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                sprintf(
-                    "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*",
-                    (string) $service['name']
-                )
-            );
-
-            return;
-        }
-
-
         if (!$from) {
             return;
         }
 
+        $normalizedBody = mb_strtolower(trim($body));
+
         try {
-       
+            if ($this->shouldStartBookingFlow($normalizedBody)) {
+                $this->startBookingFlow($from);
+
+                return;
+            }
+
+            $state = $this->conversationStateService->getState($from);
+
+            if ($state !== null && $state['step'] === 'selecting_branch' && ctype_digit($normalizedBody)) {
+                $this->handleBranchSelection($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'selecting_service' && ctype_digit($normalizedBody)) {
+                $this->handleServiceSelection($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'selecting_date') {
+                $this->handleDateSelection($from, $normalizedBody, $state);
+
+                return;
+            }
+
             $intent = $this->intentClassifier->detect($body);
 
             $responseText = match ($intent) {
                 'greeting' => $this->mainMenu(),
-                'check_agenda' => $this->agendaResponse($body),
+                'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
                 'check_barbers' => $this->barbersResponse(),
                 'reschedule' => $this->rescheduleResponse(),
-                'list_services' => $this->servicesResponse(),
+                'list_services' => $this->startBookingFlowAndReturnMessage($from),
                 'product_recommendation' => $this->productsResponse($body),
                 'haircut_recommendation' => $this->haircutRecommendationResponse($body),
                 default => $this->unknownResponse(),
@@ -145,76 +74,253 @@ final class WhatsAppBotOrchestrator
                 'intent' => $intent,
                 'result' => $result,
             ]);
-            } catch (\Throwable $exception) {
-                $this->logger->error(sprintf(
-                    'Error procesando mensaje de WhatsApp: %s | class=%s | file=%s | line=%d',
-                    $exception->getMessage(),
-                    $exception::class,
-                    $exception->getFile(),
-                    $exception->getLine()
-                ), [
-                    'message' => $message,
-                    'trace' => $exception->getTraceAsString(),
-                ]);
+        } catch (\Throwable $exception) {
+            $this->logger->error(sprintf(
+                'Error procesando mensaje de WhatsApp: %s | class=%s | file=%s | line=%d',
+                $exception->getMessage(),
+                $exception::class,
+                $exception->getFile(),
+                $exception->getLine()
+            ), [
+                'message' => $message,
+                'trace' => $exception->getTraceAsString(),
+            ]);
+        }
+    }
+
+    private function shouldStartBookingFlow(string $normalizedBody): bool
+    {
+        return in_array($normalizedBody, [
+                'agenda',
+                'agendar',
+                'cita',
+                'quiero una cita',
+                'quiero agendar',
+                'servicio',
+                'servicios',
+                'ver servicios',
+            ], true)
+            || str_contains($normalizedBody, 'quiero una cita')
+            || str_contains($normalizedBody, 'quiero agendar')
+            || str_contains($normalizedBody, 'agendar cita')
+            || str_contains($normalizedBody, 'hacer cita')
+            || str_contains($normalizedBody, 'servicio')
+            || str_contains($normalizedBody, 'servicios');
+    }
+
+    private function startBookingFlow(string $from): void
+    {
+        $state = $this->conversationStateService->start($from, 1);
+        $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->catalogService->formatBranchesMenu($branches)
+        );
+    }
+
+    private function startBookingFlowAndReturnMessage(string $from): string
+    {
+        $state = $this->conversationStateService->start($from, 1);
+        $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+
+        return $this->catalogService->formatBranchesMenu($branches);
+    }
+
+    private function handleBranchSelection(string $from, string $normalizedBody, array $state): void
+    {
+        $option = (int) $normalizedBody;
+        $companyId = (int) $state['company_id'];
+
+        $branch = $this->catalogService->getBranchByOption($companyId, $option);
+
+        if ($branch === null) {
+            $branches = $this->catalogService->getBranchesByCompany($companyId);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No encontré esa opción de sucursal.\n\n" . $this->catalogService->formatBranchesMenu($branches)
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_service',
+            [
+                'branch_id' => (int) $branch['id'],
+                'branch_name' => (string) $branch['name'],
+                'branch_address' => (string) ($branch['address'] ?? ''),
+            ]
+        );
+
+        $services = $this->catalogService->getServicesByBranch((int) $branch['id']);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->catalogService->formatServicesMenu((string) $branch['name'], $services)
+        );
+    }
+
+    private function handleServiceSelection(string $from, string $normalizedBody, array $state): void
+    {
+        $option = (int) $normalizedBody;
+        $branchId = (int) $state['branch_id'];
+
+        $service = $this->catalogService->getServiceByOption($branchId, $option);
+
+        if ($service === null) {
+            $services = $this->catalogService->getServicesByBranch($branchId);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No encontré esa opción de servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_date',
+            [
+                'service_id' => (int) $service['id'],
+                'service_name' => (string) $service['name'],
+                'service_price' => (float) $service['price'],
+                'service_duration' => (int) $service['duration'],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*",
+                (string) $service['name']
+            )
+        );
+    }
+
+    private function handleDateSelection(string $from, string $normalizedBody, array $state): void
+    {
+        $date = $this->parseBookingDate($normalizedBody);
+
+        if ($date === null) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No pude entender la fecha.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+            );
+
+            return;
+        }
+
+        if (empty($state['branch_id']) || empty($state['service_id'])) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Perdí algunos datos de la cita. Vamos a iniciar de nuevo.\n\nEscribe *agenda* para comenzar."
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_barber',
+            [
+                'date' => $date,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Perfecto. Revisaré disponibilidad para:\n\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nEl siguiente paso será mostrarte los barberos disponibles.",
+                (string) $state['branch_name'],
+                (string) $state['service_name'],
+                $date
+            )
+        );
+    }
+
+    private function parseBookingDate(string $message): ?string
+    {
+        $message = mb_strtolower(trim($message));
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('America/Mexico_City'));
+
+        if ($message === 'hoy') {
+            return $today->format('Y-m-d');
+        }
+
+        if ($message === 'mañana' || $message === 'manana') {
+            return $today->modify('+1 day')->format('Y-m-d');
+        }
+
+        if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $message, $matches)) {
+            $day = (int) $matches[1];
+            $month = (int) $matches[2];
+            $year = (int) $matches[3];
+
+            if (!checkdate($month, $day, $year)) {
+                return null;
             }
+
+            return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        }
+
+        if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $message, $matches)) {
+            $year = (int) $matches[1];
+            $month = (int) $matches[2];
+            $day = (int) $matches[3];
+
+            if (!checkdate($month, $day, $year)) {
+                return null;
+            }
+
+            return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        }
+
+        return null;
     }
 
     private function mainMenu(): string
     {
         return "Hola 👋 Soy el asistente de la barbería.\n\n"
             . "Puedo ayudarte con:\n"
-            . "1. Ver horarios disponibles\n"
-            . "2. Ver barberos disponibles\n"
-            . "3. Reagendar una cita\n"
-            . "4. Ver servicios\n"
+            . "1. Agendar una cita\n"
+            . "2. Ver servicios por sucursal\n"
+            . "3. Ver barberos disponibles\n"
+            . "4. Reagendar una cita\n"
             . "5. Recomendar productos\n"
             . "6. Recomendar un corte según tu tipo de cara\n\n"
             . "Escribe por ejemplo:\n"
+            . "- agenda\n"
+            . "- quiero una cita\n"
             . "- servicios\n"
-            . "- agenda mañana\n"
             . "- barberos\n"
             . "- productos\n"
-            . "- corte para cara redonda";
+            . "- corte para cara redonda\n\n"
+            . "Para consultar servicios o agendar, primero te pediré la sucursal.";
     }
 
     private function servicesResponse(): string
     {
-        return $this->catalogService->getServicesMenu();
+        return "Para consultar servicios primero necesito saber la sucursal.\n\n"
+            . "Escribe *servicios* o *agenda* para comenzar.";
     }
 
     private function agendaResponse(string $message): string
     {
-        $text = mb_strtolower($message);
-
-        if (str_contains($text, 'hoy')) {
-            return "Claro. Para hoy puedo ayudarte a revisar disponibilidad.\n\n"
-                . "Por ahora indícame el servicio que necesitas:\n"
-                . "1. Corte\n"
-                . "2. Corte y barba\n"
-                . "3. Barba\n\n"
-                . "Ejemplo: quiero corte hoy";
-        }
-
-        if (str_contains($text, 'mañana') || str_contains($text, 'manana')) {
-            return "Claro. Para mañana puedo ayudarte a revisar disponibilidad.\n\n"
-                . "Indícame el servicio y si prefieres algún barbero.\n\n"
-                . "Ejemplo: corte y barba mañana con cualquier barbero";
-        }
-
-        return "Claro. Para revisar disponibilidad dime el día que prefieres.\n\n"
-            . "Puedes escribir:\n"
-            . "- agenda hoy\n"
-            . "- agenda mañana\n"
-            . "- agenda viernes\n"
-            . "- agenda 15/06/2026";
+        return "Claro. Para revisar disponibilidad vamos a iniciar tu cita paso a paso.\n\n"
+            . "Escribe *agenda* para comenzar.";
     }
 
     private function barbersResponse(): string
     {
         return "Puedo ayudarte a consultar barberos disponibles.\n\n"
-            . "Por ahora dime el día y el servicio que buscas.\n\n"
-            . "Ejemplo:\n"
-            . "barberos disponibles mañana para corte";
+            . "Para hacerlo necesito primero conocer sucursal, servicio y fecha.\n\n"
+            . "Escribe *agenda* para comenzar.";
     }
 
     private function rescheduleResponse(): string
@@ -336,7 +442,7 @@ final class WhatsAppBotOrchestrator
             . "- servicios\n"
             . "- barberos\n"
             . "- productos\n"
-            . "- reagendar\n"
+            . "- reagendar\n\n"
             . "Para consultar servicios o agendar, primero te pediré la sucursal.";
     }
 }
