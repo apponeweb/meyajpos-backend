@@ -130,13 +130,12 @@ public function getServicesByBranch(int $branchId): array
             mp.id,
             mp.name,
             mp.price,
-            COALESCE(bs.duration_override_minutes, 60) AS duration
+            COALESCE(MAX(bs.duration_override_minutes), 60) AS duration
         FROM tbd_branch_product bp
         INNER JOIN tbd_master_product mp ON mp.id = bp.product_id
         LEFT JOIN tbr_barber_service bs ON bs.product_id = mp.id
         WHERE bp.branch_id = :branchId
           AND bp.enabled = true
-          AND bp.deleted_at IS NULL
           AND mp.is_active = true
           AND mp.deleted_at IS NULL
           AND mp.service_type_id = 1
