@@ -7,6 +7,8 @@ use Doctrine\DBAL\ParameterType;
 
 class WhatsAppCatalogService
 {
+    private const BOOKING_TIMEZONE = 'America/Mexico_City';
+
     public function __construct(
         private readonly Connection $connection,
     ) {
@@ -129,7 +131,11 @@ class WhatsAppCatalogService
                 mp.id,
                 mp.name,
                 mp.price,
-                COALESCE(MAX(bs.duration_override_minutes), 60) AS duration
+                COALESCE(
+                    MAX(NULLIF(bs.duration_override_minutes, 0)),
+                    MAX(NULLIF(bs.turn_duration, 0)),
+                    60
+                ) AS duration
             FROM tbd_branch_product bp
             INNER JOIN tbd_master_product mp ON mp.id = bp.product_id
             LEFT JOIN tbr_barber_service bs ON bs.product_id = mp.id
@@ -226,8 +232,8 @@ class WhatsAppCatalogService
                   WHERE bto.barber_user_id = u.id
                     AND (bto.branch_id = :branchId OR bto.branch_id IS NULL)
                     AND (
-                        (:date::date + bsched.open_time) < bto.end_at_local
-                        AND (:date::date + bsched.close_time) > bto.start_at_local
+                        (CAST(:date AS date) + bsched.open_time) < bto.end_at_local
+                        AND (CAST(:date AS date) + bsched.close_time) > bto.start_at_local
                     )
               )
             ORDER BY name ASC
@@ -340,7 +346,7 @@ class WhatsAppCatalogService
             <<<SQL
             SELECT
                 id,
-                COALESCE(duration_override_minutes, 60) AS duration
+                COALESCE(NULLIF(duration_override_minutes, 0), 60) AS duration
             FROM tbr_barber_service
             WHERE barber_user_id = :barberId
               AND product_id = :productId
@@ -366,8 +372,8 @@ class WhatsAppCatalogService
             SELECT
                 open_time,
                 close_time,
-                COALESCE(slot_minutes, 30) AS slot_minutes,
-                COALESCE(turn_duration, :defaultDuration) AS turn_duration
+                COALESCE(NULLIF(slot_minutes, 0), 30) AS slot_minutes,
+                COALESCE(NULLIF(turn_duration, 0), 60) AS turn_duration
             FROM tbd_barber_schedules
             WHERE barber_user_id = :barberId
               AND branch_id = :branchId
@@ -382,13 +388,11 @@ class WhatsAppCatalogService
                 'branchId' => $branchId,
                 'dayOfWeek' => $dayOfWeek,
                 'date' => $date,
-                'defaultDuration' => (int) $barberService['duration'],
             ],
             [
                 'barberId' => ParameterType::INTEGER,
                 'branchId' => ParameterType::INTEGER,
                 'dayOfWeek' => ParameterType::INTEGER,
-                'defaultDuration' => ParameterType::INTEGER,
             ]
         );
 
@@ -396,16 +400,41 @@ class WhatsAppCatalogService
             return [];
         }
 
+        /*
+         * Regla correcta:
+         * slot_minutes = cada cuántos minutos puede iniciar una cita.
+         * turn_duration / duración del servicio = cuánto dura realmente la cita.
+         *
+         * Ejemplo:
+         * slot_minutes = 30
+         * turn_duration = 60
+         *
+         * Resultado:
+         * 12:00 PM - 01:00 PM
+         * 12:30 PM - 01:30 PM
+         * 01:00 PM - 02:00 PM
+         */
         $slotMinutes = (int) ($schedule['slot_minutes'] ?? 30);
-        $turnDuration = (int) ($schedule['turn_duration'] ?? $barberService['duration'] ?? 60);
+        $scheduleTurnDuration = (int) ($schedule['turn_duration'] ?? 60);
+        $serviceDuration = (int) ($barberService['duration'] ?? 60);
 
         if ($slotMinutes <= 0) {
             $slotMinutes = 30;
         }
 
-        if ($turnDuration <= 0) {
-            $turnDuration = 60;
+        if ($scheduleTurnDuration <= 0) {
+            $scheduleTurnDuration = 60;
         }
+
+        if ($serviceDuration <= 0) {
+            $serviceDuration = 60;
+        }
+
+        /*
+         * Si la duración del servicio cambió a 60, pero el schedule sigue en 30,
+         * usamos la duración mayor para no mostrar slots visuales de 30 min.
+         */
+        $turnDuration = max($scheduleTurnDuration, $serviceDuration);
 
         $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration);
 
@@ -524,8 +553,8 @@ class WhatsAppCatalogService
                 FROM tbd_barber_time_off
                 WHERE barber_user_id = :barberId
                   AND (branch_id = :branchId OR branch_id IS NULL)
-                  AND start_at_local <= (:date::date + time '23:59:59')
-                  AND end_at_local >= (:date::date + time '00:00:00')
+                  AND start_at_local <= (CAST(:date AS date) + time '23:59:59')
+                  AND end_at_local >= (CAST(:date AS date) + time '00:00:00')
                 SQL,
                 [
                     'barberId' => $barberId,
@@ -540,13 +569,15 @@ class WhatsAppCatalogService
 
             foreach ($timeOffs as $timeOff) {
                 $occupiedRanges[] = [
-                    'start' => new \DateTimeImmutable((string) $timeOff['start_at_local']),
-                    'end' => new \DateTimeImmutable((string) $timeOff['end_at_local']),
+                    'start' => new \DateTimeImmutable((string) $timeOff['start_at_local'], new \DateTimeZone(self::BOOKING_TIMEZONE)),
+                    'end' => new \DateTimeImmutable((string) $timeOff['end_at_local'], new \DateTimeZone(self::BOOKING_TIMEZONE)),
                 ];
             }
         } catch (\Throwable) {
-            // Si falla la lectura de bloqueos, no detenemos el flujo conversacional.
-            // El endpoint final de reserva volverá a validar traslapes.
+            /*
+             * Si falla la lectura de bloqueos, no detenemos el flujo conversacional.
+             * El endpoint final de reserva volverá a validar traslapes.
+             */
         }
 
         try {
@@ -573,32 +604,38 @@ class WhatsAppCatalogService
             );
 
             foreach ($sales as $sale) {
-                $start = new \DateTimeImmutable((string) $sale['sale_date']);
+                $start = new \DateTimeImmutable((string) $sale['sale_date'], new \DateTimeZone(self::BOOKING_TIMEZONE));
+
                 $occupiedRanges[] = [
                     'start' => $start,
                     'end' => $start->modify(sprintf('+%d minutes', $turnDuration)),
                 ];
             }
         } catch (\Throwable) {
-            // La disponibilidad de citas se vuelve a validar al reservar.
+            /*
+             * La disponibilidad de citas se vuelve a validar al reservar.
+             */
         }
 
         try {
             $appointments = $this->connection->fetchAllAssociative(
                 <<<SQL
                 SELECT
-                    aps.scheduled_start_at,
-                    aps.duration_minutes
+                    aps.scheduled_date_time,
+                    aps.duration
                 FROM tbd_appointment_service aps
-                INNER JOIN tbd_barber_profile bp ON bp.id = aps.barber_profile_id
+                INNER JOIN tbd_barber_profile bp ON bp.id = aps.barber_id
+                INNER JOIN tbd_appointment a ON a.id = aps.appointment_id
                 WHERE bp.barber_user_id = :barberId
-                  AND aps.scheduled_start_at >= :startOfDay
-                  AND aps.scheduled_start_at <= :endOfDay
+                  AND aps.scheduled_date_time >= :startOfDay
+                  AND aps.scheduled_date_time <= :endOfDay
+                  AND a.status != :cancelledStatus
                 SQL,
                 [
                     'barberId' => $barberId,
                     'startOfDay' => $date . ' 00:00:00',
                     'endOfDay' => $date . ' 23:59:59',
+                    'cancelledStatus' => 3,
                 ],
                 [
                     'barberId' => ParameterType::INTEGER,
@@ -606,8 +643,8 @@ class WhatsAppCatalogService
             );
 
             foreach ($appointments as $appointment) {
-                $duration = (int) ($appointment['duration_minutes'] ?? $turnDuration);
-                $start = new \DateTimeImmutable((string) $appointment['scheduled_start_at']);
+                $duration = (int) ($appointment['duration'] ?? $turnDuration);
+                $start = new \DateTimeImmutable((string) $appointment['scheduled_date_time'], new \DateTimeZone(self::BOOKING_TIMEZONE));
 
                 $occupiedRanges[] = [
                     'start' => $start,
@@ -615,7 +652,9 @@ class WhatsAppCatalogService
                 ];
             }
         } catch (\Throwable) {
-            // Si las columnas de AppointmentService cambian, el endpoint final sigue protegiendo la reserva.
+            /*
+             * Si las columnas de AppointmentService cambian, el endpoint final sigue protegiendo la reserva.
+             */
         }
 
         return $occupiedRanges;
@@ -631,8 +670,11 @@ class WhatsAppCatalogService
     ): array {
         $slots = [];
 
-        $currentTime = new \DateTimeImmutable(sprintf('%s %s', $date, $openTime));
-        $endTime = new \DateTimeImmutable(sprintf('%s %s', $date, $closeTime));
+        $timezone = new \DateTimeZone(self::BOOKING_TIMEZONE);
+
+        $currentTime = new \DateTimeImmutable(sprintf('%s %s', $date, $openTime), $timezone);
+        $endTime = new \DateTimeImmutable(sprintf('%s %s', $date, $closeTime), $timezone);
+        $now = new \DateTimeImmutable('now', $timezone);
 
         while ($currentTime < $endTime) {
             $slotStart = $currentTime;
@@ -642,10 +684,22 @@ class WhatsAppCatalogService
                 break;
             }
 
+            /*
+             * Si la fecha es hoy, no mostramos horarios que ya pasaron.
+             */
+            if ($slotStart <= $now) {
+                $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+                continue;
+            }
+
             if (!$this->hasOverlap($slotStart, $slotEnd, $occupiedRanges)) {
                 $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
             }
 
+            /*
+             * El siguiente inicio avanza por slot_minutes, no por duración.
+             * Esto permite inicios cada 30 min aunque el servicio dure 60 min.
+             */
             $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
         }
 
