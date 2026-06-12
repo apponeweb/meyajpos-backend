@@ -687,7 +687,7 @@ final class WhatsAppBotOrchestrator
         $this->whatsAppClient->sendTextMessage(
             $from,
             sprintf(
-                "Correo registrado: %s.\n\nAhora escribe tu *teléfono a 10 dígitos*.\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número o escribir otro.",
+                "Correo registrado: %s.\n\nAhora escribe tu *teléfono con lada del país*.\n\nEjemplos:\nMéxico: *+52 8180201499*\nCuba: *+53 55848425*\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número completo o escribir otro.",
                 $email,
                 $suggestedPhone
             )
@@ -696,16 +696,12 @@ final class WhatsAppBotOrchestrator
 
     private function handleCustomerPhone(string $from, string $body, array $state): void
     {
-        $phone = preg_replace('/\D+/', '', $body) ?? '';
+        $phoneData = $this->parseInternationalPhoneInput($body);
 
-        if (str_starts_with($phone, '52') && strlen($phone) > 10) {
-            $phone = substr($phone, -10);
-        }
-
-        if (strlen($phone) !== 10) {
+        if ($phoneData === null) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "El teléfono debe tener 10 dígitos.\n\nEjemplo:\n8180201499"
+                "No pude entender el teléfono.\n\nEscríbelo con *lada del país + número*.\n\nEjemplos:\nMéxico: *+52 8180201499*\nCuba: *+53 55848425*"
             );
 
             return;
@@ -715,8 +711,8 @@ final class WhatsAppBotOrchestrator
             $from,
             'collecting_customer_notes',
             [
-                'customer_phone' => $phone,
-                'customer_country_code' => '+52',
+                'customer_phone' => $phoneData['phone'],
+                'customer_country_code' => $phoneData['country_code'],
             ]
         );
 
@@ -831,58 +827,123 @@ final class WhatsAppBotOrchestrator
 
     private function extractPhoneFromWhatsAppId(string $waId): string
     {
-        $phone = preg_replace('/\D+/', '', $waId) ?? '';
+        $digits = preg_replace('/\D+/', '', $waId) ?? '';
 
-        if (str_starts_with($phone, '521') && strlen($phone) === 13) {
-            return substr($phone, 3);
+        if ($digits === '') {
+            return '';
         }
 
-        if (str_starts_with($phone, '52') && strlen($phone) === 12) {
-            return substr($phone, 2);
+        if (str_starts_with($digits, '521') && strlen($digits) === 13) {
+            return '+52 ' . substr($digits, 3);
         }
 
-        return strlen($phone) > 10 ? substr($phone, -10) : $phone;
+        if (str_starts_with($digits, '52') && strlen($digits) === 12) {
+            return '+52 ' . substr($digits, 2);
+        }
+
+        foreach ($this->knownCountryCallingCodes() as $countryCode) {
+            if (str_starts_with($digits, $countryCode) && strlen($digits) > strlen($countryCode)) {
+                return '+' . $countryCode . ' ' . substr($digits, strlen($countryCode));
+            }
+        }
+
+        return '+' . $digits;
     }
 
-    private function extractBookingDateTextFromMessage(string $message): ?string
+    /**
+     * @return array{country_code:string, phone:string}|null
+     */
+    private function parseInternationalPhoneInput(string $input): ?array
     {
-        $text = $this->normalizeDateText($message);
+        $text = trim($input);
 
-        foreach ([
-            '/\bhoy\b/u',
-            '/\bmanana\b/u',
-            '/\b\d{1,2}\/\d{1,2}\/\d{4}\b/u',
-            '/\b\d{4}-\d{1,2}-\d{1,2}\b/u',
-            '/(?:para\s+el|para|el)?\s*\d{1,2}\s*(?:de\s*)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b/u',
-            '/(?:para\s+el|para|el)\s+\d{1,2}\b/u',
-        ] as $pattern) {
-            if (preg_match($pattern, $text, $matches)) {
-                return trim((string) $matches[0]);
+        if ($text === '') {
+            return null;
+        }
+
+        if (preg_match('/^\s*\+(\d{1,4})(.*)$/', $text, $matches)) {
+            $countryCode = $matches[1];
+            $phone = preg_replace('/\D+/', '', $matches[2]) ?? '';
+
+            return $this->validateInternationalPhoneParts($countryCode, $phone);
+        }
+
+        $digits = preg_replace('/\D+/', '', $text) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        foreach ($this->knownCountryCallingCodes() as $countryCode) {
+            if (!str_starts_with($digits, $countryCode)) {
+                continue;
+            }
+
+            $phone = substr($digits, strlen($countryCode));
+            $phoneData = $this->validateInternationalPhoneParts($countryCode, $phone);
+
+            if ($phoneData !== null) {
+                return $phoneData;
             }
         }
 
         return null;
     }
 
-    private function formatDateHintForCustomer(string $date): string
+    /**
+     * @return array{country_code:string, phone:string}|null
+     */
+    private function validateInternationalPhoneParts(string $countryCode, string $phone): ?array
     {
-        try {
-            $timezone = new \DateTimeZone('America/Mexico_City');
-            $selectedDate = new \DateTimeImmutable($date . ' 00:00:00', $timezone);
-            $today = new \DateTimeImmutable('today', $timezone);
+        $countryCode = preg_replace('/\D+/', '', $countryCode) ?? '';
+        $phone = preg_replace('/\D+/', '', $phone) ?? '';
 
-            if ($selectedDate->format('Y-m-d') === $today->format('Y-m-d')) {
-                return 'hoy';
-            }
-
-            if ($selectedDate->format('Y-m-d') === $today->modify('+1 day')->format('Y-m-d')) {
-                return 'mañana';
-            }
-
-            return $selectedDate->format('d/m/Y');
-        } catch (\Throwable) {
-            return $date;
+        if ($countryCode === '' || strlen($countryCode) < 1 || strlen($countryCode) > 4) {
+            return null;
         }
+
+        if (strlen($phone) < 6 || strlen($phone) > 15) {
+            return null;
+        }
+
+        return [
+            'country_code' => '+' . $countryCode,
+            'phone' => $phone,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function knownCountryCallingCodes(): array
+    {
+        $codes = [
+            '1', '7', '20', '27', '30', '31', '32', '33', '34', '36', '39',
+            '40', '41', '43', '44', '45', '46', '47', '48', '49', '51', '52',
+            '53', '54', '55', '56', '57', '58', '591', '502', '503', '504',
+            '505', '506', '507', '509', '593', '595', '598', '599', '351',
+            '352', '353', '354', '355', '356', '357', '358', '359', '370',
+            '371', '372', '373', '374', '375', '376', '377', '378', '380',
+            '381', '382', '383', '385', '386', '387', '389', '420', '421',
+            '423', '852', '853', '855', '856', '880', '886', '90', '91', '92',
+            '93', '94', '95', '98', '212', '213', '216', '218', '220', '221',
+            '222', '223', '224', '225', '226', '227', '228', '229', '230',
+            '231', '232', '233', '234', '235', '236', '237', '238', '239',
+            '240', '241', '242', '243', '244', '245', '246', '248', '249',
+            '250', '251', '252', '253', '254', '255', '256', '257', '258',
+            '260', '261', '262', '263', '264', '265', '266', '267', '268',
+            '269', '290', '291', '297', '298', '299', '350', '500', '501',
+            '508', '590', '592', '594', '596', '597', '670', '672', '673',
+            '674', '675', '676', '677', '678', '679', '680', '681', '682',
+            '683', '685', '686', '687', '688', '689', '690', '691', '692',
+            '850', '960', '961', '962', '963', '964', '965', '966', '967',
+            '968', '970', '971', '972', '973', '974', '975', '976', '977',
+            '992', '993', '994', '995', '996', '998',
+        ];
+
+        usort($codes, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        return $codes;
     }
 
     private function parseBookingDate(string $message): ?string
