@@ -46,6 +46,14 @@ final class WhatsAppBotOrchestrator
             }
 
             if ($this->shouldStartCancellationFlow($normalizedBody)) {
+                $folio = $this->extractAppointmentFolioFromText($body);
+
+                if ($folio !== null) {
+                    $this->startCancellationFlowWithFolio($from, $folio);
+
+                    return;
+                }
+
                 $this->startCancellationFlow($from);
 
                 return;
@@ -129,17 +137,6 @@ final class WhatsAppBotOrchestrator
             }
 
             $intent = $this->intentClassifier->detect($body);
-
-            // $responseText = match ($intent) {
-            //     'greeting' => $this->mainMenu(),
-            //     'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
-            //     'check_barbers' => $this->barbersResponse(),
-            //     'reschedule' => $this->rescheduleResponse(),
-            //     'list_services' => $this->startBookingFlowAndReturnMessage($from),
-            //     'product_recommendation' => $this->productsResponse($body),
-            //     'haircut_recommendation' => $this->haircutRecommendationResponse($body),
-            //     default => $this->unknownResponse(),
-            // };
 
             if ($intent === 'cancel_appointment') {
                 $folio = $this->extractAppointmentFolioFromText($body);
@@ -1288,6 +1285,4 @@ final class WhatsAppBotOrchestrator
             . "- reagendar\n\n"
             . "Para consultar servicios o agendar, primero te pediré la sucursal.";
     }
-
-
 }
