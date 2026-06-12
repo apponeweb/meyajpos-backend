@@ -496,9 +496,9 @@ final class AppointmentBookingService
                 // Conserva la fecha original si no puede formatearse.
             }
         }
-
+        
         return sprintf(
-            "Folio: %s\nSucursal: %s\nServicio: %s\nBarbero: %s\nFecha: %s\nHorario: %s",
+            "Folio: %s | Sucursal: %s | Servicio: %s | Barbero: %s | Fecha: %s | Horario: %s",
             (string) ($appointment->getId() ?? ''),
             (string) ($data['branch']['name'] ?? $branch->getName()),
             $serviceName,
