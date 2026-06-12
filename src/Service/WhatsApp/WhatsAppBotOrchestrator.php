@@ -141,18 +141,28 @@ final class WhatsAppBotOrchestrator
             //     default => $this->unknownResponse(),
             // };
 
-            $responseText = match ($intent) {
-                'greeting' => $this->mainMenu(),
-                'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
-                'cancel_appointment' => $this->startCancellationFlowAndReturnMessage($from),
-                'check_barbers' => $this->barbersResponse(),
-                'reschedule' => $this->rescheduleResponse(),
-                'list_services' => $this->startBookingFlowAndReturnMessage($from),
-                'product_recommendation' => $this->productsResponse($body),
-                'haircut_recommendation' => $this->haircutRecommendationResponse($body),
-                default => $this->unknownResponse(),
-            };
+            if ($intent === 'cancel_appointment') {
+                $folio = $this->extractAppointmentFolioFromText($body);
 
+                if ($folio !== null) {
+                    $this->startCancellationFlowWithFolio($from, $folio);
+
+                    return;
+                }
+
+                $responseText = $this->startCancellationFlowAndReturnMessage($from);
+            } else {
+                $responseText = match ($intent) {
+                    'greeting' => $this->mainMenu(),
+                    'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
+                    'check_barbers' => $this->barbersResponse(),
+                    'reschedule' => $this->rescheduleResponse(),
+                    'list_services' => $this->startBookingFlowAndReturnMessage($from),
+                    'product_recommendation' => $this->productsResponse($body),
+                    'haircut_recommendation' => $this->haircutRecommendationResponse($body),
+                    default => $this->unknownResponse(),
+                };
+            }
 
             $result = $this->whatsAppClient->sendTextMessage($from, $responseText);
 
@@ -840,13 +850,27 @@ final class WhatsAppBotOrchestrator
                 'quiero cancelar',
                 'quiero cancelar cita',
                 'quiero cancelar mi cita',
+                'quiero cancelar folio',
+                'quiero cancelar el folio',
+                'cancelar folio',
+                'cancelar el folio',
                 'cancelacion',
                 'cancelación',
+                'anular cita',
+                'anular mi cita',
+                'anular reservacion',
+                'anular reservación',
             ], true)
             || str_contains($normalizedBody, 'cancelar cita')
             || str_contains($normalizedBody, 'cancelar mi cita')
+            || str_contains($normalizedBody, 'cancelar folio')
+            || str_contains($normalizedBody, 'cancelar el folio')
             || str_contains($normalizedBody, 'cancelación')
-            || str_contains($normalizedBody, 'cancelacion');
+            || str_contains($normalizedBody, 'cancelacion')
+            || str_contains($normalizedBody, 'anular cita')
+            || str_contains($normalizedBody, 'anular mi cita')
+            || str_contains($normalizedBody, 'anular reservacion')
+            || str_contains($normalizedBody, 'anular reservación');
     }
 
     private function startCancellationFlow(string $from): void
@@ -1022,22 +1046,85 @@ final class WhatsAppBotOrchestrator
     }
 
     private function startCancellationFlowAndReturnMessage(string $from): string
-{
-    $this->conversationStateService->start($from, 1);
+    {
+        $this->conversationStateService->start($from, 1);
 
-    $this->conversationStateService->updateState(
-        $from,
-        'cancelling_waiting_folio',
-        [
-            'payload_json' => [
-                'flow' => 'appointment_cancellation',
-            ],
-        ]
-    );
+        $this->conversationStateService->updateState(
+            $from,
+            'cancelling_waiting_folio',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_cancellation',
+                ],
+            ]
+        );
 
-    return "Claro. Para cancelar tu cita necesito el *folio*.\n\n"
-        . "Ejemplo:\n*18*\n\n"
-        . "Si no tienes el folio, escribe *NO* para salir.";
+        return "Claro. Para cancelar tu cita necesito el *folio*.\n\n"
+            . "Ejemplo:\n*18*\n\n"
+            . "Si no tienes el folio, escribe *NO* para salir.";
+    }
+
+    private function extractAppointmentFolioFromText(string $text): ?int
+    {
+        $normalizedText = mb_strtolower(trim($text));
+
+        if (preg_match('/(?:folio|cita)\s*#?\s*(\d+)/i', $normalizedText, $matches)) {
+            return (int) $matches[1];
+        }
+
+        if (preg_match('/\b(\d{1,10})\b/', $normalizedText, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function startCancellationFlowWithFolio(string $from, int $appointmentId): void
+    {
+        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolio($appointmentId);
+
+        if ($appointment === null) {
+            $this->conversationStateService->start($from, 1);
+
+            $this->conversationStateService->updateState(
+                $from,
+                'cancelling_waiting_folio',
+                [
+                    'payload_json' => [
+                        'flow' => 'appointment_cancellation',
+                    ],
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "No encontré una cita futura activa con el folio *%s*.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir.",
+                    (string) $appointmentId
+                )
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->start($from, 1);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'cancelling_confirming',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_cancellation',
+                    'appointment_id' => $appointmentId,
+                    'appointment' => $appointment,
+                ],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->appointmentCancellationService->formatAppointmentForConfirmation($appointment)
+        );
     }
 
     private function mainMenu(): string
