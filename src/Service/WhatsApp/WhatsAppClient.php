@@ -109,6 +109,39 @@ final class WhatsAppClient
         return $response->toArray(false);
     }
 
+
+    public function markAsReadAndTyping(string $messageId): array
+    {
+        $messageId = trim($messageId);
+
+        if ($messageId === '') {
+            return [];
+        }
+
+        $url = sprintf(
+            'https://graph.facebook.com/%s/%s/messages',
+            self::GRAPH_API_VERSION,
+            $this->whatsappPhoneNumberId
+        );
+
+        $response = $this->httpClient->request('POST', $url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $this->whatsappAccessToken,
+                'Content-Type' => 'application/json',
+            ],
+            'json' => [
+                'messaging_product' => 'whatsapp',
+                'status' => 'read',
+                'message_id' => $messageId,
+                'typing_indicator' => [
+                    'type' => 'text',
+                ],
+            ],
+        ]);
+
+        return $response->toArray(false);
+    }
+
     public function normalizeRecipient(string $phone): string
     {
         $digits = preg_replace('/\D+/', '', $phone) ?? '';

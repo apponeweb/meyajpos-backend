@@ -1,0 +1,153 @@
+{
+  "version": "1.0.0",
+  "language": "es-MX",
+  "intents": {
+    "greeting": {
+      "description": "Saludo o solicitud de menú inicial",
+      "priority": 10,
+      "examples": [
+        "hola",
+        "buenas",
+        "buen día",
+        "buen dia",
+        "hey",
+        "qué onda",
+        "que onda",
+        "menú",
+        "menu",
+        "inicio",
+        "ayuda"
+      ]
+    },
+    "book_appointment": {
+      "description": "El cliente quiere agendar una cita",
+      "priority": 100,
+      "examples": [
+        "agenda",
+        "agendar",
+        "quiero agendar",
+        "quiero una cita",
+        "necesito una cita",
+        "ocupo una cita",
+        "me puedes agendar",
+        "me puedes dar cita",
+        "quiero reservar",
+        "quiero apartar",
+        "tienen espacio",
+        "hay lugar",
+        "hay disponibilidad",
+        "necesito corte",
+        "quiero cortarme el pelo",
+        "quiero cita hoy",
+        "quiero cita mañana",
+        "quiero agendar el 18 de junio"
+      ]
+    },
+    "cancel_appointment": {
+      "description": "El cliente quiere cancelar una cita",
+      "priority": 100,
+      "examples": [
+        "cancelar cita",
+        "cancelar mi cita",
+        "quiero cancelar",
+        "quiero cancelar mi cita",
+        "cancelar folio",
+        "cancelar el folio",
+        "quiero cancelar el folio 32",
+        "anular cita",
+        "anular mi cita",
+        "ya no voy a ir",
+        "no podré asistir",
+        "no podre asistir",
+        "cancela mi reservación",
+        "cancela mi reservacion"
+      ]
+    },
+    "reschedule_appointment": {
+      "description": "El cliente quiere cambiar fecha u hora",
+      "priority": 90,
+      "examples": [
+        "reagendar",
+        "quiero reagendar",
+        "cambiar cita",
+        "mover cita",
+        "cambiar mi cita",
+        "modificar cita",
+        "reprogramar",
+        "puedo cambiar mi horario",
+        "quiero mover mi cita para mañana"
+      ]
+    },
+    "list_services": {
+      "description": "El cliente quiere servicios o precios",
+      "priority": 80,
+      "examples": [
+        "servicios",
+        "ver servicios",
+        "qué servicios tienen",
+        "que servicios tienen",
+        "precios",
+        "precio",
+        "cuánto cuesta",
+        "cuanto cuesta",
+        "precio del corte",
+        "corte adulto",
+        "corte niño",
+        "paquete tios",
+        "paquete tios full",
+        "tinte barba"
+      ]
+    },
+    "check_barbers": {
+      "description": "Pregunta por barberos",
+      "priority": 80,
+      "examples": [
+        "barberos",
+        "qué barberos tienen",
+        "que barberos tienen",
+        "quién corta",
+        "quien corta",
+        "con quién puedo agendar",
+        "con quien puedo agendar",
+        "está Joe",
+        "esta Joe",
+        "hay espacio con Joe",
+        "quiero con Joe",
+        "quiero que me atienda Neo",
+        "disponible con Yank"
+      ]
+    },
+    "product_recommendation": {
+      "description": "Recomendación de producto",
+      "priority": 70,
+      "examples": [
+        "productos",
+        "recomienda producto",
+        "qué producto me recomiendas",
+        "que producto me recomiendas",
+        "pomada",
+        "cera",
+        "gel",
+        "shampoo",
+        "aceite para barba",
+        "producto para barba",
+        "producto para peinar"
+      ]
+    },
+    "haircut_recommendation": {
+      "description": "Recomendación de corte",
+      "priority": 70,
+      "examples": [
+        "corte para cara redonda",
+        "qué corte me queda",
+        "que corte me queda",
+        "tipo de cara",
+        "cara redonda",
+        "cara ovalada",
+        "cara cuadrada",
+        "cara alargada",
+        "recomienda un corte"
+      ]
+    }
+  }
+}

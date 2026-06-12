@@ -28,6 +28,20 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
+        $messageId = trim((string) ($message['id'] ?? ''));
+
+        if ($messageId !== '') {
+            try {
+                $this->whatsAppClient->markAsReadAndTyping($messageId);
+            } catch (\Throwable $exception) {
+                $this->logger->warning('No se pudo activar indicador de escritura de WhatsApp.', [
+                    'wa_id' => $from,
+                    'message_id' => $messageId,
+                    'detail' => $exception->getMessage(),
+                ]);
+            }
+        }
+
         $normalizedBody = mb_strtolower(trim($body));
 
         try {
@@ -696,12 +710,20 @@ final class WhatsAppBotOrchestrator
 
     private function handleCustomerPhone(string $from, string $body, array $state): void
     {
-        $phoneData = $this->parseInternationalPhoneInput($body);
+        $phoneData = $this->parseInternationalPhoneInput($body, $from);
 
         if ($phoneData === null) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No pude entender el teléfono.\n\nEscríbelo con *lada del país + número*.\n\nEjemplos:\nMéxico: *+52 8180201499*\nCuba: *+53 55848425*"
+                "No pude entender el teléfono.
+
+Escríbelo con *lada del país + número* o confirma el número detectado.
+
+Ejemplos:
+México: *+52 8180201499*
+Cuba: *+53 55848425*
+
+También puedes responder: *es el mismo*"
             );
 
             return;
@@ -718,7 +740,10 @@ final class WhatsAppBotOrchestrator
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            "¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
+            "¿Deseas agregar alguna nota para tu cita?
+
+Puedes escribir tu nota o responder:
+*sin notas*"
         );
     }
 
@@ -833,27 +858,19 @@ final class WhatsAppBotOrchestrator
             return '';
         }
 
-        if (str_starts_with($digits, '521') && strlen($digits) === 13) {
-            return '+52 ' . substr($digits, 3);
+        $phoneData = $this->splitInternationalDigits($digits);
+
+        if ($phoneData === null) {
+            return '+' . $digits;
         }
 
-        if (str_starts_with($digits, '52') && strlen($digits) === 12) {
-            return '+52 ' . substr($digits, 2);
-        }
-
-        foreach ($this->knownCountryCallingCodes() as $countryCode) {
-            if (str_starts_with($digits, $countryCode) && strlen($digits) > strlen($countryCode)) {
-                return '+' . $countryCode . ' ' . substr($digits, strlen($countryCode));
-            }
-        }
-
-        return '+' . $digits;
+        return $phoneData['country_code'] . ' ' . $phoneData['phone'];
     }
 
     /**
      * @return array{country_code:string, phone:string}|null
      */
-    private function parseInternationalPhoneInput(string $input): ?array
+    private function parseInternationalPhoneInput(string $input, string $from = ''): ?array
     {
         $text = trim($input);
 
@@ -861,14 +878,50 @@ final class WhatsAppBotOrchestrator
             return null;
         }
 
-        if (preg_match('/^\s*\+(\d{1,4})(.*)$/', $text, $matches)) {
-            $countryCode = $matches[1];
-            $phone = preg_replace('/\D+/', '', $matches[2]) ?? '';
+        if ($this->isAcceptDetectedPhonePhrase($text)) {
+            $suggestedPhone = $this->extractPhoneFromWhatsAppId($from);
 
-            return $this->validateInternationalPhoneParts($countryCode, $phone);
+            return $this->parseInternationalPhoneInput($suggestedPhone, '');
         }
 
         $digits = preg_replace('/\D+/', '', $text) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($text, '+') || str_starts_with($digits, '00')) {
+            if (str_starts_with($digits, '00')) {
+                $digits = substr($digits, 2);
+            }
+
+            return $this->splitInternationalDigits($digits);
+        }
+
+        $phoneData = $this->splitInternationalDigits($digits);
+
+        if ($phoneData !== null) {
+            return $phoneData;
+        }
+
+        $fromPhoneData = $this->splitInternationalDigits(preg_replace('/\D+/', '', $from) ?? '');
+
+        if ($fromPhoneData !== null) {
+            return $this->validateInternationalPhoneParts(
+                preg_replace('/\D+/', '', $fromPhoneData['country_code']) ?? '',
+                $digits
+            );
+        }
+
+        return $this->validateInternationalPhoneParts('52', $digits);
+    }
+
+    /**
+     * @return array{country_code:string, phone:string}|null
+     */
+    private function splitInternationalDigits(string $digits): ?array
+    {
+        $digits = preg_replace('/\D+/', '', $digits) ?? '';
 
         if ($digits === '') {
             return null;
@@ -902,7 +955,11 @@ final class WhatsAppBotOrchestrator
             return null;
         }
 
-        if (strlen($phone) < 6 || strlen($phone) > 15) {
+        $rules = $this->countryPhoneRules();
+        $minLength = (int) ($rules[$countryCode]['min'] ?? 6);
+        $maxLength = (int) ($rules[$countryCode]['max'] ?? 15);
+
+        if (strlen($phone) < $minLength || strlen($phone) > $maxLength) {
             return null;
         }
 
@@ -912,12 +969,89 @@ final class WhatsAppBotOrchestrator
         ];
     }
 
+    private function isAcceptDetectedPhonePhrase(string $text): bool
+    {
+        $normalizedText = $this->normalizeRuleText($text);
+
+        foreach ($this->acceptDetectedPhonePhrases() as $phrase) {
+            if ($normalizedText === $this->normalizeRuleText($phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function acceptDetectedPhonePhrases(): array
+    {
+        $config = $this->loadWhatsappEntitiesConfig();
+        $phrases = $config['entities']['phone']['acceptDetectedPhonePhrases'] ?? null;
+
+        if (is_array($phrases)) {
+            return array_values(array_filter($phrases, static fn (mixed $value): bool => is_string($value) && trim($value) !== ''));
+        }
+
+        return ['es el mismo', 'el mismo', 'ese mismo', 'es el que detectaste', 'el que detectaste', 'usa ese', 'si ese', 'sí ese', 'correcto', 'ese', 'mi whatsapp', 'usa mi whatsapp'];
+    }
+
+    /**
+     * @return array<string, array{min:int, max:int}>
+     */
+    private function countryPhoneRules(): array
+    {
+        $rules = [];
+        $config = $this->loadWhatsappEntitiesConfig();
+        $countries = $config['countries'] ?? [];
+
+        if (is_array($countries)) {
+            foreach ($countries as $country) {
+                if (!is_array($country)) {
+                    continue;
+                }
+
+                $countryCode = preg_replace('/\D+/', '', (string) ($country['countryCode'] ?? '')) ?? '';
+
+                if ($countryCode === '') {
+                    continue;
+                }
+
+                $rules[$countryCode] = [
+                    'min' => (int) ($country['localPhoneMinLength'] ?? 6),
+                    'max' => (int) ($country['localPhoneMaxLength'] ?? 15),
+                ];
+            }
+        }
+
+        return $rules;
+    }
+
     /**
      * @return list<string>
      */
     private function knownCountryCallingCodes(): array
     {
-        $codes = [
+        $codes = [];
+        $config = $this->loadWhatsappEntitiesConfig();
+        $countries = $config['countries'] ?? [];
+
+        if (is_array($countries)) {
+            foreach ($countries as $country) {
+                if (!is_array($country)) {
+                    continue;
+                }
+
+                $countryCode = preg_replace('/\D+/', '', (string) ($country['countryCode'] ?? '')) ?? '';
+
+                if ($countryCode !== '') {
+                    $codes[] = $countryCode;
+                }
+            }
+        }
+
+        $codes = array_values(array_unique(array_merge($codes, [
             '1', '7', '20', '27', '30', '31', '32', '33', '34', '36', '39',
             '40', '41', '43', '44', '45', '46', '47', '48', '49', '51', '52',
             '53', '54', '55', '56', '57', '58', '591', '502', '503', '504',
@@ -939,11 +1073,45 @@ final class WhatsAppBotOrchestrator
             '850', '960', '961', '962', '963', '964', '965', '966', '967',
             '968', '970', '971', '972', '973', '974', '975', '976', '977',
             '992', '993', '994', '995', '996', '998',
-        ];
+        ])));
 
         usort($codes, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
         return $codes;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadWhatsappEntitiesConfig(): array
+    {
+        $path = dirname(__DIR__, 3) . '/config/whatsapp/whatsapp_entities.json';
+
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $json = file_get_contents($path);
+
+        if ($json === false) {
+            return [];
+        }
+
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function normalizeRuleText(string $text): string
+    {
+        $text = mb_strtolower(trim($text));
+        $text = strtr($text, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        $text = preg_replace('/[^a-z0-9\s]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
     }
 
     private function parseBookingDate(string $message): ?string

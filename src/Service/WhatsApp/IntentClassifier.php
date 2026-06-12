@@ -104,6 +104,12 @@ final class IntentClassifier
      */
     private function detectByRules(string $text, array $entities): string
     {
+        $configuredIntent = $this->detectByConfiguredRules($text);
+
+        if ($configuredIntent !== null) {
+            return $configuredIntent;
+        }
+
         if ($entities['folio'] !== null || $this->containsAny($text, [
             'cancelar cita',
             'cancelar mi cita',
@@ -476,6 +482,106 @@ final class IntentClassifier
         }
 
         return null;
+    }
+
+
+    private function detectByConfiguredRules(string $text): ?string
+    {
+        $config = $this->loadWhatsappIntentsConfig();
+        $intents = $config['intents'] ?? [];
+
+        if (!is_array($intents)) {
+            return null;
+        }
+
+        $matches = [];
+
+        foreach ($intents as $intentKey => $intentConfig) {
+            if (!is_string($intentKey) || !is_array($intentConfig)) {
+                continue;
+            }
+
+            $examples = $intentConfig['examples'] ?? [];
+
+            if (!is_array($examples)) {
+                continue;
+            }
+
+            foreach ($examples as $example) {
+                if (!is_string($example) || trim($example) === '') {
+                    continue;
+                }
+
+                $normalizedExample = $this->normalizeText($example);
+
+                if ($normalizedExample === '') {
+                    continue;
+                }
+
+                if ($text === $normalizedExample || str_contains($text, $normalizedExample)) {
+                    $matches[] = [
+                        'intent' => $this->mapConfiguredIntentToLegacyIntent($intentKey),
+                        'priority' => (int) ($intentConfig['priority'] ?? 0),
+                        'length' => strlen($normalizedExample),
+                    ];
+
+                    break;
+                }
+            }
+        }
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, static function (array $a, array $b): int {
+            $priority = $b['priority'] <=> $a['priority'];
+
+            if ($priority !== 0) {
+                return $priority;
+            }
+
+            return $b['length'] <=> $a['length'];
+        });
+
+        return (string) $matches[0]['intent'];
+    }
+
+    private function mapConfiguredIntentToLegacyIntent(string $intent): string
+    {
+        return match ($intent) {
+            'book_appointment' => 'check_agenda',
+            'cancel_appointment' => 'cancel_appointment',
+            'reschedule_appointment' => 'reschedule',
+            'product_recommendation' => 'product_recommendation',
+            'haircut_recommendation' => 'haircut_recommendation',
+            'list_services' => 'list_services',
+            'check_barbers' => 'check_barbers',
+            'greeting' => 'greeting',
+            default => $intent,
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadWhatsappIntentsConfig(): array
+    {
+        $path = dirname(__DIR__, 3) . '/config/whatsapp/whatsapp_intents.json';
+
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $json = file_get_contents($path);
+
+        if ($json === false) {
+            return [];
+        }
+
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
     }
 
     private function containsAny(string $text, array $needles): bool

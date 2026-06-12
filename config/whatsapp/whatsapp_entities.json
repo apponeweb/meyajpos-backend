@@ -1,0 +1,216 @@
+{
+  "version": "1.0.0",
+  "entities": {
+    "phone": {
+      "acceptDetectedPhonePhrases": [
+        "es el mismo",
+        "el mismo",
+        "ese mismo",
+        "es el que detectaste",
+        "el que detectaste",
+        "usa ese",
+        "sí ese",
+        "si ese",
+        "correcto",
+        "ese",
+        "mi whatsapp",
+        "usa mi whatsapp",
+        "el de whatsapp",
+        "el que aparece",
+        "el que sale ahí",
+        "el que sale ahi"
+      ]
+    },
+    "notes": {
+      "noNotesPhrases": [
+        "no",
+        "sin notas",
+        "ninguna",
+        "nada",
+        "no tengo notas",
+        "así está bien",
+        "asi esta bien"
+      ]
+    },
+    "confirmation": {
+      "confirmPhrases": [
+        "confirmar",
+        "confirmo",
+        "sí",
+        "si",
+        "ok",
+        "correcto",
+        "adelante",
+        "va",
+        "está bien",
+        "esta bien"
+      ],
+      "cancelPhrases": [
+        "cancelar",
+        "cancel",
+        "salir",
+        "mejor no",
+        "ya no"
+      ]
+    }
+  },
+  "countries": [
+    {
+      "countryCode": "+52",
+      "country": "Mexico",
+      "aliases": [
+        "mexico",
+        "méxico",
+        "mx"
+      ],
+      "localPhoneMinLength": 10,
+      "localPhoneMaxLength": 10
+    },
+    {
+      "countryCode": "+53",
+      "country": "Cuba",
+      "aliases": [
+        "cuba",
+        "cu"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+57",
+      "country": "Colombia",
+      "aliases": [
+        "colombia",
+        "co"
+      ],
+      "localPhoneMinLength": 10,
+      "localPhoneMaxLength": 10
+    },
+    {
+      "countryCode": "+1",
+      "country": "USA/Canada",
+      "aliases": [
+        "usa",
+        "estados unidos",
+        "canada",
+        "canadá"
+      ],
+      "localPhoneMinLength": 10,
+      "localPhoneMaxLength": 10
+    },
+    {
+      "countryCode": "+54",
+      "country": "Argentina",
+      "aliases": [
+        "argentina",
+        "ar"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 12
+    },
+    {
+      "countryCode": "+55",
+      "country": "Brasil",
+      "aliases": [
+        "brasil",
+        "brazil",
+        "br"
+      ],
+      "localPhoneMinLength": 10,
+      "localPhoneMaxLength": 11
+    },
+    {
+      "countryCode": "+56",
+      "country": "Chile",
+      "aliases": [
+        "chile",
+        "cl"
+      ],
+      "localPhoneMinLength": 9,
+      "localPhoneMaxLength": 9
+    },
+    {
+      "countryCode": "+58",
+      "country": "Venezuela",
+      "aliases": [
+        "venezuela",
+        "ve"
+      ],
+      "localPhoneMinLength": 10,
+      "localPhoneMaxLength": 10
+    },
+    {
+      "countryCode": "+502",
+      "country": "Guatemala",
+      "aliases": [
+        "guatemala",
+        "gt"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+503",
+      "country": "El Salvador",
+      "aliases": [
+        "el salvador",
+        "sv"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+504",
+      "country": "Honduras",
+      "aliases": [
+        "honduras",
+        "hn"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+505",
+      "country": "Nicaragua",
+      "aliases": [
+        "nicaragua",
+        "ni"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+506",
+      "country": "Costa Rica",
+      "aliases": [
+        "costa rica",
+        "cr"
+      ],
+      "localPhoneMinLength": 8,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+507",
+      "country": "Panama",
+      "aliases": [
+        "panama",
+        "panamá",
+        "pa"
+      ],
+      "localPhoneMinLength": 7,
+      "localPhoneMaxLength": 8
+    },
+    {
+      "countryCode": "+34",
+      "country": "España",
+      "aliases": [
+        "españa",
+        "espana",
+        "spain",
+        "es"
+      ],
+      "localPhoneMinLength": 9,
+      "localPhoneMaxLength": 9
+    }
+  ]
+}
