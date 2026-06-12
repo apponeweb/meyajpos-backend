@@ -130,9 +130,21 @@ final class WhatsAppBotOrchestrator
 
             $intent = $this->intentClassifier->detect($body);
 
+            // $responseText = match ($intent) {
+            //     'greeting' => $this->mainMenu(),
+            //     'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
+            //     'check_barbers' => $this->barbersResponse(),
+            //     'reschedule' => $this->rescheduleResponse(),
+            //     'list_services' => $this->startBookingFlowAndReturnMessage($from),
+            //     'product_recommendation' => $this->productsResponse($body),
+            //     'haircut_recommendation' => $this->haircutRecommendationResponse($body),
+            //     default => $this->unknownResponse(),
+            // };
+
             $responseText = match ($intent) {
                 'greeting' => $this->mainMenu(),
                 'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
+                'cancel_appointment' => $this->startCancellationFlowAndReturnMessage($from),
                 'check_barbers' => $this->barbersResponse(),
                 'reschedule' => $this->rescheduleResponse(),
                 'list_services' => $this->startBookingFlowAndReturnMessage($from),
@@ -140,6 +152,7 @@ final class WhatsAppBotOrchestrator
                 'haircut_recommendation' => $this->haircutRecommendationResponse($body),
                 default => $this->unknownResponse(),
             };
+
 
             $result = $this->whatsAppClient->sendTextMessage($from, $responseText);
 
@@ -1008,6 +1021,25 @@ final class WhatsAppBotOrchestrator
         return is_array($decoded) ? $decoded : [];
     }
 
+    private function startCancellationFlowAndReturnMessage(string $from): string
+{
+    $this->conversationStateService->start($from, 1);
+
+    $this->conversationStateService->updateState(
+        $from,
+        'cancelling_waiting_folio',
+        [
+            'payload_json' => [
+                'flow' => 'appointment_cancellation',
+            ],
+        ]
+    );
+
+    return "Claro. Para cancelar tu cita necesito el *folio*.\n\n"
+        . "Ejemplo:\n*18*\n\n"
+        . "Si no tienes el folio, escribe *NO* para salir.";
+    }
+
     private function mainMenu(): string
     {
         return "Hola 👋 Soy el asistente de la barbería.\n\n"
@@ -1169,4 +1201,6 @@ final class WhatsAppBotOrchestrator
             . "- reagendar\n\n"
             . "Para consultar servicios o agendar, primero te pediré la sucursal.";
     }
+
+
 }
