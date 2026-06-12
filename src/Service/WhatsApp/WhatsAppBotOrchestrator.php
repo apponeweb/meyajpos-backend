@@ -274,6 +274,23 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
+        if ($this->isPastBookingDate($date)) {
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_date',
+                [
+                    'date' => null,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+            );
+
+            return;
+        }
+
         if (empty($state['branch_id']) || empty($state['service_id'])) {
             $this->conversationStateService->clear($from);
 
@@ -767,6 +784,19 @@ final class WhatsAppBotOrchestrator
         }
 
         return null;
+    }
+
+    private function isPastBookingDate(string $date): bool
+    {
+        try {
+            $timezone = new \DateTimeZone('America/Mexico_City');
+            $selectedDate = new \DateTimeImmutable($date . ' 00:00:00', $timezone);
+            $today = new \DateTimeImmutable('today', $timezone);
+
+            return $selectedDate < $today;
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     private function mainMenu(): string
