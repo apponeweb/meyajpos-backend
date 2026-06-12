@@ -436,7 +436,28 @@ final class AppointmentBookingService
         $source = mb_strtolower((string) ($data['source'] ?? self::SOURCE_LANDING));
         $shouldNotify = (bool) ($data['notifyCustomerWhatsApp'] ?? true);
 
+        $this->writeWhatsAppConfirmationDebugLog('start', [
+            'appointment_id' => $appointment->getId(),
+            'customer_id' => $customer->getId(),
+            'source' => $source,
+            'notify_customer_whatsapp' => $shouldNotify,
+            'payload_customer_phone' => (string) ($data['customer']['phone'] ?? ''),
+            'payload_customer_country_code' => (string) ($data['customer']['countryCode'] ?? ''),
+            'customer_entity_phone' => (string) ($customer->getPhone() ?? ''),
+            'customer_entity_country_code' => (string) ($customer->getCountryCode() ?? ''),
+        ]);
+
         if ($source === self::SOURCE_WHATSAPP || !$shouldNotify) {
+            $this->writeWhatsAppConfirmationDebugLog('skipped', [
+                'appointment_id' => $appointment->getId(),
+                'customer_id' => $customer->getId(),
+                'reason' => $source === self::SOURCE_WHATSAPP
+                    ? 'source_whatsapp'
+                    : 'notify_customer_whatsapp_false',
+                'source' => $source,
+                'notify_customer_whatsapp' => $shouldNotify,
+            ]);
+
             return;
         }
 
@@ -449,12 +470,30 @@ final class AppointmentBookingService
         $phone = $normalizedPhone['phone'];
         $whatsAppRecipient = $this->buildWhatsAppRecipient($countryCode, $phone);
 
+        $this->writeWhatsAppConfirmationDebugLog('phone_normalized', [
+            'appointment_id' => $appointment->getId(),
+            'customer_id' => $customer->getId(),
+            'country_code' => $countryCode,
+            'stored_phone' => $phone,
+            'whatsapp_recipient' => $whatsAppRecipient,
+            'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+        ]);
+
         if ($whatsAppRecipient === '') {
             $this->logger->warning('No se envió confirmación WhatsApp: cliente sin teléfono válido.', [
                 'appointment_id' => $appointment->getId(),
                 'customer_id' => $customer->getId(),
                 'country_code' => $countryCode,
                 'phone' => $phone,
+            ]);
+
+            $this->writeWhatsAppConfirmationDebugLog('invalid_phone', [
+                'appointment_id' => $appointment->getId(),
+                'customer_id' => $customer->getId(),
+                'country_code' => $countryCode,
+                'stored_phone' => $phone,
+                'whatsapp_recipient' => $whatsAppRecipient,
+                'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
             ]);
 
             return;
@@ -466,6 +505,18 @@ final class AppointmentBookingService
             appointment: $appointment,
             branch: $branch
         );
+
+        $this->writeWhatsAppConfirmationDebugLog('before_send', [
+            'appointment_id' => $appointment->getId(),
+            'customer_id' => $customer->getId(),
+            'customer_name' => $customerName,
+            'customer_phone' => $whatsAppRecipient,
+            'country_code' => $countryCode,
+            'stored_phone' => $phone,
+            'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+            'template' => 'booking_confirmation',
+            'appointment_details' => $appointmentDetails,
+        ]);
 
         try {
             $result = $this->whatsAppClient->sendBookingConfirmationTemplate(
@@ -482,6 +533,16 @@ final class AppointmentBookingService
                 'stored_phone' => $phone,
                 'result' => $result,
             ]);
+
+            $this->writeWhatsAppConfirmationDebugLog('sent', [
+                'appointment_id' => $appointment->getId(),
+                'customer_id' => $customer->getId(),
+                'customer_phone' => $whatsAppRecipient,
+                'country_code' => $countryCode,
+                'stored_phone' => $phone,
+                'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+                'meta_result' => $result,
+            ]);
         } catch (\Throwable $exception) {
             $this->logger->error('No se pudo enviar confirmación de cita por WhatsApp.', [
                 'appointment_id' => $appointment->getId(),
@@ -492,6 +553,45 @@ final class AppointmentBookingService
                 'detail' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString(),
             ]);
+
+            $this->writeWhatsAppConfirmationDebugLog('error', [
+                'appointment_id' => $appointment->getId(),
+                'customer_id' => $customer->getId(),
+                'customer_phone' => $whatsAppRecipient,
+                'country_code' => $countryCode,
+                'stored_phone' => $phone,
+                'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+                'error_message' => $exception->getMessage(),
+                'error_class' => $exception::class,
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function writeWhatsAppConfirmationDebugLog(string $event, array $context = []): void
+    {
+        try {
+            $logDir = dirname(__DIR__, 3) . '/var/debug';
+
+            if (!is_dir($logDir)) {
+                mkdir($logDir, 0775, true);
+            }
+
+            $payload = [
+                'timestamp' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s.u\Z'),
+                'event' => $event,
+                'context' => $context,
+            ];
+
+            file_put_contents(
+                $logDir . '/whatsapp_confirmation.log',
+                json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL,
+                FILE_APPEND | LOCK_EX
+            );
+        } catch (\Throwable) {
+            // Este log es solo diagnóstico. Nunca debe romper el flujo de creación de citas.
         }
     }
 
