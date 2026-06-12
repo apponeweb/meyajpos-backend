@@ -166,7 +166,14 @@ final class AppointmentBookingService
     private function findOrCreateCustomer(array $customerData, Branch $branch): Customer
     {
         $email = mb_strtolower(trim((string) ($customerData['email'] ?? '')));
-        $phone = preg_replace('/\D+/', '', (string) ($customerData['phone'] ?? '')) ?? '';
+
+        $normalizedPhone = $this->normalizeCustomerPhone(
+            countryCode: (string) ($customerData['countryCode'] ?? '+52'),
+            phone: (string) ($customerData['phone'] ?? '')
+        );
+
+        $phone = $normalizedPhone['phone'];
+        $countryCode = $normalizedPhone['countryCode'];
 
         /** @var Customer|null $customer */
         $customer = $this->customerRepository->createQueryBuilder('c')
@@ -179,7 +186,7 @@ final class AppointmentBookingService
         if ($customer) {
             $customer->setName(trim((string) $customerData['name']));
             $customer->setPhone($phone);
-            $customer->setCountryCode((string) ($customerData['countryCode'] ?? '+52'));
+            $customer->setCountryCode($countryCode);
             $customer->setBranch($branch);
 
             return $customer;
@@ -189,7 +196,7 @@ final class AppointmentBookingService
         $customer->setEmail($email);
         $customer->setName(trim((string) $customerData['name']));
         $customer->setPhone($phone);
-        $customer->setCountryCode((string) ($customerData['countryCode'] ?? '+52'));
+        $customer->setCountryCode($countryCode);
         $customer->setNotes((string) ($customerData['notes'] ?? ''));
         $customer->setBranch($branch);
 
@@ -433,12 +440,21 @@ final class AppointmentBookingService
             return;
         }
 
-        $phone = trim((string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''));
+        $normalizedPhone = $this->normalizeCustomerPhone(
+            countryCode: (string) ($data['customer']['countryCode'] ?? $customer->getCountryCode() ?? '+52'),
+            phone: (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? '')
+        );
 
-        if ($phone === '') {
-            $this->logger->warning('No se envió confirmación WhatsApp: cliente sin teléfono.', [
+        $countryCode = $normalizedPhone['countryCode'];
+        $phone = $normalizedPhone['phone'];
+        $whatsAppRecipient = $this->buildWhatsAppRecipient($countryCode, $phone);
+
+        if ($whatsAppRecipient === '') {
+            $this->logger->warning('No se envió confirmación WhatsApp: cliente sin teléfono válido.', [
                 'appointment_id' => $appointment->getId(),
                 'customer_id' => $customer->getId(),
+                'country_code' => $countryCode,
+                'phone' => $phone,
             ]);
 
             return;
@@ -453,20 +469,26 @@ final class AppointmentBookingService
 
         try {
             $result = $this->whatsAppClient->sendBookingConfirmationTemplate(
-                to: $phone,
+                to: $whatsAppRecipient,
                 customerName: $customerName,
                 appointmentDetails: $appointmentDetails
             );
 
             $this->logger->info('Confirmación de cita enviada por WhatsApp.', [
                 'appointment_id' => $appointment->getId(),
-                'customer_phone' => $phone,
+                'customer_phone' => $whatsAppRecipient,
+                'country_code' => $countryCode,
+                'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+                'stored_phone' => $phone,
                 'result' => $result,
             ]);
         } catch (\Throwable $exception) {
             $this->logger->error('No se pudo enviar confirmación de cita por WhatsApp.', [
                 'appointment_id' => $appointment->getId(),
-                'customer_phone' => $phone,
+                'customer_phone' => $whatsAppRecipient,
+                'country_code' => $countryCode,
+                'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
+                'stored_phone' => $phone,
                 'detail' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString(),
             ]);
@@ -509,6 +531,163 @@ final class AppointmentBookingService
     }
 
     /**
+     * @return array{
+     *     countryCode:string,
+     *     phone:string
+     * }
+     */
+    private function normalizeCustomerPhone(?string $countryCode, ?string $phone): array
+    {
+        $rawCountryCode = trim((string) $countryCode);
+        $rawPhone = trim((string) $phone);
+
+        $countryCodeDigits = preg_replace('/\D+/', '', $rawCountryCode) ?? '';
+        $phoneDigits = preg_replace('/\D+/', '', $rawPhone) ?? '';
+
+        /*
+         * Si el cliente escribe el teléfono con lada internacional en el mismo campo,
+         * usamos esa lada y guardamos el número local sin duplicarla.
+         *
+         * Ejemplos:
+         * +53 55848425 -> countryCode +53, phone 55848425
+         * +52 8180201499 -> countryCode +52, phone 8180201499
+         * +528180201499 -> countryCode +52, phone 8180201499
+         */
+        $detected = $this->splitInternationalPhone($rawPhone);
+
+        if ($detected !== null) {
+            return $detected;
+        }
+
+        if ($countryCodeDigits === '') {
+            $countryCodeDigits = '52';
+        }
+
+        if ($phoneDigits !== '' && str_starts_with($phoneDigits, $countryCodeDigits)) {
+            $possibleLocalPhone = substr($phoneDigits, strlen($countryCodeDigits));
+
+            if ($possibleLocalPhone !== '') {
+                $phoneDigits = $possibleLocalPhone;
+            }
+        }
+
+        return [
+            'countryCode' => '+' . $countryCodeDigits,
+            'phone' => $phoneDigits,
+        ];
+    }
+
+    /**
+     * @return array{countryCode:string, phone:string}|null
+     */
+    private function splitInternationalPhone(string $rawPhone): ?array
+    {
+        $normalizedRawPhone = trim($rawPhone);
+
+        if ($normalizedRawPhone === '') {
+            return null;
+        }
+
+        $phoneDigits = preg_replace('/\D+/', '', $normalizedRawPhone) ?? '';
+
+        if ($phoneDigits === '') {
+            return null;
+        }
+
+        if (str_starts_with($phoneDigits, '00')) {
+            $phoneDigits = substr($phoneDigits, 2);
+        }
+
+        $countryCodes = $this->knownCountryCodes();
+
+        foreach ($countryCodes as $countryCodeDigits) {
+            if (!str_starts_with($phoneDigits, $countryCodeDigits)) {
+                continue;
+            }
+
+            $localPhone = substr($phoneDigits, strlen($countryCodeDigits));
+
+            if ($localPhone === '') {
+                continue;
+            }
+
+            return [
+                'countryCode' => '+' . $countryCodeDigits,
+                'phone' => $localPhone,
+            ];
+        }
+
+        if (str_starts_with($normalizedRawPhone, '+')) {
+            if (preg_match('/^\s*\+(\d{1,4})[\s\-.]*(.+)$/', $normalizedRawPhone, $matches)) {
+                $detectedCountryCode = preg_replace('/\D+/', '', (string) $matches[1]) ?? '';
+                $detectedPhone = preg_replace('/\D+/', '', (string) $matches[2]) ?? '';
+
+                if ($detectedCountryCode !== '' && $detectedPhone !== '') {
+                    return [
+                        'countryCode' => '+' . $detectedCountryCode,
+                        'phone' => $detectedPhone,
+                    ];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function knownCountryCodes(): array
+    {
+        return [
+            '52',
+            '53',
+            '57',
+            '1',
+            '34',
+            '54',
+            '55',
+            '56',
+            '58',
+            '51',
+            '502',
+            '503',
+            '504',
+            '505',
+            '506',
+            '507',
+            '593',
+            '591',
+            '595',
+            '598',
+            '44',
+            '33',
+            '49',
+            '39',
+        ];
+    }
+
+    private function buildWhatsAppRecipient(?string $countryCode, ?string $phone): string
+    {
+        $countryCodeDigits = preg_replace('/\D+/', '', (string) $countryCode) ?? '';
+        $phoneDigits = preg_replace('/\D+/', '', (string) $phone) ?? '';
+
+        if ($phoneDigits === '') {
+            return '';
+        }
+
+        if ($countryCodeDigits === '') {
+            $countryCodeDigits = '52';
+        }
+
+        if (str_starts_with($phoneDigits, $countryCodeDigits)) {
+            return $phoneDigits;
+        }
+
+        return $countryCodeDigits . $phoneDigits;
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     private function validateBookingPayload(array $data): void
@@ -531,6 +710,22 @@ final class AppointmentBookingService
 
         if (empty($data['customer']['phone'])) {
             throw new \InvalidArgumentException('Falta el teléfono del cliente.');
+        }
+
+        $normalizedPhone = $this->normalizeCustomerPhone(
+            countryCode: (string) ($data['customer']['countryCode'] ?? '+52'),
+            phone: (string) ($data['customer']['phone'] ?? '')
+        );
+
+        $countryCodeDigits = preg_replace('/\D+/', '', $normalizedPhone['countryCode']) ?? '';
+        $phoneDigits = preg_replace('/\D+/', '', $normalizedPhone['phone']) ?? '';
+
+        if ($countryCodeDigits === '' || strlen($countryCodeDigits) < 1 || strlen($countryCodeDigits) > 4) {
+            throw new \InvalidArgumentException('El código de país del cliente no es válido.');
+        }
+
+        if (strlen($phoneDigits) < 6 || strlen($phoneDigits) > 15) {
+            throw new \InvalidArgumentException('El teléfono del cliente no es válido. Incluye lada del país y número.');
         }
 
         if (empty($data['services']) || !is_array($data['services'])) {
@@ -576,6 +771,22 @@ final class AppointmentBookingService
 
         if (!filter_var((string) $state['customer_email'], FILTER_VALIDATE_EMAIL)) {
             throw new \InvalidArgumentException('El correo del cliente no es válido.');
+        }
+
+        $normalizedPhone = $this->normalizeCustomerPhone(
+            countryCode: (string) ($state['customer_country_code'] ?? '+52'),
+            phone: (string) ($state['customer_phone'] ?? '')
+        );
+
+        $countryCodeDigits = preg_replace('/\D+/', '', $normalizedPhone['countryCode']) ?? '';
+        $phoneDigits = preg_replace('/\D+/', '', $normalizedPhone['phone']) ?? '';
+
+        if ($countryCodeDigits === '' || strlen($countryCodeDigits) < 1 || strlen($countryCodeDigits) > 4) {
+            throw new \InvalidArgumentException('El código de país del cliente no es válido.');
+        }
+
+        if (strlen($phoneDigits) < 6 || strlen($phoneDigits) > 15) {
+            throw new \InvalidArgumentException('El teléfono del cliente no es válido. Incluye lada del país y número.');
         }
     }
 
