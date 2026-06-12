@@ -13,6 +13,7 @@ use App\Entity\MasterProduct;
 use App\Entity\Sale;
 use App\Entity\User;
 use App\Enum\SaleStatus;
+use App\Enum\AppointmentStatus;
 use App\Repository\UserRepository;
 use Doctrine\ORM\Tools\Pagination\Paginator;
 use FOS\RestBundle\Controller\Annotations as Rest;
@@ -397,10 +398,14 @@ final class BarberController extends BaseController
             return $this->json([], Response::HTTP_OK);
         }
 
-        // 2. Get Barber Profile for slot configuration
+        // 2. Get Barber Profile and schedule configuration
         $barberProfile = $this->entityManager->getRepository(BarberProfile::class)->findOneBy(['user' => $barberId]);
         $slotMinutes = $barberSchedule->getSlotMinutes() ?: ($barberProfile ? $barberProfile->getSlotMinutes() : 30);
         $turnDuration = $barberSchedule->getTurnDuration() ?: 60;
+
+        $gapMinutes = max(0, (int)$slotMinutes);
+        $turnDuration = max(1, (int)$turnDuration);
+        $stepMinutes = max(1, $turnDuration + $gapMinutes);
 
         // 3. Get Occupied Slots from Sales
         $sales = $this->entityManager->getRepository(Sale::class)
@@ -420,7 +425,7 @@ final class BarberController extends BaseController
         $occupiedRanges = [];
         foreach ($sales as $sale) {
             $start = $sale->getSaleDate();
-            $end = (clone $start)->modify("+{$turnDuration} minutes");
+            $end = (clone $start)->modify("+{$stepMinutes} minutes");
             $occupiedRanges[] = ['start' => $start, 'end' => $end];
         }
 
@@ -441,7 +446,39 @@ final class BarberController extends BaseController
             $occupiedRanges[] = ['start' => $to->getStartAtLocal(), 'end' => $to->getEndAtLocal()];
         }
 
-        // 5. Generate Slots
+        // 5. Get occupied slots from active appointments. Cancelled appointments are ignored,
+        // so their time is released automatically.
+        if ($barberProfile) {
+            $appointments = $this->entityManager->getRepository(AppointmentService::class)
+                ->createQueryBuilder('aps')
+                ->join('aps.appointment', 'a')
+                ->where('aps.barber = :barberProfile')
+                ->andWhere('aps.scheduledDateTime >= :startOfDay')
+                ->andWhere('aps.scheduledDateTime <= :endOfDay')
+                ->andWhere('a.status != :cancelledAppointmentStatus')
+                ->setParameter('barberProfile', $barberProfile)
+                ->setParameter('startOfDay', $date->format('Y-m-d 00:00:00'))
+                ->setParameter('endOfDay', $date->format('Y-m-d 23:59:59'))
+                ->setParameter('cancelledAppointmentStatus', AppointmentStatus::CANCELLED)
+                ->getQuery()
+                ->getResult();
+
+            foreach ($appointments as $appointmentService) {
+                $start = $appointmentService->getScheduledDateTime();
+
+                if (!$start instanceof \DateTimeInterface) {
+                    continue;
+                }
+
+                $duration = (int)$appointmentService->getDuration();
+                $duration = $duration > 0 ? $duration : $turnDuration;
+                $end = (clone $start)->modify('+' . ($duration + $gapMinutes) . ' minutes');
+
+                $occupiedRanges[] = ['start' => $start, 'end' => $end];
+            }
+        }
+
+        // 6. Generate Slots
         $slots = [];
         $currentTime = clone $date;
         $currentTime->setTime((int)$barberSchedule->getOpenTime()->format('H'), (int)$barberSchedule->getOpenTime()->format('i'));
@@ -452,35 +489,34 @@ final class BarberController extends BaseController
         while ($currentTime < $endTime) {
             $slotStart = clone $currentTime;
             $slotEnd = (clone $currentTime)->modify("+{$turnDuration} minutes");
+            $slotOperationalEnd = (clone $slotEnd)->modify("+{$gapMinutes} minutes");
 
+            // El servicio debe terminar dentro del horario laboral.
+            // El gap posterior puede quedar al cierre de la jornada.
             if ($slotEnd > $endTime) break;
 
             $isOccupied = false;
 
-            // 1. Check AppointmentService overlap
-            if ($barberProfile && $this->entityManager->getRepository(AppointmentService::class)->hasOverlap($barberProfile->getId(), $slotStart, $turnDuration)) {
-                $isOccupied = true;
-            }
+            foreach ($occupiedRanges as $range) {
+                if (empty($range['start']) || empty($range['end'])) {
+                    continue;
+                }
 
-            if (!$isOccupied) {
-                // 2. Check Sales/TimeOff overlaps
-                foreach ($occupiedRanges as $range) {
-                    $maxStart = max($slotStart->getTimestamp(), $range['start']->getTimestamp());
-                    $minEnd = min($slotEnd->getTimestamp(), $range['end']->getTimestamp());
+                $maxStart = max($slotStart->getTimestamp(), $range['start']->getTimestamp());
+                $minEnd = min($slotOperationalEnd->getTimestamp(), $range['end']->getTimestamp());
 
-                    if ($maxStart < $minEnd) {
-                        $isOccupied = true;
-                        break;
-                    }
+                if ($maxStart < $minEnd) {
+                    $isOccupied = true;
+                    break;
                 }
             }
 
             if (!$isOccupied) {
-                // Format: 11:00 AM - 11:30 AM
                 $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
             }
 
-            $currentTime->modify("+{$slotMinutes} minutes");
+            // El siguiente inicio avanza por duración del servicio + gap.
+            $currentTime->modify("+{$stepMinutes} minutes");
         }
 
         // 6. Group Slots

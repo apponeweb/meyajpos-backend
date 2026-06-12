@@ -400,18 +400,18 @@ class WhatsAppCatalogService
         }
 
         /*
-         * Regla correcta:
-         * slot_minutes = cada cuántos minutos puede iniciar una cita.
-         * turn_duration / duración del servicio = cuánto dura realmente la cita.
+         * Regla operativa BookinPOS:
+         * slot_minutes = gap/espacio entre clientes.
+         * turn_duration = duración real del servicio configurada en el horario.
          *
          * Ejemplo:
          * slot_minutes = 30
          * turn_duration = 60
          *
          * Resultado:
-         * 12:00 PM - 01:00 PM
+         * 11:00 AM - 12:00 PM
          * 12:30 PM - 01:30 PM
-         * 01:00 PM - 02:00 PM
+         * 02:00 PM - 03:00 PM
          */
         $slotMinutes = (int) ($schedule['slot_minutes'] ?? 30);
         $scheduleTurnDuration = (int) ($schedule['turn_duration'] ?? 60);
@@ -430,18 +430,20 @@ class WhatsAppCatalogService
         }
 
         /*
-         * Si la duración del servicio cambió a 60, pero el schedule sigue en 30,
-         * usamos la duración mayor para no mostrar slots visuales de 30 min.
+         * La duración real del bloque visible sale de la configuración del horario
+         * y del servicio del barbero. Conservamos la mayor para evitar rangos más
+         * cortos que la duración configurada para ese servicio.
          */
         $turnDuration = max($scheduleTurnDuration, $serviceDuration);
+        $gapMinutes = max(0, $slotMinutes);
 
-        $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration);
+        $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration, $gapMinutes);
 
         $slots = $this->generateSlots(
             $date,
             (string) $schedule['open_time'],
             (string) $schedule['close_time'],
-            $slotMinutes,
+            $gapMinutes,
             $turnDuration,
             $occupiedRanges
         );
@@ -539,7 +541,7 @@ class WhatsAppCatalogService
         return (bool) $branchIsOpen;
     }
 
-    private function getOccupiedRanges(int $barberId, int $branchId, string $date, int $turnDuration): array
+    private function getOccupiedRanges(int $barberId, int $branchId, string $date, int $turnDuration, int $gapMinutes): array
     {
         $occupiedRanges = [];
 
@@ -607,7 +609,7 @@ class WhatsAppCatalogService
 
                 $occupiedRanges[] = [
                     'start' => $start,
-                    'end' => $start->modify(sprintf('+%d minutes', $turnDuration)),
+                    'end' => $start->modify(sprintf('+%d minutes', $turnDuration + $gapMinutes)),
                 ];
             }
         } catch (\Throwable) {
@@ -647,7 +649,7 @@ class WhatsAppCatalogService
 
                 $occupiedRanges[] = [
                     'start' => $start,
-                    'end' => $start->modify(sprintf('+%d minutes', $duration > 0 ? $duration : $turnDuration)),
+                    'end' => $start->modify(sprintf('+%d minutes', ($duration > 0 ? $duration : $turnDuration) + $gapMinutes)),
                 ];
             }
         } catch (\Throwable) {
@@ -663,7 +665,7 @@ class WhatsAppCatalogService
         string $date,
         string $openTime,
         string $closeTime,
-        int $slotMinutes,
+        int $gapMinutes,
         int $turnDuration,
         array $occupiedRanges
     ): array {
@@ -674,11 +676,17 @@ class WhatsAppCatalogService
         $currentTime = new \DateTimeImmutable(sprintf('%s %s', $date, $openTime), $timezone);
         $endTime = new \DateTimeImmutable(sprintf('%s %s', $date, $closeTime), $timezone);
         $now = new \DateTimeImmutable('now', $timezone);
+        $stepMinutes = max(1, $turnDuration + max(0, $gapMinutes));
 
         while ($currentTime < $endTime) {
             $slotStart = $currentTime;
             $slotEnd = $currentTime->modify(sprintf('+%d minutes', $turnDuration));
+            $slotOperationalEnd = $slotEnd->modify(sprintf('+%d minutes', max(0, $gapMinutes)));
 
+            /*
+             * El servicio debe terminar dentro del horario laboral. El gap posterior
+             * puede quedar al final de la jornada porque ya no atiende a otro cliente.
+             */
             if ($slotEnd > $endTime) {
                 break;
             }
@@ -687,19 +695,18 @@ class WhatsAppCatalogService
              * Si la fecha es hoy, no mostramos horarios que ya pasaron.
              */
             if ($slotStart <= $now) {
-                $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+                $currentTime = $currentTime->modify(sprintf('+%d minutes', $stepMinutes));
                 continue;
             }
 
-            if (!$this->hasOverlap($slotStart, $slotEnd, $occupiedRanges)) {
+            if (!$this->hasOverlap($slotStart, $slotOperationalEnd, $occupiedRanges)) {
                 $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
             }
 
             /*
-             * El siguiente inicio avanza por slot_minutes, no por duración.
-             * Esto permite inicios cada 30 min aunque el servicio dure 60 min.
+             * El siguiente inicio avanza por duración del servicio + gap.
              */
-            $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+            $currentTime = $currentTime->modify(sprintf('+%d minutes', $stepMinutes));
         }
 
         return $slots;
