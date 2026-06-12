@@ -37,6 +37,14 @@ final class IntentClassifier
         $aiIntent = (string) ($aiResult['intent'] ?? 'unknown');
         $confidence = (float) ($aiResult['confidence'] ?? 0);
 
+        error_log(sprintf(
+            '[WhatsApp AI Intent] message="%s" intent="%s" confidence="%s" entities=%s',
+            $message,
+            $aiIntent,
+            (string) $confidence,
+            json_encode($aiResult['entities'] ?? [], JSON_UNESCAPED_UNICODE)
+        ));
+
         $this->logger->info('OpenAI intent classifier result', [
             'message' => $message,
             'intent' => $aiIntent,
@@ -101,6 +109,17 @@ final class IntentClassifier
             'cancelacion',
             'cancelación',
             'cancelar folio',
+            'cancelar el folio',
+            'cancelar reservacion',
+            'cancelar reservación',
+            'anular reservacion',
+            'anular reservación',
+            'anular mi cita',
+            'anular cita',
+            'quiero cancelar',
+            'quiero cancelar mi cita',
+            'quiero cancelar el folio',
+            'quiero cancelar folio',
         ])) {
             return 'cancel_appointment';
         }
@@ -141,6 +160,13 @@ final class IntentClassifier
             'hoy',
             'mañana',
             'manana',
+            'espacio',
+            'espacio disponible',
+            'lugar',
+            'apartado',
+            'apartar',
+            'reservación',
+            'reservacion',
         ])) {
             return 'check_agenda';
         }
