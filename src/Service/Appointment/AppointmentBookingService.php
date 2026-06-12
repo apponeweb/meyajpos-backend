@@ -17,15 +17,22 @@ use App\Enum\AppointmentStatus;
 use App\Enum\SaleStatus;
 use App\Repository\AppointmentServiceRepository;
 use App\Repository\CustomerRepository;
+use App\Service\WhatsApp\WhatsAppClient;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 final class AppointmentBookingService
 {
+    private const SOURCE_WHATSAPP = 'whatsapp';
+    private const SOURCE_LANDING = 'landing';
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly CustomerRepository $customerRepository,
         private readonly AppointmentServiceRepository $appointmentServiceRepository,
+        private readonly WhatsAppClient $whatsAppClient,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -80,10 +87,14 @@ final class AppointmentBookingService
             $this->entityManager->flush();
             $this->entityManager->commit();
 
-            return [
+            $result = [
                 'appointmentId' => $appointment->getId(),
                 'customer' => $customer->getName(),
             ];
+
+            $this->notifyCustomerByWhatsAppIfNeeded($data, $appointment, $customer, $branch);
+
+            return $result;
         } catch (\Throwable $exception) {
             $this->entityManager->rollback();
 
@@ -107,6 +118,8 @@ final class AppointmentBookingService
         $this->validateWhatsAppState($state);
 
         $payload = [
+            'source' => self::SOURCE_WHATSAPP,
+            'notifyCustomerWhatsApp' => false,
             'branch' => [
                 'id' => (int) $state['branch_id'],
                 'name' => (string) $state['branch_name'],
@@ -155,17 +168,20 @@ final class AppointmentBookingService
         $email = mb_strtolower(trim((string) ($customerData['email'] ?? '')));
         $phone = preg_replace('/\D+/', '', (string) ($customerData['phone'] ?? '')) ?? '';
 
-        $queryBuilder = $this->customerRepository->createQueryBuilder('c')
-            ->where('c.email = :email')
-            ->orWhere('c.phone = :phone')
-            ->setParameter('email', $email)
-            ->setParameter('phone', $phone)
-            ->setMaxResults(1);
-
         /** @var Customer|null $customer */
-        $customer = $queryBuilder->getQuery()->getOneOrNullResult();
+        $customer = $this->customerRepository->createQueryBuilder('c')
+            ->where('LOWER(c.email) = :email')
+            ->setParameter('email', $email)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
 
         if ($customer) {
+            $customer->setName(trim((string) $customerData['name']));
+            $customer->setPhone($phone);
+            $customer->setCountryCode((string) ($customerData['countryCode'] ?? '+52'));
+            $customer->setBranch($branch);
+
             return $customer;
         }
 
@@ -399,6 +415,97 @@ final class AppointmentBookingService
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function notifyCustomerByWhatsAppIfNeeded(
+        array $data,
+        Appointment $appointment,
+        Customer $customer,
+        Branch $branch
+    ): void {
+        $source = mb_strtolower((string) ($data['source'] ?? self::SOURCE_LANDING));
+        $shouldNotify = (bool) ($data['notifyCustomerWhatsApp'] ?? true);
+
+        if ($source === self::SOURCE_WHATSAPP || !$shouldNotify) {
+            return;
+        }
+
+        $phone = trim((string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''));
+
+        if ($phone === '') {
+            $this->logger->warning('No se envió confirmación WhatsApp: cliente sin teléfono.', [
+                'appointment_id' => $appointment->getId(),
+                'customer_id' => $customer->getId(),
+            ]);
+
+            return;
+        }
+
+        $customerName = trim((string) ($data['customer']['name'] ?? $customer->getName() ?? 'Cliente'));
+        $appointmentDetails = $this->formatBookingConfirmationDetails(
+            data: $data,
+            appointment: $appointment,
+            branch: $branch
+        );
+
+        try {
+            $result = $this->whatsAppClient->sendBookingConfirmationTemplate(
+                to: $phone,
+                customerName: $customerName,
+                appointmentDetails: $appointmentDetails
+            );
+
+            $this->logger->info('Confirmación de cita enviada por WhatsApp.', [
+                'appointment_id' => $appointment->getId(),
+                'customer_phone' => $phone,
+                'result' => $result,
+            ]);
+        } catch (\Throwable $exception) {
+            $this->logger->error('No se pudo enviar confirmación de cita por WhatsApp.', [
+                'appointment_id' => $appointment->getId(),
+                'customer_phone' => $phone,
+                'detail' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function formatBookingConfirmationDetails(
+        array $data,
+        Appointment $appointment,
+        Branch $branch
+    ): string {
+        $serviceData = $data['services'][0] ?? [];
+
+        $serviceName = (string) ($serviceData['name'] ?? 'Servicio');
+        $barberName = (string) ($serviceData['professionalName'] ?? 'Por asignar');
+        $scheduledDate = (string) ($serviceData['scheduledDate'] ?? '');
+        $timeLabel = (string) ($serviceData['time'] ?? '');
+
+        if ($scheduledDate !== '') {
+            try {
+                $date = new \DateTimeImmutable($scheduledDate);
+                $scheduledDate = $date->format('d/m/Y');
+            } catch (\Throwable) {
+                // Conserva la fecha original si no puede formatearse.
+            }
+        }
+
+        return sprintf(
+            "Folio: %s\nSucursal: %s\nServicio: %s\nBarbero: %s\nFecha: %s\nHorario: %s",
+            (string) ($appointment->getId() ?? ''),
+            (string) ($data['branch']['name'] ?? $branch->getName()),
+            $serviceName,
+            $barberName,
+            $scheduledDate,
+            $timeLabel
+        );
     }
 
     /**
