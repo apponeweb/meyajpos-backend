@@ -131,7 +131,7 @@ final class WhatsAppBotOrchestrator
             }
 
             if ($this->shouldStartBookingFlow($normalizedBody)) {
-                $this->startBookingFlow($from);
+                $this->startBookingFlow($from, $body);
 
                 return;
             }
@@ -151,10 +151,10 @@ final class WhatsAppBotOrchestrator
             } else {
                 $responseText = match ($intent) {
                     'greeting' => $this->mainMenu(),
-                    'check_agenda' => $this->startBookingFlowAndReturnMessage($from),
+                    'check_agenda' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'check_barbers' => $this->barbersResponse(),
                     'reschedule' => $this->rescheduleResponse(),
-                    'list_services' => $this->startBookingFlowAndReturnMessage($from),
+                    'list_services' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'product_recommendation' => $this->productsResponse($body),
                     'haircut_recommendation' => $this->haircutRecommendationResponse($body),
                     default => $this->unknownResponse(),
@@ -208,23 +208,78 @@ final class WhatsAppBotOrchestrator
             || str_contains($normalizedBody, 'servicios');
     }
 
-    private function startBookingFlow(string $from): void
+    private function startBookingFlow(string $from, ?string $message = null): void
     {
         $state = $this->conversationStateService->start($from, 1);
+        $state = $this->applyBookingHintsFromMessage($from, $state, $message);
+
         $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+
+        $messageText = $this->catalogService->formatBranchesMenu($branches);
+
+        if (!empty($state['date'])) {
+            $messageText = sprintf(
+                "Detecté que quieres agendar para *%s*.
+
+%s",
+                $this->formatDateHintForCustomer((string) $state['date']),
+                $messageText
+            );
+        }
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            $this->catalogService->formatBranchesMenu($branches)
+            $messageText
         );
     }
 
-    private function startBookingFlowAndReturnMessage(string $from): string
+    private function startBookingFlowAndReturnMessage(string $from, ?string $message = null): string
     {
         $state = $this->conversationStateService->start($from, 1);
-        $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+        $state = $this->applyBookingHintsFromMessage($from, $state, $message);
 
-        return $this->catalogService->formatBranchesMenu($branches);
+        $branches = $this->catalogService->getBranchesByCompany((int) $state['company_id']);
+        $messageText = $this->catalogService->formatBranchesMenu($branches);
+
+        if (!empty($state['date'])) {
+            $messageText = sprintf(
+                "Detecté que quieres agendar para *%s*.
+
+%s",
+                $this->formatDateHintForCustomer((string) $state['date']),
+                $messageText
+            );
+        }
+
+        return $messageText;
+    }
+
+    private function applyBookingHintsFromMessage(string $from, array $state, ?string $message): array
+    {
+        if ($message === null || trim($message) === '') {
+            return $state;
+        }
+
+        $dateText = $this->extractBookingDateTextFromMessage($message);
+
+        if ($dateText === null) {
+            return $state;
+        }
+
+        $date = $this->parseBookingDate($dateText);
+
+        if ($date === null || $this->isPastBookingDate($date)) {
+            return $state;
+        }
+
+        return $this->conversationStateService->updateState(
+            $from,
+            (string) ($state['step'] ?? 'selecting_branch'),
+            [
+                'date' => $date,
+                'date_text' => $dateText,
+            ]
+        );
     }
 
     private function handleBranchSelection(string $from, string $normalizedBody, array $state): void
@@ -245,14 +300,24 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
+        $branchStateData = [
+            'branch_id' => (int) $branch['id'],
+            'branch_name' => (string) $branch['name'],
+            'branch_address' => (string) ($branch['address'] ?? ''),
+        ];
+
+        if (!empty($state['date'])) {
+            $branchStateData['date'] = (string) $state['date'];
+        }
+
+        if (!empty($state['date_text'])) {
+            $branchStateData['date_text'] = (string) $state['date_text'];
+        }
+
         $this->conversationStateService->updateState(
             $from,
             'selecting_service',
-            [
-                'branch_id' => (int) $branch['id'],
-                'branch_name' => (string) $branch['name'],
-                'branch_address' => (string) ($branch['address'] ?? ''),
-            ]
+            $branchStateData
         );
 
         $services = $this->catalogService->getServicesByBranch((int) $branch['id']);
@@ -281,16 +346,32 @@ final class WhatsAppBotOrchestrator
             return;
         }
 
-        $this->conversationStateService->updateState(
+        $serviceStateData = [
+            'service_id' => (int) $service['id'],
+            'service_name' => (string) $service['name'],
+            'service_price' => (float) $service['price'],
+            'service_duration' => (int) $service['duration'],
+        ];
+
+        if (!empty($state['date'])) {
+            $serviceStateData['date'] = (string) $state['date'];
+        }
+
+        if (!empty($state['date_text'])) {
+            $serviceStateData['date_text'] = (string) $state['date_text'];
+        }
+
+        $updatedState = $this->conversationStateService->updateState(
             $from,
             'selecting_date',
-            [
-                'service_id' => (int) $service['id'],
-                'service_name' => (string) $service['name'],
-                'service_price' => (float) $service['price'],
-                'service_duration' => (int) $service['duration'],
-            ]
+            $serviceStateData
         );
+
+        if (!empty($updatedState['date'])) {
+            $this->handleDateSelection($from, (string) $updatedState['date'], $updatedState);
+
+            return;
+        }
 
         $this->whatsAppClient->sendTextMessage(
             $from,
@@ -784,6 +865,54 @@ final class WhatsAppBotOrchestrator
         }
 
         return strlen($phone) > 10 ? substr($phone, -10) : $phone;
+    }
+
+    private function extractBookingDateTextFromMessage(string $message): ?string
+    {
+        $text = mb_strtolower(trim($message));
+
+        if ($text === '') {
+            return null;
+        }
+
+        if (preg_match('/\b(hoy)\b/u', $text)) {
+            return 'hoy';
+        }
+
+        if (preg_match('/\b(mañana|manana)\b/u', $text, $matches)) {
+            return (string) $matches[1];
+        }
+
+        if (preg_match('/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/u', $text, $matches)) {
+            return (string) $matches[1];
+        }
+
+        if (preg_match('/\b(\d{4}-\d{1,2}-\d{1,2})\b/u', $text, $matches)) {
+            return (string) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function formatDateHintForCustomer(string $date): string
+    {
+        try {
+            $timezone = new \DateTimeZone('America/Mexico_City');
+            $selectedDate = new \DateTimeImmutable($date . ' 00:00:00', $timezone);
+            $today = new \DateTimeImmutable('today', $timezone);
+
+            if ($selectedDate->format('Y-m-d') === $today->format('Y-m-d')) {
+                return 'hoy';
+            }
+
+            if ($selectedDate->format('Y-m-d') === $today->modify('+1 day')->format('Y-m-d')) {
+                return 'mañana';
+            }
+
+            return $selectedDate->format('d/m/Y');
+        } catch (\Throwable) {
+            return $date;
+        }
     }
 
     private function parseBookingDate(string $message): ?string
