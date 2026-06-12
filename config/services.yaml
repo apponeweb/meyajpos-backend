@@ -57,5 +57,18 @@ services:
         arguments:
             $openAiApiKey: '%app.openai_api_key%'
 
+
+    App\Service\AI\OpenAIClient:
+        arguments:
+            $openAiApiKey: '%env(default::OPENAI_API_KEY)%'
+            $openAiModel: '%env(default:gpt-5.4-mini:OPENAI_MODEL)%'
+            $timeoutSeconds: '%env(int:default:20:OPENAI_TIMEOUT_SECONDS)%'
+
+    App\Service\WhatsApp\IntentClassifier:
+        arguments:
+            $openAiEnabled: '%env(bool:default:true:OPENAI_ENABLED)%'
+            $minimumAiConfidence: '%env(float:default:0.70:OPENAI_MIN_CONFIDENCE)%'
+
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
