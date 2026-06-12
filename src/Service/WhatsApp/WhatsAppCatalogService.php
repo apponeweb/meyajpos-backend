@@ -400,18 +400,18 @@ class WhatsAppCatalogService
         }
 
         /*
-         * Regla operativa BookinPOS:
-         * slot_minutes = gap/espacio entre clientes.
-         * turn_duration = duración real del servicio configurada en el horario.
+         * Regla correcta:
+         * slot_minutes = cada cuántos minutos puede iniciar una cita.
+         * turn_duration / duración del servicio = cuánto dura realmente la cita.
          *
          * Ejemplo:
          * slot_minutes = 30
          * turn_duration = 60
          *
          * Resultado:
-         * 11:00 AM - 12:00 PM
+         * 12:00 PM - 01:00 PM
          * 12:30 PM - 01:30 PM
-         * 02:00 PM - 03:00 PM
+         * 01:00 PM - 02:00 PM
          */
         $slotMinutes = (int) ($schedule['slot_minutes'] ?? 30);
         $scheduleTurnDuration = (int) ($schedule['turn_duration'] ?? 60);
@@ -430,20 +430,18 @@ class WhatsAppCatalogService
         }
 
         /*
-         * La duración real del bloque visible sale de la configuración del horario
-         * y del servicio del barbero. Conservamos la mayor para evitar rangos más
-         * cortos que la duración configurada para ese servicio.
+         * Si la duración del servicio cambió a 60, pero el schedule sigue en 30,
+         * usamos la duración mayor para no mostrar slots visuales de 30 min.
          */
         $turnDuration = max($scheduleTurnDuration, $serviceDuration);
-        $gapMinutes = max(0, $slotMinutes);
 
-        $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration, $gapMinutes);
+        $occupiedRanges = $this->getOccupiedRanges($barberId, $branchId, $date, $turnDuration);
 
         $slots = $this->generateSlots(
             $date,
             (string) $schedule['open_time'],
             (string) $schedule['close_time'],
-            $gapMinutes,
+            $slotMinutes,
             $turnDuration,
             $occupiedRanges
         );
@@ -515,6 +513,206 @@ class WhatsAppCatalogService
         return sprintf('%s %s', $date, $timeLabel);
     }
 
+
+    public function getBranchByText(int $companyId, string $text): ?array
+    {
+        return $this->findBestTextMatch(
+            $this->getBranchesByCompany($companyId),
+            $text,
+            static fn (array $branch): string => (string) ($branch['name'] ?? '')
+        );
+    }
+
+    public function getServiceByText(int $branchId, string $text): ?array
+    {
+        return $this->findBestTextMatch(
+            $this->getServicesByBranch($branchId),
+            $text,
+            static fn (array $service): string => (string) ($service['name'] ?? '')
+        );
+    }
+
+    public function getAvailableBarberByText(int $branchId, string $date, int $productId, string $text): ?array
+    {
+        return $this->findBestTextMatch(
+            $this->getAvailableBarbers($branchId, $date, $productId),
+            $text,
+            static fn (array $barber): string => (string) ($barber['name'] ?? '')
+        );
+    }
+
+    public function getSlotByTimeText(int $barberId, int $branchId, string $date, int $productId, string $text): ?array
+    {
+        $slotGroups = $this->getAvailableSlots($barberId, $branchId, $date, $productId);
+        $slots = $this->flattenSlotGroups($slotGroups);
+        $candidates = $this->normalizeTimeCandidates($text);
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        $matches = [];
+
+        foreach ($slots as $slot) {
+            $slotStart = $this->extractSlotStartTime((string) ($slot['time'] ?? ''));
+
+            if ($slotStart === null) {
+                continue;
+            }
+
+            if (in_array($slotStart, $candidates, true)) {
+                $matches[] = $slot;
+            }
+        }
+
+        return count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    private function findBestTextMatch(array $items, string $text, callable $labelExtractor): ?array
+    {
+        $needle = $this->normalizeSearchText($text);
+
+        if ($needle === '') {
+            return null;
+        }
+
+        $best = null;
+        $bestScore = 0;
+        $secondBestScore = 0;
+
+        foreach ($items as $item) {
+            $label = $this->normalizeSearchText((string) $labelExtractor($item));
+
+            if ($label === '') {
+                continue;
+            }
+
+            $score = $this->scoreTextMatch($needle, $label);
+
+            if ($score > $bestScore) {
+                $secondBestScore = $bestScore;
+                $bestScore = $score;
+                $best = $item;
+            } elseif ($score > $secondBestScore) {
+                $secondBestScore = $score;
+            }
+        }
+
+        if ($best === null || $bestScore < 65) {
+            return null;
+        }
+
+        if ($secondBestScore > 0 && ($bestScore - $secondBestScore) < 10) {
+            return null;
+        }
+
+        return $best;
+    }
+
+    private function scoreTextMatch(string $needle, string $label): int
+    {
+        if ($needle === $label) {
+            return 100;
+        }
+
+        if (str_contains($needle, $label) || str_contains($label, $needle)) {
+            return 90;
+        }
+
+        $needleTokens = array_values(array_filter(explode(' ', $needle)));
+        $labelTokens = array_values(array_filter(explode(' ', $label)));
+
+        if ($needleTokens === [] || $labelTokens === []) {
+            return 0;
+        }
+
+        $matches = 0;
+
+        foreach ($labelTokens as $labelToken) {
+            foreach ($needleTokens as $needleToken) {
+                if ($labelToken === $needleToken || str_contains($labelToken, $needleToken) || str_contains($needleToken, $labelToken)) {
+                    $matches++;
+                    break;
+                }
+            }
+        }
+
+        return (int) floor(($matches / max(1, count($labelTokens))) * 100);
+    }
+
+    private function normalizeSearchText(string $text): string
+    {
+        $text = mb_strtolower(trim($text));
+        $text = strtr($text, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n',
+        ]);
+        $text = preg_replace('/[^a-z0-9\s]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeTimeCandidates(string $text): array
+    {
+        $normalized = $this->normalizeSearchText($text);
+
+        if (!preg_match('/(?:a\s+las|alas|a\s+la|la)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/u', $normalized, $matches)) {
+            return [];
+        }
+
+        $hour = (int) $matches[1];
+        $minute = isset($matches[2]) && $matches[2] !== '' ? (int) $matches[2] : 0;
+        $meridiem = $matches[3] ?? null;
+
+        if ($hour < 1 || $hour > 23 || $minute < 0 || $minute > 59) {
+            return [];
+        }
+
+        if ($meridiem === 'pm') {
+            return [sprintf('%02d:%02d', $hour < 12 ? $hour + 12 : $hour, $minute)];
+        }
+
+        if ($meridiem === 'am') {
+            return [sprintf('%02d:%02d', $hour === 12 ? 0 : $hour, $minute)];
+        }
+
+        if ($hour >= 13) {
+            return [sprintf('%02d:%02d', $hour, $minute)];
+        }
+
+        $candidates = [sprintf('%02d:%02d', $hour, $minute)];
+
+        if ($hour >= 1 && $hour <= 11) {
+            $candidates[] = sprintf('%02d:%02d', $hour + 12, $minute);
+        }
+
+        return array_values(array_unique($candidates));
+    }
+
+    private function extractSlotStartTime(string $slotLabel): ?string
+    {
+        $start = trim(explode(' - ', $slotLabel)[0] ?? $slotLabel);
+        $dateTime = \DateTimeImmutable::createFromFormat('h:i A', $start, new \DateTimeZone(self::BOOKING_TIMEZONE));
+
+        if (!$dateTime) {
+            $dateTime = \DateTimeImmutable::createFromFormat('H:i', $start, new \DateTimeZone(self::BOOKING_TIMEZONE));
+        }
+
+        return $dateTime ? $dateTime->format('H:i') : null;
+    }
+
     private function isBranchOpen(int $branchId, string $date, int $dayOfWeek): bool
     {
         $branchIsOpen = $this->connection->fetchOne(
@@ -541,7 +739,7 @@ class WhatsAppCatalogService
         return (bool) $branchIsOpen;
     }
 
-    private function getOccupiedRanges(int $barberId, int $branchId, string $date, int $turnDuration, int $gapMinutes): array
+    private function getOccupiedRanges(int $barberId, int $branchId, string $date, int $turnDuration): array
     {
         $occupiedRanges = [];
 
@@ -609,7 +807,7 @@ class WhatsAppCatalogService
 
                 $occupiedRanges[] = [
                     'start' => $start,
-                    'end' => $start->modify(sprintf('+%d minutes', $turnDuration + $gapMinutes)),
+                    'end' => $start->modify(sprintf('+%d minutes', $turnDuration)),
                 ];
             }
         } catch (\Throwable) {
@@ -649,7 +847,7 @@ class WhatsAppCatalogService
 
                 $occupiedRanges[] = [
                     'start' => $start,
-                    'end' => $start->modify(sprintf('+%d minutes', ($duration > 0 ? $duration : $turnDuration) + $gapMinutes)),
+                    'end' => $start->modify(sprintf('+%d minutes', $duration > 0 ? $duration : $turnDuration)),
                 ];
             }
         } catch (\Throwable) {
@@ -665,7 +863,7 @@ class WhatsAppCatalogService
         string $date,
         string $openTime,
         string $closeTime,
-        int $gapMinutes,
+        int $slotMinutes,
         int $turnDuration,
         array $occupiedRanges
     ): array {
@@ -676,17 +874,11 @@ class WhatsAppCatalogService
         $currentTime = new \DateTimeImmutable(sprintf('%s %s', $date, $openTime), $timezone);
         $endTime = new \DateTimeImmutable(sprintf('%s %s', $date, $closeTime), $timezone);
         $now = new \DateTimeImmutable('now', $timezone);
-        $stepMinutes = max(1, $turnDuration + max(0, $gapMinutes));
 
         while ($currentTime < $endTime) {
             $slotStart = $currentTime;
             $slotEnd = $currentTime->modify(sprintf('+%d minutes', $turnDuration));
-            $slotOperationalEnd = $slotEnd->modify(sprintf('+%d minutes', max(0, $gapMinutes)));
 
-            /*
-             * El servicio debe terminar dentro del horario laboral. El gap posterior
-             * puede quedar al final de la jornada porque ya no atiende a otro cliente.
-             */
             if ($slotEnd > $endTime) {
                 break;
             }
@@ -695,18 +887,19 @@ class WhatsAppCatalogService
              * Si la fecha es hoy, no mostramos horarios que ya pasaron.
              */
             if ($slotStart <= $now) {
-                $currentTime = $currentTime->modify(sprintf('+%d minutes', $stepMinutes));
+                $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
                 continue;
             }
 
-            if (!$this->hasOverlap($slotStart, $slotOperationalEnd, $occupiedRanges)) {
+            if (!$this->hasOverlap($slotStart, $slotEnd, $occupiedRanges)) {
                 $slots[] = $slotStart->format('h:i A') . ' - ' . $slotEnd->format('h:i A');
             }
 
             /*
-             * El siguiente inicio avanza por duración del servicio + gap.
+             * El siguiente inicio avanza por slot_minutes, no por duración.
+             * Esto permite inicios cada 30 min aunque el servicio dure 60 min.
              */
-            $currentTime = $currentTime->modify(sprintf('+%d minutes', $stepMinutes));
+            $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
         }
 
         return $slots;

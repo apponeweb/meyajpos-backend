@@ -70,14 +70,14 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
-            if ($state !== null && $state['step'] === 'selecting_branch' && ctype_digit($normalizedBody)) {
-                $this->handleBranchSelection($from, $normalizedBody, $state);
+            if ($state !== null && $state['step'] === 'selecting_branch') {
+                $this->handleBranchSelection($from, $body, $state);
 
                 return;
             }
 
-            if ($state !== null && $state['step'] === 'selecting_service' && ctype_digit($normalizedBody)) {
-                $this->handleServiceSelection($from, $normalizedBody, $state);
+            if ($state !== null && $state['step'] === 'selecting_service') {
+                $this->handleServiceSelection($from, $body, $state);
 
                 return;
             }
@@ -260,13 +260,7 @@ final class WhatsAppBotOrchestrator
             return $state;
         }
 
-        $dateText = $this->extractBookingDateTextFromMessage($message);
-
-        if ($dateText === null) {
-            return $state;
-        }
-
-        $date = $this->parseBookingDate($dateText);
+        $date = $this->parseBookingDate($message);
 
         if ($date === null || $this->isPastBookingDate($date)) {
             return $state;
@@ -277,24 +271,28 @@ final class WhatsAppBotOrchestrator
             (string) ($state['step'] ?? 'selecting_branch'),
             [
                 'date' => $date,
-                'date_text' => $dateText,
+                'date_text' => $this->extractBookingDateTextFromMessage($message) ?? $date,
             ]
         );
     }
 
-    private function handleBranchSelection(string $from, string $normalizedBody, array $state): void
+    private function handleBranchSelection(string $from, string $message, array $state): void
     {
-        $option = (int) $normalizedBody;
+        $normalizedBody = mb_strtolower(trim($message));
         $companyId = (int) $state['company_id'];
 
-        $branch = $this->catalogService->getBranchByOption($companyId, $option);
+        if (ctype_digit($normalizedBody)) {
+            $branch = $this->catalogService->getBranchByOption($companyId, (int) $normalizedBody);
+        } else {
+            $branch = $this->catalogService->getBranchByText($companyId, $message);
+        }
 
         if ($branch === null) {
             $branches = $this->catalogService->getBranchesByCompany($companyId);
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No encontré esa opción de sucursal.\n\n" . $this->catalogService->formatBranchesMenu($branches)
+                "No encontré esa sucursal. Puedes responder con el número o con el nombre.\n\n" . $this->catalogService->formatBranchesMenu($branches)
             );
 
             return;
@@ -328,19 +326,23 @@ final class WhatsAppBotOrchestrator
         );
     }
 
-    private function handleServiceSelection(string $from, string $normalizedBody, array $state): void
+    private function handleServiceSelection(string $from, string $message, array $state): void
     {
-        $option = (int) $normalizedBody;
+        $normalizedBody = mb_strtolower(trim($message));
         $branchId = (int) $state['branch_id'];
 
-        $service = $this->catalogService->getServiceByOption($branchId, $option);
+        if (ctype_digit($normalizedBody)) {
+            $service = $this->catalogService->getServiceByOption($branchId, (int) $normalizedBody);
+        } else {
+            $service = $this->catalogService->getServiceByText($branchId, $message);
+        }
 
         if ($service === null) {
             $services = $this->catalogService->getServicesByBranch($branchId);
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No encontré esa opción de servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+                "No encontré ese servicio. Puedes responder con el número o con el nombre del servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
             );
 
             return;
@@ -376,7 +378,7 @@ final class WhatsAppBotOrchestrator
         $this->whatsAppClient->sendTextMessage(
             $from,
             sprintf(
-                "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*",
+                "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*\n*18 de junio*\n*para el 18*",
                 (string) $service['name']
             )
         );
@@ -477,34 +479,21 @@ final class WhatsAppBotOrchestrator
 
     private function handleBarberSelection(string $from, string $normalizedBody, array $state): void
     {
-        if (!ctype_digit($normalizedBody)) {
-            $barbers = $this->catalogService->getAvailableBarbers(
+        if (ctype_digit($normalizedBody)) {
+            $barber = $this->catalogService->getAvailableBarberByOption(
                 (int) $state['branch_id'],
                 (string) $state['date'],
-                (int) $state['service_id']
+                (int) $state['service_id'],
+                (int) $normalizedBody
             );
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                "Responde con el número del barbero.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
-                    (string) $state['branch_name'],
-                    (string) $state['service_name'],
-                    (string) $state['date'],
-                    $barbers
-                )
+        } else {
+            $barber = $this->catalogService->getAvailableBarberByText(
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id'],
+                $normalizedBody
             );
-
-            return;
         }
-
-        $option = (int) $normalizedBody;
-
-        $barber = $this->catalogService->getAvailableBarberByOption(
-            (int) $state['branch_id'],
-            (string) $state['date'],
-            (int) $state['service_id'],
-            $option
-        );
 
         if ($barber === null) {
             $barbers = $this->catalogService->getAvailableBarbers(
@@ -515,7 +504,7 @@ final class WhatsAppBotOrchestrator
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No encontré esa opción de barbero.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
+                "No encontré ese barbero. Puedes responder con el número o con el nombre.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
                     (string) $state['branch_name'],
                     (string) $state['service_name'],
                     (string) $state['date'],
@@ -576,35 +565,23 @@ final class WhatsAppBotOrchestrator
 
     private function handleTimeSelection(string $from, string $normalizedBody, array $state): void
     {
-        if (!ctype_digit($normalizedBody)) {
-            $slotGroups = $this->catalogService->getAvailableSlots(
+        if (ctype_digit($normalizedBody)) {
+            $slot = $this->catalogService->getSlotByOption(
                 (int) $state['barber_id'],
                 (int) $state['branch_id'],
                 (string) $state['date'],
-                (int) $state['service_id']
+                (int) $state['service_id'],
+                (int) $normalizedBody
             );
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                "Responde con el número del horario.\n\n" . $this->catalogService->formatAvailableSlotsMenu(
-                    (string) $state['barber_name'],
-                    (string) $state['date'],
-                    $slotGroups
-                )
+        } else {
+            $slot = $this->catalogService->getSlotByTimeText(
+                (int) $state['barber_id'],
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id'],
+                $normalizedBody
             );
-
-            return;
         }
-
-        $option = (int) $normalizedBody;
-
-        $slot = $this->catalogService->getSlotByOption(
-            (int) $state['barber_id'],
-            (int) $state['branch_id'],
-            (string) $state['date'],
-            (int) $state['service_id'],
-            $option
-        );
 
         if ($slot === null) {
             $slotGroups = $this->catalogService->getAvailableSlots(
@@ -616,7 +593,7 @@ final class WhatsAppBotOrchestrator
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No encontré esa opción de horario.\n\n" . $this->catalogService->formatAvailableSlotsMenu(
+                "No encontré ese horario. Puedes responder con el número o con una hora como *5 pm*, *17:30* o *a las 5*.\n\n" . $this->catalogService->formatAvailableSlotsMenu(
                     (string) $state['barber_name'],
                     (string) $state['date'],
                     $slotGroups
@@ -869,26 +846,19 @@ final class WhatsAppBotOrchestrator
 
     private function extractBookingDateTextFromMessage(string $message): ?string
     {
-        $text = mb_strtolower(trim($message));
+        $text = $this->normalizeDateText($message);
 
-        if ($text === '') {
-            return null;
-        }
-
-        if (preg_match('/\b(hoy)\b/u', $text)) {
-            return 'hoy';
-        }
-
-        if (preg_match('/\b(mañana|manana)\b/u', $text, $matches)) {
-            return (string) $matches[1];
-        }
-
-        if (preg_match('/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/u', $text, $matches)) {
-            return (string) $matches[1];
-        }
-
-        if (preg_match('/\b(\d{4}-\d{1,2}-\d{1,2})\b/u', $text, $matches)) {
-            return (string) $matches[1];
+        foreach ([
+            '/\bhoy\b/u',
+            '/\bmanana\b/u',
+            '/\b\d{1,2}\/\d{1,2}\/\d{4}\b/u',
+            '/\b\d{4}-\d{1,2}-\d{1,2}\b/u',
+            '/(?:para\s+el|para|el)?\s*\d{1,2}\s*(?:de\s*)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b/u',
+            '/(?:para\s+el|para|el)\s+\d{1,2}\b/u',
+        ] as $pattern) {
+            if (preg_match($pattern, $text, $matches)) {
+                return trim((string) $matches[0]);
+            }
         }
 
         return null;
@@ -917,42 +887,123 @@ final class WhatsAppBotOrchestrator
 
     private function parseBookingDate(string $message): ?string
     {
-        $message = mb_strtolower(trim($message));
-        $today = new \DateTimeImmutable('today', new \DateTimeZone('America/Mexico_City'));
+        $text = $this->normalizeDateText($message);
+        $timezone = new \DateTimeZone('America/Mexico_City');
+        $today = new \DateTimeImmutable('today', $timezone);
 
-        if ($message === 'hoy') {
+        if (preg_match('/\bhoy\b/u', $text)) {
             return $today->format('Y-m-d');
         }
 
-        if ($message === 'mañana' || $message === 'manana') {
+        if (preg_match('/\bmanana\b/u', $text)) {
             return $today->modify('+1 day')->format('Y-m-d');
         }
 
-        if (preg_match('/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $message, $matches)) {
-            $day = (int) $matches[1];
-            $month = (int) $matches[2];
-            $year = (int) $matches[3];
-
-            if (!checkdate($month, $day, $year)) {
-                return null;
-            }
-
-            return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        if (preg_match('/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/u', $text, $matches)) {
+            return $this->buildBookingDate((int) $matches[3], (int) $matches[2], (int) $matches[1]);
         }
 
-        if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $message, $matches)) {
-            $year = (int) $matches[1];
-            $month = (int) $matches[2];
-            $day = (int) $matches[3];
+        if (preg_match('/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/u', $text, $matches)) {
+            return $this->buildBookingDate((int) $matches[1], (int) $matches[2], (int) $matches[3]);
+        }
 
-            if (!checkdate($month, $day, $year)) {
-                return null;
+        $months = $this->spanishMonths();
+
+        if (preg_match('/(?:para\s+el|para|el)?\s*(\d{1,2})\s*(?:de\s*)?([a-z]+)/u', $text, $matches)) {
+            $day = (int) $matches[1];
+            $monthName = $matches[2];
+
+            if (isset($months[$monthName])) {
+                $month = $months[$monthName];
+                $year = (int) $today->format('Y');
+                $candidate = $this->buildBookingDate($year, $month, $day);
+
+                if ($candidate === null) {
+                    return null;
+                }
+
+                if (new \DateTimeImmutable($candidate . ' 00:00:00', $timezone) < $today) {
+                    $candidate = $this->buildBookingDate($year + 1, $month, $day);
+                }
+
+                return $candidate;
             }
+        }
 
-            return sprintf('%04d-%02d-%02d', $year, $month, $day);
+        if (preg_match('/(?:para\s+el|para|el)\s+(\d{1,2})\b/u', $text, $matches)) {
+            return $this->buildFutureBookingDateFromDay((int) $matches[1], $today, $timezone);
+        }
+
+        if (preg_match('/^\s*(\d{1,2})\s*$/u', $text, $matches)) {
+            return $this->buildFutureBookingDateFromDay((int) $matches[1], $today, $timezone);
         }
 
         return null;
+    }
+
+    private function buildFutureBookingDateFromDay(int $day, \DateTimeImmutable $today, \DateTimeZone $timezone): ?string
+    {
+        $candidate = $this->buildBookingDate((int) $today->format('Y'), (int) $today->format('m'), $day);
+
+        if ($candidate === null) {
+            return null;
+        }
+
+        if (new \DateTimeImmutable($candidate . ' 00:00:00', $timezone) < $today) {
+            $nextMonth = $today->modify('first day of next month');
+            $candidate = $this->buildBookingDate((int) $nextMonth->format('Y'), (int) $nextMonth->format('m'), $day);
+        }
+
+        return $candidate;
+    }
+
+    private function buildBookingDate(int $year, int $month, int $day): ?string
+    {
+        if (!checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function spanishMonths(): array
+    {
+        return [
+            'enero' => 1,
+            'febrero' => 2,
+            'marzo' => 3,
+            'abril' => 4,
+            'mayo' => 5,
+            'junio' => 6,
+            'julio' => 7,
+            'agosto' => 8,
+            'septiembre' => 9,
+            'setiembre' => 9,
+            'octubre' => 10,
+            'noviembre' => 11,
+            'diciembre' => 12,
+        ];
+    }
+
+    private function normalizeDateText(string $message): string
+    {
+        $text = mb_strtolower(trim($message));
+        $text = strtr($text, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n',
+        ]);
+        $text = preg_replace('/[^a-z0-9:\/\-\s#]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
     }
 
     private function isPastBookingDate(string $date): bool
