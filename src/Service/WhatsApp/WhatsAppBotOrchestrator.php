@@ -4,6 +4,7 @@ namespace App\Service\WhatsApp;
 
 use App\Service\Appointment\AppointmentBookingService;
 use Psr\Log\LoggerInterface;
+use App\Service\Appointment\AppointmentCancellationService;
 
 final class WhatsAppBotOrchestrator
 {
@@ -13,6 +14,7 @@ final class WhatsAppBotOrchestrator
         private readonly WhatsAppCatalogService $catalogService,
         private readonly WhatsAppConversationStateService $conversationStateService,
         private readonly AppointmentBookingService $appointmentBookingService,
+        private readonly AppointmentCancellationService $appointmentCancellationService,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -30,6 +32,24 @@ final class WhatsAppBotOrchestrator
 
         try {
             $state = $this->conversationStateService->getState($from);
+
+            if ($this->shouldStartCancellationFlow($normalizedBody)) {
+                $this->startCancellationFlow($from);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'cancelling_waiting_folio') {
+                $this->handleCancellationFolio($from, $normalizedBody);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'cancelling_confirming') {
+                $this->handleCancellationConfirmation($from, $normalizedBody, $state);
+
+                return;
+            }
 
             if ($state !== null && in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true)) {
                 $this->conversationStateService->clear($from);
@@ -797,6 +817,195 @@ final class WhatsAppBotOrchestrator
         } catch (\Throwable) {
             return true;
         }
+    }
+
+    private function shouldStartCancellationFlow(string $normalizedBody): bool
+    {
+        return in_array($normalizedBody, [
+                'cancelar cita',
+                'cancelar mi cita',
+                'quiero cancelar',
+                'quiero cancelar cita',
+                'quiero cancelar mi cita',
+                'cancelacion',
+                'cancelación',
+            ], true)
+            || str_contains($normalizedBody, 'cancelar cita')
+            || str_contains($normalizedBody, 'cancelar mi cita')
+            || str_contains($normalizedBody, 'cancelación')
+            || str_contains($normalizedBody, 'cancelacion');
+    }
+
+    private function startCancellationFlow(string $from): void
+    {
+        $this->conversationStateService->start($from, 1);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'cancelling_waiting_folio',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_cancellation',
+                ],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Claro. Para cancelar tu cita necesito el *folio*.\n\nEjemplo:\n*11*\n\nSi no tienes el folio, escribe *NO* para salir."
+        );
+    }
+
+    private function handleCancellationFolio(string $from, string $normalizedBody): void
+    {
+        if (in_array($normalizedBody, ['no', 'salir', 'cancelar'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, no cancelé ninguna cita.\n\nPuedes escribir *agenda* si quieres agendar una nueva cita."
+            );
+
+            return;
+        }
+
+        if (!ctype_digit($normalizedBody)) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "El folio debe ser numérico.\n\nEjemplo:\n*11*\n\nEscribe el folio o responde *NO* para salir."
+            );
+
+            return;
+        }
+
+        $appointmentId = (int) $normalizedBody;
+        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolio($appointmentId);
+
+        if ($appointment === null) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No encontré una cita futura activa con ese folio.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir."
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'cancelling_confirming',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_cancellation',
+                    'appointment_id' => $appointmentId,
+                    'appointment' => $appointment,
+                ],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->appointmentCancellationService->formatAppointmentForConfirmation($appointment)
+        );
+    }
+
+    private function handleCancellationConfirmation(string $from, string $normalizedBody, array $state): void
+    {
+        $payload = $this->decodeStatePayload($state);
+
+        if (in_array($normalizedBody, ['no', 'salir', 'cancelar'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, no cancelé ninguna cita.\n\nTu reservación sigue activa."
+            );
+
+            return;
+        }
+
+        if (!in_array($normalizedBody, ['cancelar cita', 'confirmar', 'si', 'sí', 'ok'], true)) {
+            $appointment = $payload['appointment'] ?? null;
+
+            if (is_array($appointment)) {
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    $this->appointmentCancellationService->formatAppointmentForConfirmation($appointment)
+                );
+
+                return;
+            }
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Para confirmar la cancelación responde *CANCELAR CITA*.\n\nPara salir responde *NO*."
+            );
+
+            return;
+        }
+
+        $appointmentId = (int) ($payload['appointment_id'] ?? 0);
+
+        if ($appointmentId <= 0) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Perdí el folio de la cita. No cancelé nada.\n\nEscribe *cancelar cita* para iniciar de nuevo."
+            );
+
+            return;
+        }
+
+        try {
+            $appointment = $this->appointmentCancellationService->cancelByFolio($appointmentId);
+
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Tu cita fue cancelada correctamente.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\nHorario: *%s*",
+                    (string) ($appointment['appointment_id'] ?? ''),
+                    (string) ($appointment['branch_name'] ?? ''),
+                    (string) ($appointment['service_name'] ?? ''),
+                    (string) ($appointment['scheduled_date_display'] ?? ''),
+                    (string) ($appointment['scheduled_time_label'] ?? '')
+                )
+            );
+        } catch (\Throwable $exception) {
+            $this->logger->error('Error cancelando cita desde WhatsApp', [
+                'wa_id' => $from,
+                'appointment_id' => $appointmentId,
+                'detail' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
+
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No pude cancelar la cita.\n\nDetalle: "
+                . $exception->getMessage()
+                . "\n\nPuedes intentar de nuevo escribiendo *cancelar cita*."
+            );
+        }
+    }
+
+    private function decodeStatePayload(array $state): array
+    {
+        $payload = $state['payload_json'] ?? null;
+
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (!is_string($payload) || trim($payload) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($payload, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function mainMenu(): string
