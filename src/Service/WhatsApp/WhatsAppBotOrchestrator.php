@@ -33,12 +33,6 @@ final class WhatsAppBotOrchestrator
         try {
             $state = $this->conversationStateService->getState($from);
 
-            if ($this->shouldStartCancellationFlow($normalizedBody)) {
-                $this->startCancellationFlow($from);
-
-                return;
-            }
-
             if ($state !== null && $state['step'] === 'cancelling_waiting_folio') {
                 $this->handleCancellationFolio($from, $normalizedBody);
 
@@ -47,6 +41,12 @@ final class WhatsAppBotOrchestrator
 
             if ($state !== null && $state['step'] === 'cancelling_confirming') {
                 $this->handleCancellationConfirmation($from, $normalizedBody, $state);
+
+                return;
+            }
+
+            if ($this->shouldStartCancellationFlow($normalizedBody)) {
+                $this->startCancellationFlow($from);
 
                 return;
             }
