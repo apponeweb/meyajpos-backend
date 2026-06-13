@@ -17,6 +17,7 @@ use App\Enum\AppointmentStatus;
 use App\Enum\SaleStatus;
 use App\Repository\AppointmentServiceRepository;
 use App\Repository\CustomerRepository;
+use App\Service\Phone\PhoneNumberService;
 use App\Service\WhatsApp\WhatsAppClient;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,6 +32,7 @@ final class AppointmentBookingService
         private readonly EntityManagerInterface $entityManager,
         private readonly CustomerRepository $customerRepository,
         private readonly AppointmentServiceRepository $appointmentServiceRepository,
+        private readonly PhoneNumberService $phoneNumberService,
         private readonly WhatsAppClient $whatsAppClient,
         private readonly LoggerInterface $logger,
     ) {
@@ -468,7 +470,11 @@ final class AppointmentBookingService
 
         $countryCode = $normalizedPhone['countryCode'];
         $phone = $normalizedPhone['phone'];
-        $whatsAppRecipient = $this->buildWhatsAppRecipient($countryCode, $phone);
+        $whatsAppRecipient = (string) ($normalizedPhone['whatsapp'] ?? '');
+
+        if ($whatsAppRecipient === '') {
+            $whatsAppRecipient = $this->buildWhatsAppRecipient($countryCode, $phone);
+        }
 
         $this->writeWhatsAppConfirmationDebugLog('phone_normalized', [
             'appointment_id' => $appointment->getId(),
@@ -476,6 +482,11 @@ final class AppointmentBookingService
             'country_code' => $countryCode,
             'stored_phone' => $phone,
             'whatsapp_recipient' => $whatsAppRecipient,
+            'e164' => $normalizedPhone['e164'] ?? null,
+            'is_valid' => $normalizedPhone['isValid'] ?? false,
+            'is_possible' => $normalizedPhone['isPossible'] ?? false,
+            'region_code' => $normalizedPhone['regionCode'] ?? null,
+            'normalization_error' => $normalizedPhone['error'] ?? null,
             'raw_phone' => (string) ($data['customer']['phone'] ?? $customer->getPhone() ?? ''),
         ]);
 
@@ -631,160 +642,52 @@ final class AppointmentBookingService
     }
 
     /**
+     * Normaliza el teléfono del cliente usando libphonenumber.
+     *
+     * Reglas principales:
+     * - Si el usuario escribe +53 55848425, detecta Cuba y guarda phone=55848425.
+     * - Si el usuario escribe +52 8180201499, detecta México y guarda phone=8180201499.
+     * - Si el campo countryCode viene separado, lo usa junto con el número local.
+     * - El número final para WhatsApp queda en la llave "whatsapp".
+     *
      * @return array{
      *     countryCode:string,
-     *     phone:string
+     *     phone:string,
+     *     whatsapp:string,
+     *     e164:string|null,
+     *     isValid:bool,
+     *     isPossible:bool,
+     *     regionCode:string|null,
+     *     error:string|null
      * }
      */
     private function normalizeCustomerPhone(?string $countryCode, ?string $phone): array
     {
-        $rawCountryCode = trim((string) $countryCode);
-        $rawPhone = trim((string) $phone);
-
-        $countryCodeDigits = preg_replace('/\D+/', '', $rawCountryCode) ?? '';
-        $phoneDigits = preg_replace('/\D+/', '', $rawPhone) ?? '';
-
-        /*
-         * Si el cliente escribe el teléfono con lada internacional en el mismo campo,
-         * usamos esa lada y guardamos el número local sin duplicarla.
-         *
-         * Ejemplos:
-         * +53 55848425 -> countryCode +53, phone 55848425
-         * +52 8180201499 -> countryCode +52, phone 8180201499
-         * +528180201499 -> countryCode +52, phone 8180201499
-         */
-        $detected = $this->splitInternationalPhone($rawPhone);
-
-        if ($detected !== null) {
-            return $detected;
-        }
-
-        if ($countryCodeDigits === '') {
-            $countryCodeDigits = '52';
-        }
-
-        if ($phoneDigits !== '' && str_starts_with($phoneDigits, $countryCodeDigits)) {
-            $possibleLocalPhone = substr($phoneDigits, strlen($countryCodeDigits));
-
-            if ($possibleLocalPhone !== '') {
-                $phoneDigits = $possibleLocalPhone;
-            }
-        }
+        $normalized = $this->phoneNumberService->normalize(
+            countryCode: $countryCode,
+            phone: $phone,
+            defaultRegion: 'MX'
+        );
 
         return [
-            'countryCode' => '+' . $countryCodeDigits,
-            'phone' => $phoneDigits,
-        ];
-    }
-
-    /**
-     * @return array{countryCode:string, phone:string}|null
-     */
-    private function splitInternationalPhone(string $rawPhone): ?array
-    {
-        $normalizedRawPhone = trim($rawPhone);
-
-        if ($normalizedRawPhone === '') {
-            return null;
-        }
-
-        $phoneDigits = preg_replace('/\D+/', '', $normalizedRawPhone) ?? '';
-
-        if ($phoneDigits === '') {
-            return null;
-        }
-
-        if (str_starts_with($phoneDigits, '00')) {
-            $phoneDigits = substr($phoneDigits, 2);
-        }
-
-        $countryCodes = $this->knownCountryCodes();
-
-        foreach ($countryCodes as $countryCodeDigits) {
-            if (!str_starts_with($phoneDigits, $countryCodeDigits)) {
-                continue;
-            }
-
-            $localPhone = substr($phoneDigits, strlen($countryCodeDigits));
-
-            if ($localPhone === '') {
-                continue;
-            }
-
-            return [
-                'countryCode' => '+' . $countryCodeDigits,
-                'phone' => $localPhone,
-            ];
-        }
-
-        if (str_starts_with($normalizedRawPhone, '+')) {
-            if (preg_match('/^\s*\+(\d{1,4})[\s\-.]*(.+)$/', $normalizedRawPhone, $matches)) {
-                $detectedCountryCode = preg_replace('/\D+/', '', (string) $matches[1]) ?? '';
-                $detectedPhone = preg_replace('/\D+/', '', (string) $matches[2]) ?? '';
-
-                if ($detectedCountryCode !== '' && $detectedPhone !== '') {
-                    return [
-                        'countryCode' => '+' . $detectedCountryCode,
-                        'phone' => $detectedPhone,
-                    ];
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return string[]
-     */
-    private function knownCountryCodes(): array
-    {
-        return [
-            '52',
-            '53',
-            '57',
-            '1',
-            '34',
-            '54',
-            '55',
-            '56',
-            '58',
-            '51',
-            '502',
-            '503',
-            '504',
-            '505',
-            '506',
-            '507',
-            '593',
-            '591',
-            '595',
-            '598',
-            '44',
-            '33',
-            '49',
-            '39',
+            'countryCode' => (string) ($normalized['countryCode'] ?? ''),
+            'phone' => (string) ($normalized['phone'] ?? ''),
+            'whatsapp' => (string) ($normalized['whatsapp'] ?? ''),
+            'e164' => isset($normalized['e164']) ? (string) $normalized['e164'] : null,
+            'isValid' => (bool) ($normalized['isValid'] ?? false),
+            'isPossible' => (bool) ($normalized['isPossible'] ?? false),
+            'regionCode' => isset($normalized['regionCode']) ? (string) $normalized['regionCode'] : null,
+            'error' => isset($normalized['error']) ? (string) $normalized['error'] : null,
         ];
     }
 
     private function buildWhatsAppRecipient(?string $countryCode, ?string $phone): string
     {
-        $countryCodeDigits = preg_replace('/\D+/', '', (string) $countryCode) ?? '';
-        $phoneDigits = preg_replace('/\D+/', '', (string) $phone) ?? '';
-
-        if ($phoneDigits === '') {
-            return '';
-        }
-
-        if ($countryCodeDigits === '') {
-            $countryCodeDigits = '52';
-        }
-
-        if (str_starts_with($phoneDigits, $countryCodeDigits)) {
-            return $phoneDigits;
-        }
-
-        return $countryCodeDigits . $phoneDigits;
+        return (string) ($this->phoneNumberService->normalizeForWhatsApp(
+            countryCode: $countryCode,
+            phone: $phone,
+            defaultRegion: 'MX'
+        ) ?? '');
     }
 
     /**

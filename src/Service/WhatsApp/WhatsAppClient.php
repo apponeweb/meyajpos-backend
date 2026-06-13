@@ -144,22 +144,20 @@ final class WhatsAppClient
 
     public function normalizeRecipient(string $phone): string
     {
+        /*
+         * WhatsAppClient ya no decide país ni agrega prefijos.
+         *
+         * El número debe llegar ya normalizado desde PhoneNumberService:
+         * - México: 5218180201499
+         * - Cuba: 5355848425
+         * - Colombia: 573001234567
+         *
+         * Aquí solo limpiamos espacios, paréntesis, guiones y el signo +.
+         */
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
 
         if ($digits === '') {
             return $phone;
-        }
-
-        if (str_starts_with($digits, '521') && strlen($digits) === 13) {
-            return $digits;
-        }
-
-        if (str_starts_with($digits, '52') && strlen($digits) === 12) {
-            return '521' . substr($digits, 2);
-        }
-
-        if (strlen($digits) === 10) {
-            return '521' . $digits;
         }
 
         return $digits;
