@@ -885,6 +885,10 @@ Puedes escribir tu nota o responder:
             return true;
         }
 
+        if ($this->trySwitchBarberFromText($from, $body, $state)) {
+            return true;
+        }
+
         if ($this->isChangeBarberIntent($normalizedBody)) {
             $this->restartBarberSelection($from, $state);
 
@@ -1002,6 +1006,107 @@ Puedes escribir tu nota o responder:
             $from,
             "Claro, cambiemos la fecha.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*\n*18 de junio*"
         );
+    }
+
+    private function trySwitchBarberFromText(string $from, string $body, array $state): bool
+    {
+        $normalizedBody = mb_strtolower(trim($body));
+
+        if (empty($state['branch_id']) || empty($state['service_id']) || empty($state['date'])) {
+            return false;
+        }
+
+        if (!$this->looksLikeBarberChangeText($normalizedBody)) {
+            return false;
+        }
+
+        $barber = $this->catalogService->getAvailableBarberByText(
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id'],
+            $body
+        );
+
+        if ($barber === null) {
+            $this->restartBarberSelection($from, $state);
+
+            return true;
+        }
+
+        $slotGroups = $this->catalogService->getAvailableSlots(
+            (int) $barber['id'],
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id']
+        );
+
+        if ($slotGroups === []) {
+            $barbers = $this->catalogService->getAvailableBarbers(
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_barber',
+                [
+                    'barber_id' => null,
+                    'barber_name' => null,
+                    'time_label' => null,
+                    'scheduled_date_time' => null,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Sí puedo cambiar el barbero, pero por ahora no encontré horarios disponibles con *%s* para el *%s*.
+
+Elige otro barbero:
+
+%s",
+                    (string) $barber['name'],
+                    $this->formatDateForCustomer((string) $state['date']),
+                    $this->catalogService->formatAvailableBarbersMenu(
+                        (string) $state['branch_name'],
+                        (string) $state['service_name'],
+                        (string) $state['date'],
+                        $barbers
+                    )
+                )
+            );
+
+            return true;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_time',
+            [
+                'barber_id' => (int) $barber['id'],
+                'barber_name' => (string) $barber['name'],
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Claro, cambiemos con *%s*.
+
+%s",
+                (string) $barber['name'],
+                $this->catalogService->formatAvailableSlotsMenu(
+                    (string) $barber['name'],
+                    (string) $state['date'],
+                    $slotGroups
+                )
+            )
+        );
+
+        return true;
     }
 
     private function restartBarberSelection(string $from, array $state): void
@@ -1127,7 +1232,25 @@ Puedes escribir tu nota o responder:
         return str_contains($normalizedBody, 'cambiar barbero')
             || str_contains($normalizedBody, 'cambiar el barbero')
             || str_contains($normalizedBody, 'otro barbero')
-            || str_contains($normalizedBody, 'otra persona');
+            || str_contains($normalizedBody, 'otra persona')
+            || str_contains($normalizedBody, 'puede ser con')
+            || str_contains($normalizedBody, 'puede ser mejor con')
+            || str_contains($normalizedBody, 'mejor con')
+            || str_contains($normalizedBody, 'prefiero con')
+            || str_contains($normalizedBody, 'quiero con')
+            || str_contains($normalizedBody, 'con otro')
+            || str_contains($normalizedBody, 'con otra');
+    }
+
+    private function looksLikeBarberChangeText(string $normalizedBody): bool
+    {
+        return $this->isChangeBarberIntent($normalizedBody)
+            || str_contains($normalizedBody, 'con joe')
+            || str_contains($normalizedBody, 'con neo')
+            || str_contains($normalizedBody, 'con yank')
+            || str_contains($normalizedBody, 'con lucas')
+            || str_contains($normalizedBody, 'con preno')
+            || str_contains($normalizedBody, 'con claude');
     }
 
     private function isListServicesIntent(string $normalizedBody): bool
@@ -1410,6 +1533,24 @@ Puedes escribir tu nota o responder:
         $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 
         return trim($text);
+    }
+
+    private function formatDateHintForCustomer(string $date): string
+    {
+        return $this->formatDateForCustomer($date);
+    }
+
+    private function formatDateForCustomer(string $date): string
+    {
+        $date = trim($date);
+
+        try {
+            $parsed = new \DateTimeImmutable($date);
+
+            return $parsed->format('d/m/Y');
+        } catch (\Throwable) {
+            return $date;
+        }
     }
 
     private function parseBookingDate(string $message): ?string
