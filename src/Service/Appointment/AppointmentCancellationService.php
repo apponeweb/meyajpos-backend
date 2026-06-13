@@ -3,6 +3,7 @@
 namespace App\Service\Appointment;
 
 use App\Enum\AppointmentStatus;
+use App\Service\Phone\PhoneNumberService;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 
@@ -12,6 +13,7 @@ final class AppointmentCancellationService
 
     public function __construct(
         private readonly Connection $connection,
+        private readonly PhoneNumberService $phoneNumberService,
     ) {
     }
 
@@ -25,6 +27,7 @@ final class AppointmentCancellationService
                 c.name AS customer_name,
                 c.email AS customer_email,
                 c.phone AS customer_phone,
+                c.country_code AS customer_country_code,
                 b.name AS branch_name,
                 b.address AS branch_address,
                 mp.name AS service_name,
@@ -77,12 +80,18 @@ final class AppointmentCancellationService
 
         $endDateTime = $scheduledDateTime->modify(sprintf('+%d minutes', $duration));
 
+        $customerCountryCode = (string) ($appointment['customer_country_code'] ?? '');
+        $customerPhone = (string) ($appointment['customer_phone'] ?? '');
+        $customerWhatsApp = $this->normalizeCustomerWhatsApp($customerCountryCode, $customerPhone);
+
         return [
             'appointment_id' => (int) $appointment['appointment_id'],
             'status' => (int) $appointment['status'],
             'customer_name' => (string) ($appointment['customer_name'] ?? ''),
             'customer_email' => (string) ($appointment['customer_email'] ?? ''),
-            'customer_phone' => (string) ($appointment['customer_phone'] ?? ''),
+            'customer_phone' => $customerPhone,
+            'customer_country_code' => $customerCountryCode,
+            'customer_whatsapp' => $customerWhatsApp,
             'branch_name' => (string) ($appointment['branch_name'] ?? ''),
             'branch_address' => (string) ($appointment['branch_address'] ?? ''),
             'service_name' => (string) ($appointment['service_name'] ?? ''),
@@ -97,6 +106,21 @@ final class AppointmentCancellationService
         ];
     }
 
+    public function findCancelableAppointmentByFolioForWhatsApp(int $appointmentId, string $waId): ?array
+    {
+        $appointment = $this->findCancelableAppointmentByFolio($appointmentId);
+
+        if ($appointment === null) {
+            return null;
+        }
+
+        if (!$this->appointmentBelongsToWhatsApp($appointment, $waId)) {
+            return null;
+        }
+
+        return $appointment;
+    }
+
     public function cancelByFolio(int $appointmentId): array
     {
         $appointment = $this->findCancelableAppointmentByFolio($appointmentId);
@@ -105,6 +129,36 @@ final class AppointmentCancellationService
             throw new \RuntimeException('No encontré una cita futura activa con ese folio.');
         }
 
+        return $this->cancelAppointment($appointmentId, $appointment);
+    }
+
+    public function cancelByFolioForWhatsApp(int $appointmentId, string $waId): array
+    {
+        $appointment = $this->findCancelableAppointmentByFolioForWhatsApp($appointmentId, $waId);
+
+        if ($appointment === null) {
+            throw new \RuntimeException('No encontré una cita futura activa con ese folio asociada a este número de WhatsApp.');
+        }
+
+        return $this->cancelAppointment($appointmentId, $appointment);
+    }
+
+    public function formatAppointmentForConfirmation(array $appointment): string
+    {
+        return sprintf(
+            "Encontré esta cita:\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\nCliente: *%s*\n\n¿Confirmas que deseas cancelarla?\n\nResponde *SÍ*, *CANCELAR CITA* o *NO* para salir.",
+            (string) ($appointment['appointment_id'] ?? ''),
+            (string) ($appointment['branch_name'] ?? ''),
+            (string) ($appointment['service_name'] ?? ''),
+            (string) ($appointment['barber_name'] ?? ''),
+            (string) ($appointment['scheduled_date_display'] ?? ''),
+            (string) ($appointment['scheduled_time_label'] ?? ''),
+            (string) ($appointment['customer_name'] ?? '')
+        );
+    }
+
+    private function cancelAppointment(int $appointmentId, array $appointment): array
+    {
         $affectedRows = $this->connection->executeStatement(
             <<<SQL
             UPDATE tbd_appointment
@@ -131,17 +185,32 @@ final class AppointmentCancellationService
         return $appointment;
     }
 
-    public function formatAppointmentForConfirmation(array $appointment): string
+    private function appointmentBelongsToWhatsApp(array $appointment, string $waId): bool
     {
-        return sprintf(
-            "Encontré esta cita:\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\nCliente: *%s*\n\n¿Confirmas que deseas cancelarla?\n\nResponde *CANCELAR CITA* para confirmar o *NO* para salir.",
-            (string) ($appointment['appointment_id'] ?? ''),
-            (string) ($appointment['branch_name'] ?? ''),
-            (string) ($appointment['service_name'] ?? ''),
-            (string) ($appointment['barber_name'] ?? ''),
-            (string) ($appointment['scheduled_date_display'] ?? ''),
-            (string) ($appointment['scheduled_time_label'] ?? ''),
-            (string) ($appointment['customer_name'] ?? '')
-        );
+        $expectedWhatsApp = $appointment['customer_whatsapp'] ?? null;
+        $incomingWhatsApp = $this->normalizeIncomingWhatsApp($waId);
+
+        if (!is_string($expectedWhatsApp) || trim($expectedWhatsApp) === '') {
+            return false;
+        }
+
+        if ($incomingWhatsApp === '') {
+            return false;
+        }
+
+        return $expectedWhatsApp === $incomingWhatsApp;
+    }
+
+    private function normalizeCustomerWhatsApp(string $countryCode, string $phone): ?string
+    {
+        $normalized = $this->phoneNumberService->normalize($countryCode, $phone);
+        $whatsApp = $normalized['whatsapp'] ?? null;
+
+        return is_string($whatsApp) && trim($whatsApp) !== '' ? $whatsApp : null;
+    }
+
+    private function normalizeIncomingWhatsApp(string $waId): string
+    {
+        return preg_replace('/\D+/', '', $waId) ?? '';
     }
 }

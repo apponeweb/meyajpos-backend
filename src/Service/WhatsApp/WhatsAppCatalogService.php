@@ -284,7 +284,7 @@ class WhatsAppCatalogService
                 "Por el momento no encontré barberos disponibles para:\n\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
                 $branchName,
                 $serviceName,
-                $date
+                $this->formatDateForDisplay($date)
             );
         }
 
@@ -293,7 +293,7 @@ class WhatsAppCatalogService
                 'Estos barberos están disponibles para *%s* en *%s* el *%s*:',
                 $serviceName,
                 $branchName,
-                $date
+                $this->formatDateForDisplay($date)
             ),
             '',
         ];
@@ -481,7 +481,7 @@ class WhatsAppCatalogService
             return sprintf(
                 "Por el momento no encontré horarios disponibles con *%s* el *%s*.\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
                 $barberName,
-                $date
+                $this->formatDateForDisplay($date)
             );
         }
 
@@ -489,7 +489,7 @@ class WhatsAppCatalogService
             sprintf(
                 'Estos horarios están disponibles con *%s* el *%s*:',
                 $barberName,
-                $date
+                $this->formatDateForDisplay($date)
             ),
             '',
         ];
@@ -713,6 +713,13 @@ class WhatsAppCatalogService
         return $dateTime ? $dateTime->format('H:i') : null;
     }
 
+    private function formatDateForDisplay(string $date): string
+    {
+        $dateTime = \DateTimeImmutable::createFromFormat('Y-m-d', $date, new \DateTimeZone(self::BOOKING_TIMEZONE));
+
+        return $dateTime instanceof \DateTimeImmutable ? $dateTime->format('d/m/Y') : $date;
+    }
+
     private function isBranchOpen(int $branchId, string $date, int $dayOfWeek): bool
     {
         $branchIsOpen = $this->connection->fetchOne(
@@ -887,7 +894,7 @@ class WhatsAppCatalogService
              * Si la fecha es hoy, no mostramos horarios que ya pasaron.
              */
             if ($slotStart <= $now) {
-                $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+                $currentTime = $currentTime->modify(sprintf('+%d minutes', $turnDuration));
                 continue;
             }
 
@@ -896,10 +903,10 @@ class WhatsAppCatalogService
             }
 
             /*
-             * El siguiente inicio avanza por slot_minutes, no por duración.
-             * Esto permite inicios cada 30 min aunque el servicio dure 60 min.
+             * El siguiente inicio avanza por duración completa del turno/servicio.
+             * Esto evita mostrar bloques encimados visualmente como 11:00-12:00 y 11:30-12:30.
              */
-            $currentTime = $currentTime->modify(sprintf('+%d minutes', $slotMinutes));
+            $currentTime = $currentTime->modify(sprintf('+%d minutes', $turnDuration));
         }
 
         return $slots;

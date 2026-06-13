@@ -73,6 +73,10 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            if ($state !== null && $this->handleBookingInterruption($from, $body, $normalizedBody, $state)) {
+                return;
+            }
+
             if ($state !== null && in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true)) {
                 $this->conversationStateService->clear($from);
 
@@ -850,6 +854,300 @@ Puedes escribir tu nota o responder:
         );
     }
 
+    private function handleBookingInterruption(string $from, string $body, string $normalizedBody, array $state): bool
+    {
+        $step = (string) ($state['step'] ?? '');
+
+        if (!$this->isBookingFlowStep($step)) {
+            return false;
+        }
+
+        if ($this->isCancelCurrentFlowCommand($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, cancelé este flujo de agenda.\n\nPuedes escribir *agenda* cuando quieras comenzar de nuevo."
+            );
+
+            return true;
+        }
+
+        if ($this->isChangeServiceIntent($normalizedBody)) {
+            $this->restartServiceSelection($from, $body, $state);
+
+            return true;
+        }
+
+        if ($this->isChangeDateIntent($normalizedBody)) {
+            $this->restartDateSelection($from, $state);
+
+            return true;
+        }
+
+        if ($this->isChangeBarberIntent($normalizedBody)) {
+            $this->restartBarberSelection($from, $state);
+
+            return true;
+        }
+
+        if ($this->isListServicesIntent($normalizedBody) && !empty($state['branch_id'])) {
+            $services = $this->catalogService->getServicesByBranch((int) $state['branch_id']);
+
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_service',
+                [
+                    'service_id' => null,
+                    'service_name' => null,
+                    'service_price' => null,
+                    'service_duration' => null,
+                    'barber_id' => null,
+                    'barber_name' => null,
+                    'time_label' => null,
+                    'scheduled_date_time' => null,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Claro. Estos son los servicios disponibles.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+            );
+
+            return true;
+        }
+
+        if ($this->isListBarbersIntent($normalizedBody)) {
+            $this->handleBarbersQuestionInsideFlow($from, $state);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function restartServiceSelection(string $from, string $body, array $state): void
+    {
+        if (empty($state['branch_id'])) {
+            $this->conversationStateService->updateState($from, 'selecting_branch', []);
+            $branches = $this->catalogService->getBranchesByCompany((int) ($state['company_id'] ?? 1));
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Claro, cambiemos la sucursal primero.\n\n" . $this->catalogService->formatBranchesMenu($branches)
+            );
+
+            return;
+        }
+
+        $branchId = (int) $state['branch_id'];
+        $service = $this->catalogService->getServiceByText($branchId, $body);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_service',
+            [
+                'service_id' => null,
+                'service_name' => null,
+                'service_price' => null,
+                'service_duration' => null,
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        if ($service !== null) {
+            $freshState = $this->conversationStateService->getState($from) ?? $state;
+            $this->handleServiceSelection($from, (string) ($service['name'] ?? $body), $freshState);
+
+            return;
+        }
+
+        $services = $this->catalogService->getServicesByBranch($branchId);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Claro, cambiemos el servicio.\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+        );
+    }
+
+    private function restartDateSelection(string $from, array $state): void
+    {
+        if (empty($state['branch_id']) || empty($state['service_id'])) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Para cambiar la fecha necesito iniciar de nuevo. Escribe *agenda* para comenzar."
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_date',
+            [
+                'date' => null,
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Claro, cambiemos la fecha.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*\n*18 de junio*"
+        );
+    }
+
+    private function restartBarberSelection(string $from, array $state): void
+    {
+        if (empty($state['branch_id']) || empty($state['service_id']) || empty($state['date'])) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Para cambiar el barbero primero necesito tener sucursal, servicio y fecha. Continuemos con el paso actual."
+            );
+
+            return;
+        }
+
+        $barbers = $this->catalogService->getAvailableBarbers(
+            (int) $state['branch_id'],
+            (string) $state['date'],
+            (int) $state['service_id']
+        );
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_barber',
+            [
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Claro, cambiemos el barbero.\n\n" . $this->catalogService->formatAvailableBarbersMenu(
+                (string) $state['branch_name'],
+                (string) $state['service_name'],
+                (string) $state['date'],
+                $barbers
+            )
+        );
+    }
+
+    private function handleBarbersQuestionInsideFlow(string $from, array $state): void
+    {
+        if (!empty($state['branch_id']) && !empty($state['service_id']) && !empty($state['date'])) {
+            $barbers = $this->catalogService->getAvailableBarbers(
+                (int) $state['branch_id'],
+                (string) $state['date'],
+                (int) $state['service_id']
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                $this->catalogService->formatAvailableBarbersMenu(
+                    (string) $state['branch_name'],
+                    (string) $state['service_name'],
+                    (string) $state['date'],
+                    $barbers
+                )
+            );
+
+            return;
+        }
+
+        if (!empty($state['branch_id']) && empty($state['service_id'])) {
+            $services = $this->catalogService->getServicesByBranch((int) $state['branch_id']);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Te puedo mostrar barberos disponibles después de elegir servicio y fecha.\n\nPrimero elige el servicio:\n\n" . $this->catalogService->formatServicesMenu((string) $state['branch_name'], $services)
+            );
+
+            return;
+        }
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Para mostrar barberos disponibles necesito primero sucursal, servicio y fecha.\n\nEscribe *agenda* para comenzar."
+        );
+    }
+
+    private function isBookingFlowStep(string $step): bool
+    {
+        return in_array($step, [
+            'selecting_branch',
+            'selecting_service',
+            'selecting_date',
+            'selecting_barber',
+            'selecting_time',
+            'collecting_customer_name',
+            'collecting_customer_email',
+            'collecting_customer_phone',
+            'collecting_customer_notes',
+            'confirming_booking',
+        ], true);
+    }
+
+    private function isCancelCurrentFlowCommand(string $normalizedBody): bool
+    {
+        return in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true);
+    }
+
+    private function isChangeServiceIntent(string $normalizedBody): bool
+    {
+        return str_contains($normalizedBody, 'cambiar servicio')
+            || str_contains($normalizedBody, 'cambiar el servicio')
+            || str_contains($normalizedBody, 'otro servicio')
+            || str_contains($normalizedBody, 'mejor corte')
+            || str_contains($normalizedBody, 'mejor servicio');
+    }
+
+    private function isChangeDateIntent(string $normalizedBody): bool
+    {
+        return str_contains($normalizedBody, 'cambiar fecha')
+            || str_contains($normalizedBody, 'cambiar la fecha')
+            || str_contains($normalizedBody, 'otra fecha')
+            || str_contains($normalizedBody, 'no es el')
+            || str_contains($normalizedBody, 'no era el')
+            || str_contains($normalizedBody, 'fecha correcta');
+    }
+
+    private function isChangeBarberIntent(string $normalizedBody): bool
+    {
+        return str_contains($normalizedBody, 'cambiar barbero')
+            || str_contains($normalizedBody, 'cambiar el barbero')
+            || str_contains($normalizedBody, 'otro barbero')
+            || str_contains($normalizedBody, 'otra persona');
+    }
+
+    private function isListServicesIntent(string $normalizedBody): bool
+    {
+        return in_array($normalizedBody, ['servicios', 'ver servicios', 'lista servicios'], true)
+            || str_contains($normalizedBody, 'que servicios')
+            || str_contains($normalizedBody, 'qué servicios')
+            || str_contains($normalizedBody, 'servicios tienen');
+    }
+
+    private function isListBarbersIntent(string $normalizedBody): bool
+    {
+        return in_array($normalizedBody, ['barberos', 'ver barberos', 'lista barberos'], true)
+            || str_contains($normalizedBody, 'que barberos')
+            || str_contains($normalizedBody, 'qué barberos')
+            || str_contains($normalizedBody, 'barberos tienen')
+            || str_contains($normalizedBody, 'quien corta')
+            || str_contains($normalizedBody, 'quién corta');
+    }
+
     private function extractPhoneFromWhatsAppId(string $waId): string
     {
         $digits = preg_replace('/\D+/', '', $waId) ?? '';
@@ -1151,10 +1449,6 @@ Puedes escribir tu nota o responder:
                     return null;
                 }
 
-                if (new \DateTimeImmutable($candidate . ' 00:00:00', $timezone) < $today) {
-                    $candidate = $this->buildBookingDate($year + 1, $month, $day);
-                }
-
                 return $candidate;
             }
         }
@@ -1322,12 +1616,12 @@ Puedes escribir tu nota o responder:
         }
 
         $appointmentId = (int) $normalizedBody;
-        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolio($appointmentId);
+        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolioForWhatsApp($appointmentId, $from);
 
         if ($appointment === null) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No encontré una cita futura activa con ese folio.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir."
+                "No encontré una cita futura activa con ese folio asociada a este número de WhatsApp.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir."
             );
 
             return;
@@ -1400,7 +1694,7 @@ Puedes escribir tu nota o responder:
         }
 
         try {
-            $appointment = $this->appointmentCancellationService->cancelByFolio($appointmentId);
+            $appointment = $this->appointmentCancellationService->cancelByFolioForWhatsApp($appointmentId, $from);
 
             $this->conversationStateService->clear($from);
 
@@ -1487,7 +1781,7 @@ Puedes escribir tu nota o responder:
 
     private function startCancellationFlowWithFolio(string $from, int $appointmentId): void
     {
-        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolio($appointmentId);
+        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolioForWhatsApp($appointmentId, $from);
 
         if ($appointment === null) {
             $this->conversationStateService->start($from, 1);
@@ -1505,7 +1799,7 @@ Puedes escribir tu nota o responder:
             $this->whatsAppClient->sendTextMessage(
                 $from,
                 sprintf(
-                    "No encontré una cita futura activa con el folio *%s*.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir.",
+                    "No encontré una cita futura activa con el folio *%s* asociada a este número de WhatsApp.\n\nRevisa el número e intenta de nuevo, o responde *NO* para salir.",
                     (string) $appointmentId
                 )
             );
