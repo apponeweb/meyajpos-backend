@@ -543,19 +543,25 @@ final class WhatsAppBotOrchestrator
         if ($slotGroups === []) {
             $this->conversationStateService->updateState(
                 $from,
-                'selecting_barber',
+                'selecting_date',
                 [
                     'barber_id' => (int) $barber['id'],
                     'barber_name' => (string) $barber['name'],
+                    'time_label' => null,
+                    'scheduled_date_time' => null,
                 ]
             );
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
                 sprintf(
-                    "Seleccionaste a *%s*, pero por el momento no encontré horarios disponibles para el *%s*.\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
+                    "Seleccionaste a *%s*, pero por el momento no encontré horarios disponibles para el *%s*.
+
+Puedes intentar con otra fecha escribiendo, por ejemplo:
+*mañana*
+*18/06/2026*",
                     (string) $barber['name'],
-                    (string) $state['date']
+                    $this->formatDateForCustomer((string) $state['date'])
                 )
             );
 
@@ -873,9 +879,17 @@ Puedes escribir tu nota o responder:
             return true;
         }
 
+        if ($this->trySwitchServiceFromText($from, $body, $state)) {
+            return true;
+        }
+
         if ($this->isChangeServiceIntent($normalizedBody)) {
             $this->restartServiceSelection($from, $body, $state);
 
+            return true;
+        }
+
+        if ($this->trySwitchDateFromText($from, $body, $state)) {
             return true;
         }
 
@@ -928,6 +942,241 @@ Puedes escribir tu nota o responder:
         }
 
         return false;
+    }
+
+    private function trySwitchServiceFromText(string $from, string $body, array $state): bool
+    {
+        $step = (string) ($state['step'] ?? '');
+
+        if ($step === 'selecting_branch' || empty($state['branch_id'])) {
+            return false;
+        }
+
+        $service = $this->findServiceByLooseText((int) $state['branch_id'], $body);
+
+        if ($service === null) {
+            return false;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_service',
+            [
+                'service_id' => null,
+                'service_name' => null,
+                'service_price' => null,
+                'service_duration' => null,
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $freshState = $this->conversationStateService->getState($from) ?? $state;
+        $this->handleServiceSelection($from, (string) ($service['name'] ?? $body), $freshState);
+
+        return true;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findServiceByLooseText(int $branchId, string $body): ?array
+    {
+        $service = $this->catalogService->getServiceByText($branchId, $body);
+
+        if ($service !== null) {
+            return $service;
+        }
+
+        $needle = $this->normalizeLooseText($body);
+
+        if ($needle === '') {
+            return null;
+        }
+
+        $services = $this->catalogService->getServicesByBranch($branchId);
+        $matches = [];
+
+        foreach ($services as $candidate) {
+            $label = $this->normalizeLooseText((string) ($candidate['name'] ?? ''));
+
+            if ($label === '') {
+                continue;
+            }
+
+            $tokens = array_values(array_filter(explode(' ', $label)));
+            $distinctiveTokens = array_values(array_filter(
+                $tokens,
+                static fn (string $token): bool => !in_array($token, ['corte', 'servicio', 'paquete'], true) && mb_strlen($token) >= 3
+            ));
+
+            foreach ($distinctiveTokens as $token) {
+                if (str_contains($needle, $token)) {
+                    $matches[(int) $candidate['id']] = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return count($matches) === 1 ? array_values($matches)[0] : null;
+    }
+
+    private function trySwitchDateFromText(string $from, string $body, array $state): bool
+    {
+        $step = (string) ($state['step'] ?? '');
+
+        if (!in_array($step, ['selecting_barber', 'selecting_time', 'collecting_customer_name', 'collecting_customer_email', 'collecting_customer_phone', 'collecting_customer_notes', 'confirming_booking'], true)) {
+            return false;
+        }
+
+        if (!$this->looksLikeDateInputForInterruption($body)) {
+            return false;
+        }
+
+        $date = $this->parseBookingDate($body);
+
+        if ($date === null) {
+            $this->restartDateSelection($from, $state);
+
+            return true;
+        }
+
+        if ($this->isPastBookingDate($date)) {
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_date',
+                [
+                    'date' => null,
+                    'time_label' => null,
+                    'scheduled_date_time' => null,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+            );
+
+            return true;
+        }
+
+        $this->continueAfterDateChanged($from, $date, $state);
+
+        return true;
+    }
+
+    private function continueAfterDateChanged(string $from, string $date, array $state): void
+    {
+        if (empty($state['branch_id']) || empty($state['service_id'])) {
+            $this->restartDateSelection($from, $state);
+
+            return;
+        }
+
+        $branchId = (int) $state['branch_id'];
+        $serviceId = (int) $state['service_id'];
+        $branchName = (string) ($state['branch_name'] ?? '');
+        $serviceName = (string) ($state['service_name'] ?? '');
+
+        if (!empty($state['barber_id']) && !empty($state['barber_name'])) {
+            $slotGroups = $this->catalogService->getAvailableSlots(
+                (int) $state['barber_id'],
+                $branchId,
+                $date,
+                $serviceId
+            );
+
+            if ($slotGroups !== []) {
+                $this->conversationStateService->updateState(
+                    $from,
+                    'selecting_time',
+                    [
+                        'date' => $date,
+                        'time_label' => null,
+                        'scheduled_date_time' => null,
+                    ]
+                );
+
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    sprintf(
+                        "Claro, cambiemos la fecha al *%s*.\n\n%s",
+                        $this->formatDateForCustomer($date),
+                        $this->catalogService->formatAvailableSlotsMenu(
+                            (string) $state['barber_name'],
+                            $date,
+                            $slotGroups
+                        )
+                    )
+                );
+
+                return;
+            }
+        }
+
+        $barbers = $this->catalogService->getAvailableBarbers($branchId, $date, $serviceId);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_barber',
+            [
+                'date' => $date,
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Claro, cambiemos la fecha al *%s*.\n\n%s",
+                $this->formatDateForCustomer($date),
+                $this->catalogService->formatAvailableBarbersMenu(
+                    $branchName,
+                    $serviceName,
+                    $date,
+                    $barbers
+                )
+            )
+        );
+    }
+
+    private function looksLikeDateInputForInterruption(string $body): bool
+    {
+        $text = $this->normalizeDateText($body);
+
+        if ($text === '' || ctype_digit($text)) {
+            return false;
+        }
+
+        if (preg_match('/\b(hoy|manana)\b/u', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\b\d{1,2}\/\d{1,2}(?:\/\d{4})?\b/u', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\b\d{4}-\d{1,2}-\d{1,2}\b/u', $text)) {
+            return true;
+        }
+
+        foreach (array_keys($this->spanishMonths()) as $monthName) {
+            if (str_contains($text, $monthName)) {
+                return true;
+            }
+        }
+
+        return str_contains($text, 'fecha')
+            || str_contains($text, 'no puse')
+            || str_contains($text, 'no es')
+            || str_contains($text, 'no era')
+            || str_contains($text, 'este ano')
+            || str_contains($text, 'este año');
     }
 
     private function restartServiceSelection(string $from, string $body, array $state): void
@@ -1212,9 +1461,19 @@ Elige otro barbero:
     {
         return str_contains($normalizedBody, 'cambiar servicio')
             || str_contains($normalizedBody, 'cambiar el servicio')
+            || str_contains($normalizedBody, 'cambiar a')
+            || str_contains($normalizedBody, 'cambio a')
+            || str_contains($normalizedBody, 'puedo cambiar')
+            || str_contains($normalizedBody, 'quiero cambiar')
+            || str_contains($normalizedBody, 'quise cambiar')
+            || str_contains($normalizedBody, 'quita cambiar')
+            || str_contains($normalizedBody, 'quito cambiar')
             || str_contains($normalizedBody, 'otro servicio')
             || str_contains($normalizedBody, 'mejor corte')
-            || str_contains($normalizedBody, 'mejor servicio');
+            || str_contains($normalizedBody, 'mejor servicio')
+            || str_contains($normalizedBody, 'mejor adulto')
+            || str_contains($normalizedBody, 'mejor nino')
+            || str_contains($normalizedBody, 'mejor niño');
     }
 
     private function isChangeDateIntent(string $normalizedBody): bool
@@ -1269,6 +1528,24 @@ Elige otro barbero:
             || str_contains($normalizedBody, 'barberos tienen')
             || str_contains($normalizedBody, 'quien corta')
             || str_contains($normalizedBody, 'quién corta');
+    }
+
+    private function normalizeLooseText(string $text): string
+    {
+        $text = mb_strtolower(trim($text));
+        $text = strtr($text, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n',
+        ]);
+        $text = preg_replace('/[^a-z0-9\s]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
     }
 
     private function extractPhoneFromWhatsAppId(string $waId): string
