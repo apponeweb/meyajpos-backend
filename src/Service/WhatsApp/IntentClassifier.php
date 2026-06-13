@@ -104,7 +104,7 @@ final class IntentClassifier
      */
     private function detectByRules(string $text, array $entities): string
     {
-        $configuredIntent = $this->detectByConfiguredRules($text);
+        $configuredIntent = $this->detectByConfiguredRules($text, $entities);
 
         if ($configuredIntent !== null) {
             return $configuredIntent;
@@ -485,7 +485,7 @@ final class IntentClassifier
     }
 
 
-    private function detectByConfiguredRules(string $text): ?string
+    private function detectByConfiguredRules(string $text, array $entities = []): ?string
     {
         $config = $this->loadWhatsappIntentsConfig();
         $intents = $config['intents'] ?? [];
@@ -501,33 +501,15 @@ final class IntentClassifier
                 continue;
             }
 
-            $examples = $intentConfig['examples'] ?? [];
-
-            if (!is_array($examples)) {
+            if (!$this->intentConfigMatches($text, $entities, $intentConfig)) {
                 continue;
             }
 
-            foreach ($examples as $example) {
-                if (!is_string($example) || trim($example) === '') {
-                    continue;
-                }
-
-                $normalizedExample = $this->normalizeText($example);
-
-                if ($normalizedExample === '') {
-                    continue;
-                }
-
-                if ($text === $normalizedExample || str_contains($text, $normalizedExample)) {
-                    $matches[] = [
-                        'intent' => $this->mapConfiguredIntentToLegacyIntent($intentKey),
-                        'priority' => (int) ($intentConfig['priority'] ?? 0),
-                        'length' => strlen($normalizedExample),
-                    ];
-
-                    break;
-                }
-            }
+            $matches[] = [
+                'intent' => $this->mapConfiguredIntentToLegacyIntent($intentKey),
+                'priority' => (int) ($intentConfig['priority'] ?? 0),
+                'score' => (int) ($intentConfig['_score'] ?? 0),
+            ];
         }
 
         if ($matches === []) {
@@ -541,10 +523,152 @@ final class IntentClassifier
                 return $priority;
             }
 
-            return $b['length'] <=> $a['length'];
+            return $b['score'] <=> $a['score'];
         });
 
         return (string) $matches[0]['intent'];
+    }
+
+    /**
+     * @param array<string, string|null> $entities
+     * @param array<string, mixed> $intentConfig
+     */
+    private function intentConfigMatches(string $text, array $entities, array &$intentConfig): bool
+    {
+        if ($this->hasExcludedKeywords($text, $intentConfig)) {
+            return false;
+        }
+
+        if (!$this->hasRequiredEntities($entities, $intentConfig)) {
+            return false;
+        }
+
+        $score = 0;
+
+        $examples = $intentConfig['examples'] ?? [];
+        if (is_array($examples)) {
+            foreach ($examples as $example) {
+                if (!is_string($example) || trim($example) === '') {
+                    continue;
+                }
+
+                $normalizedExample = $this->normalizeText($example);
+
+                if ($normalizedExample !== '' && ($text === $normalizedExample || str_contains($text, $normalizedExample))) {
+                    $score += 50 + strlen($normalizedExample);
+                }
+            }
+        }
+
+        $keywords = $intentConfig['keywords'] ?? [];
+        if (is_array($keywords)) {
+            foreach ($keywords as $keyword) {
+                if (!is_string($keyword) || trim($keyword) === '') {
+                    continue;
+                }
+
+                $normalizedKeyword = $this->normalizeText($keyword);
+
+                if ($normalizedKeyword !== '' && str_contains($text, $normalizedKeyword)) {
+                    $score += 20 + strlen($normalizedKeyword);
+                }
+            }
+        }
+
+        $allKeywordsGroups = $intentConfig['all_keywords'] ?? [];
+        if (is_array($allKeywordsGroups)) {
+            foreach ($allKeywordsGroups as $group) {
+                if (!is_array($group) || $group === []) {
+                    continue;
+                }
+
+                $groupMatches = true;
+
+                foreach ($group as $keyword) {
+                    if (!is_string($keyword) || trim($keyword) === '') {
+                        $groupMatches = false;
+                        break;
+                    }
+
+                    if (!str_contains($text, $this->normalizeText($keyword))) {
+                        $groupMatches = false;
+                        break;
+                    }
+                }
+
+                if ($groupMatches) {
+                    $score += 75;
+                }
+            }
+        }
+
+        $patterns = $intentConfig['patterns'] ?? [];
+        if (is_array($patterns)) {
+            foreach ($patterns as $pattern) {
+                if (!is_string($pattern) || trim($pattern) === '') {
+                    continue;
+                }
+
+                $regex = '/' . str_replace('/', '\/', $pattern) . '/u';
+
+                if (@preg_match($regex, $text) === 1) {
+                    $score += 100;
+                }
+            }
+        }
+
+        $intentConfig['_score'] = $score;
+
+        return $score > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $intentConfig
+     */
+    private function hasExcludedKeywords(string $text, array $intentConfig): bool
+    {
+        $excluded = $intentConfig['exclude_keywords'] ?? [];
+
+        if (!is_array($excluded)) {
+            return false;
+        }
+
+        foreach ($excluded as $keyword) {
+            if (!is_string($keyword) || trim($keyword) === '') {
+                continue;
+            }
+
+            if (str_contains($text, $this->normalizeText($keyword))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, string|null> $entities
+     * @param array<string, mixed> $intentConfig
+     */
+    private function hasRequiredEntities(array $entities, array $intentConfig): bool
+    {
+        $requiredEntities = $intentConfig['required_entities'] ?? [];
+
+        if (!is_array($requiredEntities) || $requiredEntities === []) {
+            return true;
+        }
+
+        foreach ($requiredEntities as $entityKey) {
+            if (!is_string($entityKey)) {
+                continue;
+            }
+
+            if (($entities[$entityKey] ?? null) === null || $entities[$entityKey] === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function mapConfiguredIntentToLegacyIntent(string $intent): string
@@ -558,6 +682,8 @@ final class IntentClassifier
             'list_services' => 'list_services',
             'check_barbers' => 'check_barbers',
             'greeting' => 'greeting',
+            'help' => 'greeting',
+            'unknown' => 'unknown',
             default => $intent,
         };
     }

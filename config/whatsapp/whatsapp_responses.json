@@ -1,0 +1,99 @@
+{
+  "version": 2,
+  "description": "Textos configurables para el bot de WhatsApp BookinPOS.",
+  "responses": {
+    "main_menu": "Hola 👋 Soy el asistente de la barbería.\\n\\nPuedo ayudarte con:\\n1. Agendar una cita\\n2. Ver servicios por sucursal\\n3. Ver barberos disponibles\\n4. Reagendar una cita\\n5. Recomendar productos\\n6. Recomendar un corte según tu tipo de cara\\n\\nEscribe por ejemplo:\\n- agenda\\n- quiero una cita\\n- servicios\\n- barberos\\n- productos\\n- corte para cara redonda\\n\\nPara consultar servicios o agendar, primero te pediré la sucursal.",
+    "unknown": "No estoy seguro de haber entendido tu mensaje.\\n\\nPuedes escribir:\\n- agenda\\n- quiero una cita\\n- servicios\\n- barberos\\n- productos\\n- reagendar\\n\\nPara consultar servicios o agendar, primero te pediré la sucursal.",
+    "services_intro": "Para consultar servicios primero necesito saber la sucursal.\\n\\nEscribe *servicios* o *agenda* para comenzar.",
+    "agenda_intro": "Claro. Para revisar disponibilidad vamos a iniciar tu cita paso a paso.\\n\\nEscribe *agenda* para comenzar.",
+    "barbers_intro": "Puedo ayudarte a consultar barberos disponibles.\\n\\nPara hacerlo necesito primero conocer sucursal, servicio y fecha.\\n\\nEscribe *agenda* para comenzar.",
+    "reschedule_intro": "Claro, puedo ayudarte a reagendar.\\n\\nPara ubicar tu cita necesito:\\n1. Nombre con el que se registró\\n2. Día original de la cita\\n3. Nuevo día u horario deseado\\n\\nEjemplo:\\nReagendar Ernesto, cita de hoy, para mañana a las 5"
+  },
+  "product_recommendations": [
+    {
+      "name": "barba",
+      "keywords": [
+        "barba",
+        "aceite para barba",
+        "balsamo",
+        "bálsamo"
+      ],
+      "response": "Para barba te recomiendo preguntar en sucursal por:\\n\\n1. Aceite para barba\\n2. Bálsamo para barba\\n3. Shampoo para barba\\n\\nTe ayudan a hidratar, dar forma y reducir resequedad."
+    },
+    {
+      "name": "fijacion",
+      "keywords": [
+        "fijacion",
+        "fijación",
+        "pomada",
+        "cera",
+        "gel",
+        "peinar"
+      ],
+      "response": "Para peinado con fijación puedes buscar:\\n\\n1. Pomada de fijación media\\n2. Cera con acabado natural\\n3. Gel de fijación fuerte\\n\\nSi quieres acabado natural, pide cera o pomada mate."
+    },
+    {
+      "name": "frizz",
+      "keywords": [
+        "frizz",
+        "cabello seco",
+        "reseco",
+        "shampoo"
+      ],
+      "response": "Para controlar frizz o cabello seco puedes preguntar por:\\n\\n1. Shampoo hidratante\\n2. Cera ligera\\n3. Crema para peinar\\n\\nLa idea es controlar volumen sin endurecer demasiado el cabello."
+    }
+  ],
+  "haircut_recommendations": [
+    {
+      "shape": "redonda",
+      "keywords": [
+        "redonda",
+        "cara redonda"
+      ],
+      "response": "Para cara redonda suelen favorecer cortes con volumen arriba y laterales más cortos:\\n\\n1. Quiff texturizado\\n2. Pompadour bajo\\n3. Fade medio con volumen superior\\n4. Side part con laterales limpios\\n\\nLa idea es alargar visualmente el rostro."
+    },
+    {
+      "shape": "ovalada",
+      "keywords": [
+        "ovalada",
+        "cara ovalada"
+      ],
+      "response": "Para cara ovalada hay bastante libertad. Opciones recomendadas:\\n\\n1. Crop texturizado\\n2. Fade bajo\\n3. Slick back\\n4. Corte clásico con raya lateral"
+    },
+    {
+      "shape": "cuadrada",
+      "keywords": [
+        "cuadrada",
+        "cara cuadrada"
+      ],
+      "response": "Para cara cuadrada funcionan bien cortes que respetan la mandíbula marcada:\\n\\n1. Buzz cut con fade\\n2. Crew cut\\n3. Side part clásico\\n4. French crop"
+    },
+    {
+      "shape": "alargada",
+      "keywords": [
+        "alargada",
+        "cara alargada",
+        "larga"
+      ],
+      "response": "Para cara alargada conviene evitar demasiado volumen arriba. Opciones recomendadas:\\n\\n1. Corte medio texturizado\\n2. Flequillo ligero\\n3. Side part bajo\\n4. Taper clásico"
+    },
+    {
+      "shape": "diamante",
+      "keywords": [
+        "diamante",
+        "cara diamante"
+      ],
+      "response": "Para cara tipo diamante conviene equilibrar pómulos y frente:\\n\\n1. Fringe texturizado\\n2. Taper con volumen medio\\n3. Corte en capas\\n4. Side swept"
+    },
+    {
+      "shape": "corazon",
+      "keywords": [
+        "corazon",
+        "corazón",
+        "cara corazon",
+        "cara corazón"
+      ],
+      "response": "Para cara tipo corazón conviene equilibrar frente y mentón:\\n\\n1. Flequillo ligero\\n2. Taper bajo\\n3. Corte texturizado medio\\n4. Side part suave"
+    }
+  ]
+}

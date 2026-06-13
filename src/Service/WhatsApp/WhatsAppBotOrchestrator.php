@@ -1535,7 +1535,8 @@ Puedes escribir tu nota o responder:
 
     private function mainMenu(): string
     {
-        return "Hola 👋 Soy el asistente de la barbería.\n\n"
+        return $this->configuredResponse('main_menu')
+            ?? "Hola 👋 Soy el asistente de la barbería.\n\n"
             . "Puedo ayudarte con:\n"
             . "1. Agendar una cita\n"
             . "2. Ver servicios por sucursal\n"
@@ -1555,26 +1556,30 @@ Puedes escribir tu nota o responder:
 
     private function servicesResponse(): string
     {
-        return "Para consultar servicios primero necesito saber la sucursal.\n\n"
+        return $this->configuredResponse('services_intro')
+            ?? "Para consultar servicios primero necesito saber la sucursal.\n\n"
             . "Escribe *servicios* o *agenda* para comenzar.";
     }
 
     private function agendaResponse(string $message): string
     {
-        return "Claro. Para revisar disponibilidad vamos a iniciar tu cita paso a paso.\n\n"
+        return $this->configuredResponse('agenda_intro')
+            ?? "Claro. Para revisar disponibilidad vamos a iniciar tu cita paso a paso.\n\n"
             . "Escribe *agenda* para comenzar.";
     }
 
     private function barbersResponse(): string
     {
-        return "Puedo ayudarte a consultar barberos disponibles.\n\n"
+        return $this->configuredResponse('barbers_intro')
+            ?? "Puedo ayudarte a consultar barberos disponibles.\n\n"
             . "Para hacerlo necesito primero conocer sucursal, servicio y fecha.\n\n"
             . "Escribe *agenda* para comenzar.";
     }
 
     private function rescheduleResponse(): string
     {
-        return "Claro, puedo ayudarte a reagendar.\n\n"
+        return $this->configuredResponse('reschedule_intro')
+            ?? "Claro, puedo ayudarte a reagendar.\n\n"
             . "Para ubicar tu cita necesito:\n"
             . "1. Nombre con el que se registró\n"
             . "2. Día original de la cita\n"
@@ -1585,6 +1590,12 @@ Puedes escribir tu nota o responder:
 
     private function productsResponse(string $message): string
     {
+        $configuredResponse = $this->catalogService->getProductRecommendationFromConfig($message);
+
+        if ($configuredResponse !== null) {
+            return $configuredResponse;
+        }
+
         $text = mb_strtolower($message);
 
         if (str_contains($text, 'barba')) {
@@ -1620,6 +1631,12 @@ Puedes escribir tu nota o responder:
 
     private function haircutRecommendationResponse(string $message): string
     {
+        $configuredResponse = $this->catalogService->getHaircutRecommendationFromConfig($message);
+
+        if ($configuredResponse !== null) {
+            return $configuredResponse;
+        }
+
         $text = mb_strtolower($message);
 
         if (str_contains($text, 'redonda')) {
@@ -1684,7 +1701,8 @@ Puedes escribir tu nota o responder:
 
     private function unknownResponse(): string
     {
-        return "No estoy seguro de haber entendido tu mensaje.\n\n"
+        return $this->configuredResponse('unknown')
+            ?? "No estoy seguro de haber entendido tu mensaje.\n\n"
             . "Puedes escribir:\n"
             . "- agenda\n"
             . "- quiero una cita\n"
@@ -1693,5 +1711,45 @@ Puedes escribir tu nota o responder:
             . "- productos\n"
             . "- reagendar\n\n"
             . "Para consultar servicios o agendar, primero te pediré la sucursal.";
+    }
+
+    private function configuredResponse(string $key): ?string
+    {
+        $config = $this->loadWhatsappResponsesConfig();
+        $responses = $config['responses'] ?? [];
+
+        if (!is_array($responses)) {
+            return null;
+        }
+
+        $response = $responses[$key] ?? null;
+
+        if (!is_string($response) || trim($response) === '') {
+            return null;
+        }
+
+        return str_replace('\\n', "\n", $response);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadWhatsappResponsesConfig(): array
+    {
+        $path = dirname(__DIR__, 3) . '/config/whatsapp/whatsapp_responses.json';
+
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $json = file_get_contents($path);
+
+        if ($json === false) {
+            return [];
+        }
+
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
     }
 }

@@ -1007,4 +1007,127 @@ class WhatsAppCatalogService
             return null;
         }
     }
+
+    public function getProductRecommendationFromConfig(string $message): ?string
+    {
+        $config = $this->loadWhatsappResponsesConfig();
+        $recommendations = $config['product_recommendations'] ?? [];
+
+        if (!is_array($recommendations)) {
+            return null;
+        }
+
+        $text = $this->normalizeConfigText($message);
+
+        foreach ($recommendations as $recommendation) {
+            if (!is_array($recommendation)) {
+                continue;
+            }
+
+            $keywords = $recommendation['keywords'] ?? [];
+
+            if (!is_array($keywords)) {
+                continue;
+            }
+
+            foreach ($keywords as $keyword) {
+                if (!is_string($keyword) || trim($keyword) === '') {
+                    continue;
+                }
+
+                if (str_contains($text, $this->normalizeConfigText($keyword))) {
+                    $response = $recommendation['response'] ?? null;
+
+                    return is_string($response) && trim($response) !== '' ? $this->renderConfigText($response) : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public function getHaircutRecommendationFromConfig(string $message): ?string
+    {
+        $config = $this->loadWhatsappResponsesConfig();
+        $recommendations = $config['haircut_recommendations'] ?? [];
+
+        if (!is_array($recommendations)) {
+            return null;
+        }
+
+        $text = $this->normalizeConfigText($message);
+
+        foreach ($recommendations as $recommendation) {
+            if (!is_array($recommendation)) {
+                continue;
+            }
+
+            $keywords = $recommendation['keywords'] ?? [];
+
+            if (!is_array($keywords)) {
+                continue;
+            }
+
+            foreach ($keywords as $keyword) {
+                if (!is_string($keyword) || trim($keyword) === '') {
+                    continue;
+                }
+
+                if (str_contains($text, $this->normalizeConfigText($keyword))) {
+                    $response = $recommendation['response'] ?? null;
+
+                    return is_string($response) && trim($response) !== '' ? $this->renderConfigText($response) : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadWhatsappResponsesConfig(): array
+    {
+        $path = dirname(__DIR__, 3) . '/config/whatsapp/whatsapp_responses.json';
+
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $json = file_get_contents($path);
+
+        if ($json === false) {
+            return [];
+        }
+
+        $data = json_decode($json, true);
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function renderConfigText(string $text): string
+    {
+        return str_replace('\n', "\n", $text);
+    }
+
+    private function normalizeConfigText(string $text): string
+    {
+        $text = mb_strtolower(trim($text));
+        $text = strtr($text, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n',
+        ]);
+        $text = preg_replace('/[^a-z0-9:\/\-\s#]+/u', ' ', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+
+        return trim($text);
+    }
+
+
 }

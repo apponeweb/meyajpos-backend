@@ -1,152 +1,248 @@
 {
-  "version": "1.0.0",
-  "language": "es-MX",
+  "version": 2,
+  "description": "Reglas configurables para clasificación de intención del bot de WhatsApp BookinPOS.",
   "intents": {
     "greeting": {
-      "description": "Saludo o solicitud de menú inicial",
       "priority": 10,
       "examples": [
         "hola",
-        "buenas",
-        "buen día",
         "buen dia",
-        "hey",
-        "qué onda",
-        "que onda",
-        "menú",
+        "buenas tardes",
+        "buenas noches",
         "menu",
+        "menú",
         "inicio",
+        "ayuda"
+      ],
+      "keywords": [
+        "hola",
+        "buenas",
+        "menu",
         "ayuda"
       ]
     },
     "book_appointment": {
-      "description": "El cliente quiere agendar una cita",
       "priority": 100,
       "examples": [
         "agenda",
         "agendar",
-        "quiero agendar",
         "quiero una cita",
-        "necesito una cita",
-        "ocupo una cita",
-        "me puedes agendar",
-        "me puedes dar cita",
-        "quiero reservar",
-        "quiero apartar",
-        "tienen espacio",
-        "hay lugar",
-        "hay disponibilidad",
-        "necesito corte",
+        "quiero agendar",
+        "agendar cita",
+        "hacer cita",
+        "reservar cita",
+        "tienes lugar",
+        "hay espacio",
+        "me puedes dar horarios",
         "quiero cortarme el pelo",
-        "quiero cita hoy",
-        "quiero cita mañana",
-        "quiero agendar el 18 de junio"
+        "quiero un corte mañana"
+      ],
+      "keywords": [
+        "agenda",
+        "agendar",
+        "cita",
+        "reservar",
+        "horario",
+        "disponibilidad",
+        "espacio",
+        "lugar"
+      ],
+      "all_keywords": [
+        [
+          "quiero",
+          "cita"
+        ],
+        [
+          "hacer",
+          "cita"
+        ],
+        [
+          "agendar",
+          "cita"
+        ],
+        [
+          "ver",
+          "horarios"
+        ],
+        [
+          "dar",
+          "horarios"
+        ]
       ]
     },
     "cancel_appointment": {
-      "description": "El cliente quiere cancelar una cita",
-      "priority": 100,
+      "priority": 120,
       "examples": [
         "cancelar cita",
         "cancelar mi cita",
         "quiero cancelar",
-        "quiero cancelar mi cita",
         "cancelar folio",
-        "cancelar el folio",
-        "quiero cancelar el folio 32",
         "anular cita",
-        "anular mi cita",
+        "eliminar cita",
         "ya no voy a ir",
-        "no podré asistir",
-        "no podre asistir",
-        "cancela mi reservación",
-        "cancela mi reservacion"
+        "no puedo ir"
+      ],
+      "keywords": [
+        "cancelar",
+        "cancelacion",
+        "anular",
+        "eliminar"
+      ],
+      "all_keywords": [
+        [
+          "cancelar",
+          "cita"
+        ],
+        [
+          "cancelar",
+          "folio"
+        ],
+        [
+          "anular",
+          "cita"
+        ],
+        [
+          "no",
+          "ir"
+        ]
+      ],
+      "patterns": [
+        "\\bfolio\\s*#?\\s*\\d{1,10}\\b"
       ]
     },
     "reschedule_appointment": {
-      "description": "El cliente quiere cambiar fecha u hora",
-      "priority": 90,
+      "priority": 110,
       "examples": [
         "reagendar",
-        "quiero reagendar",
+        "reagendar mi cita",
         "cambiar cita",
         "mover cita",
         "cambiar mi cita",
         "modificar cita",
         "reprogramar",
-        "puedo cambiar mi horario",
-        "quiero mover mi cita para mañana"
+        "pasar mi cita para mañana"
+      ],
+      "keywords": [
+        "reagendar",
+        "reprogramar",
+        "mover cita",
+        "cambiar cita",
+        "modificar cita"
+      ],
+      "all_keywords": [
+        [
+          "cambiar",
+          "cita"
+        ],
+        [
+          "mover",
+          "cita"
+        ],
+        [
+          "pasar",
+          "cita"
+        ]
       ]
     },
     "list_services": {
-      "description": "El cliente quiere servicios o precios",
       "priority": 80,
       "examples": [
         "servicios",
         "ver servicios",
+        "lista de servicios",
+        "precios",
+        "cuanto cuesta",
         "qué servicios tienen",
-        "que servicios tienen",
+        "corte y barba",
+        "barba",
+        "fade",
+        "desvanecido"
+      ],
+      "keywords": [
+        "servicios",
+        "servicio",
         "precios",
         "precio",
-        "cuánto cuesta",
         "cuanto cuesta",
-        "precio del corte",
-        "corte adulto",
-        "corte niño",
-        "paquete tios",
-        "paquete tios full",
-        "tinte barba"
+        "barba",
+        "fade",
+        "desvanecido"
+      ],
+      "exclude_keywords": [
+        "agendar cita",
+        "quiero cita"
       ]
     },
     "check_barbers": {
-      "description": "Pregunta por barberos",
-      "priority": 80,
+      "priority": 70,
       "examples": [
         "barberos",
-        "qué barberos tienen",
-        "que barberos tienen",
-        "quién corta",
+        "ver barberos",
+        "qué barberos hay",
+        "barberos disponibles",
         "quien corta",
-        "con quién puedo agendar",
-        "con quien puedo agendar",
-        "está Joe",
-        "esta Joe",
-        "hay espacio con Joe",
-        "quiero con Joe",
-        "quiero que me atienda Neo",
-        "disponible con Yank"
+        "con qué barbero"
+      ],
+      "keywords": [
+        "barberos",
+        "barbero",
+        "estilista",
+        "quien corta",
+        "disponibles"
       ]
     },
     "product_recommendation": {
-      "description": "Recomendación de producto",
-      "priority": 70,
+      "priority": 60,
       "examples": [
         "productos",
         "recomienda producto",
-        "qué producto me recomiendas",
-        "que producto me recomiendas",
+        "producto para barba",
+        "producto para fijacion",
         "pomada",
         "cera",
         "gel",
         "shampoo",
         "aceite para barba",
-        "producto para barba",
-        "producto para peinar"
+        "control de frizz"
+      ],
+      "keywords": [
+        "producto",
+        "productos",
+        "pomada",
+        "cera",
+        "gel",
+        "shampoo",
+        "aceite",
+        "fijacion",
+        "frizz",
+        "barba",
+        "peinar"
       ]
     },
     "haircut_recommendation": {
-      "description": "Recomendación de corte",
-      "priority": 70,
+      "priority": 65,
       "examples": [
-        "corte para cara redonda",
         "qué corte me queda",
-        "que corte me queda",
+        "tipo de cara",
+        "corte para cara redonda",
+        "cara ovalada",
+        "cara cuadrada",
+        "cara alargada",
+        "cara diamante",
+        "cara corazon",
+        "recomienda un corte"
+      ],
+      "keywords": [
+        "corte me queda",
         "tipo de cara",
         "cara redonda",
         "cara ovalada",
         "cara cuadrada",
         "cara alargada",
-        "recomienda un corte"
+        "cara diamante",
+        "cara corazon",
+        "recomienda un corte",
+        "corte para cara"
       ]
     }
   }
