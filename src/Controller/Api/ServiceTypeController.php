@@ -41,6 +41,12 @@ final class ServiceTypeController extends BaseController
         ];
     }
 
+    protected function configureListQuery(\Doctrine\ORM\QueryBuilder $qb, Request $request): void
+    {
+        $qb->andWhere('u.isActive = :active')
+            ->setParameter('active', true);
+    }
+
     #[Rest\Get('/service_type')]
     public function index(Request $request, ServiceTypeRepository $repository): JsonResponse
     {

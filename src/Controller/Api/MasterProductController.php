@@ -292,6 +292,8 @@ final class MasterProductController extends BaseController
             ->where('bsch.branch = :branchId')
             ->andWhere('mp.isActive = :active')
             ->andWhere('mp.deletedAt IS NULL')
+            ->andWhere('st.isActive = :active')
+            ->andWhere('st.deletedAt IS NULL')
             ->andWhere('bs.isActive = :active')
             ->andWhere('bs.deletedAt IS NULL')
             ->andWhere('mp.isInventoriable = :notInventoriable')
