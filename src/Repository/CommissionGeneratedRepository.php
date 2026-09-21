@@ -27,7 +27,8 @@ class CommissionGeneratedRepository extends BaseRepository
                 'cg.percentage',
                 'COUNT(cg.id) as quantity',
                 'SUM(cg.commissionAmount) as totalCommission',
-                'MAX(cg.createdAt) as date'
+                'MAX(cg.createdAt) as date',
+                'AVG(sd.unitPrice) as unitPrice'
             )
             ->join('cg.saleDetail', 'sd')
             ->join('sd.product', 'mp')

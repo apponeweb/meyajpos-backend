@@ -58,9 +58,7 @@ class CommissionReportController extends AbstractController
                 $percentage = (float)$row['percentage'];
                 $totalComm = (float)$row['totalCommission'];
                 $quantity = (int)$row['quantity'];
-
-                $unitCommission = $quantity > 0 ? $totalComm / $quantity : 0;
-                $price = ($percentage > 0) ? ($unitCommission * 100) / $percentage : 0;
+                $unitPrice = (float)($row['unitPrice'] ?? 0);
 
                 $barberId = $row['barberId'] ?? null;
                 if ($barberId && !isset($barberPhotoCache[$barberId])) {
@@ -74,10 +72,10 @@ class CommissionReportController extends AbstractController
                     'serviceType' => $row['serviceType'] ?? 'N/A',
                     'barber' => $row['barber'],
                     'barberPhoto' => $photoUrl ? $baseUrl . $photoUrl : null,
-                    'price' => number_format((float)$price, 2, '.', ','),
+                    'price' => number_format($unitPrice, 2, '.', ','),
                     'percentage' => number_format($percentage, 2, '.', ','),
                     'quantity' => $quantity,
-                    'total' => number_format((float)$price * $quantity, 2, '.', ','),
+                    'total' => number_format($unitPrice * $quantity, 2, '.', ','),
                     'commission' => number_format($totalComm, 2, '.', ','),
                     'date' => $dateObj instanceof \DateTimeInterface
                         ? $dateObj->format('d/m/Y H:i')

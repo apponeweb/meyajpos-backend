@@ -299,8 +299,15 @@ final class MasterProductController extends BaseController
             ->andWhere('mp.isInventoriable = :notInventoriable')
             ->setParameter('branchId', $branchId)
             ->setParameter('active', true)
-            ->setParameter('notInventoriable', false)
-            ->groupBy('mp.id, mp.name, st.name, mp.description, mp.price, mp.image');
+            ->setParameter('notInventoriable', false);
+
+        // Filtro opcional por tipo de servicio (?serviceTypeId=1)
+        if ($serviceTypeId = $request->query->get('serviceTypeId')) {
+            $qb->andWhere('st.id = :serviceTypeId')
+                ->setParameter('serviceTypeId', $serviceTypeId);
+        }
+
+        $qb->groupBy('mp.id, mp.name, st.name, mp.description, mp.price, mp.image');
 
         $services = $qb->getQuery()->getResult();
 
