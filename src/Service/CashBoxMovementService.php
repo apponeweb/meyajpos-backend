@@ -56,7 +56,7 @@ class CashBoxMovementService
             $currentBalance = $this->movementRepo->getCurrentCashBalance($session);
             $final = $currentBalance['general']['final'] ?? 0;
             // Si el monto a retirar es mayor que el saldo actual
-            if (bccomp($movement->getAmount(), $final, 2) === 1) {
+            if (\bccomp($movement->getAmount(), $final, 2) === 1) {
                 return [
                     'success' => false,
                     'error' => "Saldo insuficiente. Solo hay $" . $final . " en caja.",
