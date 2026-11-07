@@ -88,6 +88,12 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            if ($state !== null && $state['step'] === 'asking_face_shape') {
+                $this->handleFaceShapeAnswer($from, $body, $state);
+
+                return;
+            }
+
             if ($state !== null && $state['step'] === 'selecting_branch') {
                 $this->handleBranchSelection($from, $body, $state);
 
@@ -161,6 +167,11 @@ final class WhatsAppBotOrchestrator
                 };
 
                 if ($menuResponse !== null) {
+                    if ($menuOption === 'haircut' && $this->haircutResponseNeedsFaceShape($body)) {
+                        $this->conversationStateService->start($from, 1);
+                        $this->conversationStateService->updateState($from, 'asking_face_shape');
+                    }
+
                     $result = $this->whatsAppClient->sendTextMessage($from, $menuResponse);
 
                     $this->logger->info('WhatsApp bot response sent', [
@@ -197,6 +208,11 @@ final class WhatsAppBotOrchestrator
                     'haircut_recommendation' => $this->haircutRecommendationResponse($body),
                     default => $this->unknownResponse(),
                 };
+            }
+
+            if ($intent === 'haircut_recommendation' && $this->haircutResponseNeedsFaceShape($body)) {
+                $this->conversationStateService->start($from, 1);
+                $this->conversationStateService->updateState($from, 'asking_face_shape');
             }
 
             $result = $this->whatsAppClient->sendTextMessage($from, $responseText);
@@ -2709,6 +2725,66 @@ Elige otro barbero:
             . "4. Cabello seco\n"
             . "5. Control de frizz\n\n"
             . "Ejemplo: producto para fijación fuerte";
+    }
+
+    private function haircutResponseNeedsFaceShape(string $message): bool
+    {
+        if ($this->catalogService->getHaircutRecommendationFromConfig($message) !== null) {
+            return false;
+        }
+
+        $text = mb_strtolower($message);
+
+        foreach (['redonda', 'ovalada', 'cuadrada', 'alargada', 'diamante', 'corazon', 'corazón'] as $keyword) {
+            if (str_contains($text, $keyword)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function handleFaceShapeAnswer(string $from, string $body, array $state): void
+    {
+        $faceOptions = [
+            '1' => 'ovalada',
+            '2' => 'redonda',
+            '3' => 'cuadrada',
+            '4' => 'alargada',
+            '5' => 'diamante',
+            '6' => 'corazon',
+        ];
+
+        $normalizedBody = mb_strtolower(trim($body));
+
+        if ($this->isBackToMenuCommand($normalizedBody) || $this->isCancelCurrentFlowCommand($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu($from));
+
+            return;
+        }
+
+        $answer = $faceOptions[$normalizedBody] ?? $normalizedBody;
+
+        $isRecognized = isset($faceOptions[$normalizedBody])
+            || in_array($answer, ['ovalada', 'redonda', 'cuadrada', 'alargada', 'diamante', 'corazon', 'corazón'], true);
+
+        if (!$isRecognized) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No reconocí ese tipo de cara. 😅\n\nDime si tu cara es:\n1. Ovalada\n2. Redonda\n3. Cuadrada\n4. Alargada\n5. Diamante\n6. Corazón\n\nO escribe *menú* para volver al inicio."
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->clear($from);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->haircutRecommendationResponse($answer)
+        );
     }
 
     private function haircutRecommendationResponse(string $message): string
