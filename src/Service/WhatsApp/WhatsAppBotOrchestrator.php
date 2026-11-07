@@ -1064,7 +1064,16 @@ Puedes escribir tu nota o responder:
     {
         $step = (string) ($state['step'] ?? '');
 
-        if ($step === 'selecting_branch' || empty($state['branch_id'])) {
+        if ($step === 'selecting_branch'
+            || in_array($step, [
+                'collecting_customer_name',
+                'collecting_customer_email',
+                'collecting_customer_phone',
+                'collecting_customer_notes',
+                'confirming_booking',
+            ], true)
+            || empty($state['branch_id'])
+        ) {
             return false;
         }
 
@@ -1376,6 +1385,17 @@ Puedes escribir tu nota o responder:
     private function trySwitchBarberFromText(string $from, string $body, array $state): bool
     {
         $normalizedBody = mb_strtolower(trim($body));
+        $step = (string) ($state['step'] ?? '');
+
+        if (in_array($step, [
+            'collecting_customer_name',
+            'collecting_customer_email',
+            'collecting_customer_phone',
+            'collecting_customer_notes',
+            'confirming_booking',
+        ], true)) {
+            return false;
+        }
 
         if (empty($state['branch_id']) || empty($state['service_id']) || empty($state['date'])) {
             return false;
