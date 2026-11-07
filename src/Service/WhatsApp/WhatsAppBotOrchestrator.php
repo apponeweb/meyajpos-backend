@@ -396,7 +396,7 @@ final class WhatsAppBotOrchestrator
         $this->whatsAppClient->sendTextMessage(
             $from,
             sprintf(
-                "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*\n*18 de junio*\n*para el 18*",
+                "Perfecto. Seleccionaste *%s*.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*pasado mañana*\n*sábado*\n*18/06/2026*\n*18 de junio*\n*para el 18*\n\nO escribe *menú* para volver al inicio.",
                 (string) $service['name']
             )
         );
@@ -409,7 +409,7 @@ final class WhatsAppBotOrchestrator
         if ($date === null) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "No pude entender la fecha.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+                "No pude entender la fecha.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*pasado mañana*\n*sábado*\n*18/06/2026*\n*18 de junio*\n\nO escribe *menú* para volver al inicio."
             );
 
             return;
@@ -426,7 +426,7 @@ final class WhatsAppBotOrchestrator
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*sábado*\n*18/06/2026*\n\nO escribe *menú* para volver al inicio."
             );
 
             return;
@@ -879,6 +879,14 @@ Puedes escribir tu nota o responder:
             return true;
         }
 
+        if ($this->isBackToMenuCommand($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu());
+
+            return true;
+        }
+
         if ($this->trySwitchServiceFromText($from, $body, $state)) {
             return true;
         }
@@ -1056,7 +1064,7 @@ Puedes escribir tu nota o responder:
 
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*"
+                "Esa fecha ya pasó y no puedo agendar citas en días anteriores.\n\nPuedes escribir:\n*hoy*\n*mañana*\n*sábado*\n*18/06/2026*\n\nO escribe *menú* para volver al inicio."
             );
 
             return true;
@@ -1253,7 +1261,7 @@ Puedes escribir tu nota o responder:
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            "Claro, cambiemos la fecha.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*18/06/2026*\n*18 de junio*"
+            "Claro, cambiemos la fecha.\n\n¿Para qué día quieres tu cita?\n\nPuedes escribir:\n*hoy*\n*mañana*\n*pasado mañana*\n*sábado*\n*18/06/2026*\n*18 de junio*\n\nO escribe *menú* para volver al inicio."
         );
     }
 
@@ -1455,6 +1463,24 @@ Elige otro barbero:
     private function isCancelCurrentFlowCommand(string $normalizedBody): bool
     {
         return in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true);
+    }
+
+    private function isBackToMenuCommand(string $normalizedBody): bool
+    {
+        if (in_array($normalizedBody, [
+            'menu', 'menú', 'inicio', 'regresar', 'volver', 'atras', 'atrás',
+            'hola', 'buenas', 'buen dia', 'buen día', 'buenos dias', 'buenos días',
+            'buenas tardes', 'buenas noches',
+        ], true)) {
+            return true;
+        }
+
+        return str_contains($normalizedBody, 'regresar al menu')
+            || str_contains($normalizedBody, 'regresar al menú')
+            || str_contains($normalizedBody, 'volver al menu')
+            || str_contains($normalizedBody, 'volver al menú')
+            || str_contains($normalizedBody, 'menu principal')
+            || str_contains($normalizedBody, 'menú principal');
     }
 
     private function isChangeServiceIntent(string $normalizedBody): bool
@@ -1835,8 +1861,10 @@ Elige otro barbero:
         $text = $this->normalizeDateText($message);
 
         foreach ([
+            '/\bpasado\s+manana\b/u',
             '/\bhoy\b/u',
             '/\bmanana\b/u',
+            '/\b(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/u',
             '/\b\d{1,2}\/\d{1,2}\/\d{4}\b/u',
             '/\b\d{4}-\d{1,2}-\d{1,2}\b/u',
             '/(?:para\s+el|para|el)?\s*\d{1,2}\s*(?:de\s*)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b/u',
@@ -1858,6 +1886,10 @@ Elige otro barbero:
 
         if (preg_match('/\bhoy\b/u', $text)) {
             return $today->format('Y-m-d');
+        }
+
+        if (preg_match('/\bpasado\s+manana\b/u', $text)) {
+            return $today->modify('+2 days')->format('Y-m-d');
         }
 
         if (preg_match('/\bmanana\b/u', $text)) {
@@ -1897,6 +1929,28 @@ Elige otro barbero:
 
         if (preg_match('/^\s*(\d{1,2})\s*$/u', $text, $matches)) {
             return $this->buildFutureBookingDateFromDay((int) $matches[1], $today, $timezone);
+        }
+
+        $weekdays = [
+            'lunes' => 1,
+            'martes' => 2,
+            'miercoles' => 3,
+            'jueves' => 4,
+            'viernes' => 5,
+            'sabado' => 6,
+            'domingo' => 7,
+        ];
+
+        foreach ($weekdays as $weekdayName => $isoDay) {
+            if (preg_match('/\b' . $weekdayName . '\b/u', $text)) {
+                $daysAhead = ($isoDay - (int) $today->format('N') + 7) % 7;
+
+                if ($daysAhead === 0) {
+                    $daysAhead = 7;
+                }
+
+                return $today->modify(sprintf('+%d days', $daysAhead))->format('Y-m-d');
+            }
         }
 
         return null;
