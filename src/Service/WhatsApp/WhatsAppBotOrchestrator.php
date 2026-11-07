@@ -148,6 +148,32 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            $menuOption = $this->menuOptionAction($normalizedBody);
+
+            if ($menuOption !== null) {
+                $menuResponse = match ($menuOption) {
+                    'book', 'services' => $this->startBookingFlowAndReturnMessage($from, $body),
+                    'barbers' => $this->barbersResponse(),
+                    'reschedule' => $this->rescheduleResponse(),
+                    'products' => $this->productsResponse($body),
+                    'haircut' => $this->haircutRecommendationResponse($body),
+                    default => null,
+                };
+
+                if ($menuResponse !== null) {
+                    $result = $this->whatsAppClient->sendTextMessage($from, $menuResponse);
+
+                    $this->logger->info('WhatsApp bot response sent', [
+                        'to' => $from,
+                        'body' => $body,
+                        'intent' => 'menu_option_' . $menuOption,
+                        'result' => $result,
+                    ]);
+
+                    return;
+                }
+            }
+
             $intent = $this->intentClassifier->detect($body);
 
             if ($intent === 'cancel_appointment') {
@@ -1664,6 +1690,19 @@ Elige otro barbero:
             'collecting_customer_phone',
             'confirming_booking',
         ], true);
+    }
+
+    private function menuOptionAction(string $normalizedBody): ?string
+    {
+        return match ($normalizedBody) {
+            '1' => 'book',
+            '2' => 'services',
+            '3' => 'barbers',
+            '4' => 'reschedule',
+            '5' => 'products',
+            '6' => 'haircut',
+            default => null,
+        };
     }
 
     private function isCancelCurrentFlowCommand(string $normalizedBody): bool
