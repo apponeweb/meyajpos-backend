@@ -308,6 +308,45 @@ class WhatsAppCatalogService
         );
     }
 
+    /**
+     * @return array{id:int, name:string}|null
+     */
+    public function findCustomerByPhone(string $phone, string $countryCode): ?array
+    {
+        $national = preg_replace('/\D+/', '', $phone) ?? '';
+        $national = substr($national, -10);
+        $countryDigits = preg_replace('/\D+/', '', $countryCode) ?? '';
+
+        if ($national === '' || $countryDigits === '') {
+            return null;
+        }
+
+        $row = $this->connection->fetchAssociative(
+            <<<SQL
+            SELECT id, name
+            FROM tbd_customer
+            WHERE deleted_at IS NULL
+              AND RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 10) = :national
+              AND regexp_replace(COALESCE(country_code, ''), '\\D', '', 'g') = :countryDigits
+            ORDER BY id DESC
+            LIMIT 1
+            SQL,
+            [
+                'national' => $national,
+                'countryDigits' => $countryDigits,
+            ]
+        );
+
+        if ($row === false) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $row['id'],
+            'name' => trim((string) ($row['name'] ?? '')),
+        ];
+    }
+
     public function getAvailableBarberByOption(int $branchId, string $date, int $productId, int $option): ?array
     {
         $barbers = $this->getAvailableBarbers($branchId, $date, $productId);

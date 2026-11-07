@@ -624,6 +624,41 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
             $timeLabel
         );
 
+        $detectedPhone = $this->parseInternationalPhoneInput('es el mismo', $from);
+        $knownCustomer = $detectedPhone !== null
+            ? $this->catalogService->findCustomerByPhone($detectedPhone['phone'], $detectedPhone['country_code'])
+            : null;
+
+        if ($knownCustomer !== null && $knownCustomer['name'] !== '') {
+            $this->conversationStateService->updateState(
+                $from,
+                'collecting_customer_email',
+                [
+                    'time_label' => $timeLabel,
+                    'scheduled_date_time' => $scheduledDateTime,
+                    'customer_name' => $knownCustomer['name'],
+                    'customer_phone' => $detectedPhone['phone'],
+                    'customer_country_code' => $detectedPhone['country_code'],
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Perfecto. Apartamos este horario:\n\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nHola de nuevo, *%s*. Ya tengo tu nombre y tu número *%s*.\n\n¿Quieres agregar tu *correo electrónico*? Es opcional.\n\nEscribe el correo o responde *no* para omitirlo.",
+                    (string) $state['branch_name'],
+                    (string) $state['service_name'],
+                    (string) $state['barber_name'],
+                    (string) $state['date'],
+                    $timeLabel,
+                    $knownCustomer['name'],
+                    $this->extractPhoneFromWhatsAppId($from)
+                )
+            );
+
+            return;
+        }
+
         $this->conversationStateService->updateState(
             $from,
             'collecting_customer_name',
