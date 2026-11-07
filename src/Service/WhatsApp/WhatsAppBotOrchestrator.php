@@ -2623,7 +2623,7 @@ Elige otro barbero:
     }
 
     /**
-     * @return array{customer: array{id:int, name:string}, phone: array{country_code:string, phone:string}, last_appointment: array{scheduled_date_time:string, scheduled_date:string, scheduled_date_display:string, is_upcoming:bool}|null}|null
+     * @return array{customer: array{id:int, name:string}, phone: array{country_code:string, phone:string}, last_appointment: array{scheduled_date_time:string, scheduled_date:string, scheduled_date_display:string, scheduled_time_display:string, is_upcoming:bool}|null}|null
      */
     private function knownCustomerForSender(string $from): ?array
     {
@@ -2642,7 +2642,7 @@ Elige otro barbero:
         return [
             'customer' => $customer,
             'phone' => $phoneData,
-            'last_appointment' => $this->catalogService->findLastAppointmentForCustomer((int) $customer['id']),
+            'last_appointment' => $this->catalogService->findRelevantAppointmentForPhone($phoneData['phone'], $phoneData['country_code']),
         ];
     }
 
@@ -2662,9 +2662,13 @@ Elige otro barbero:
         $lastAppointment = $known['last_appointment'] ?? null;
 
         if (is_array($lastAppointment) && !empty($lastAppointment['scheduled_date_display'])) {
+            $timeText = !empty($lastAppointment['scheduled_time_display'])
+                ? sprintf(' a las *%s*', (string) $lastAppointment['scheduled_time_display'])
+                : '';
+
             $greeting .= !empty($lastAppointment['is_upcoming'])
-                ? sprintf("\nTu próxima cita está agendada para el *%s*.", (string) $lastAppointment['scheduled_date_display'])
-                : sprintf("\nTu última cita fue el *%s*.", (string) $lastAppointment['scheduled_date_display']);
+                ? sprintf("\nTu próxima cita está agendada para el *%s*%s.", (string) $lastAppointment['scheduled_date_display'], $timeText)
+                : sprintf("\nTu última cita fue el *%s*%s.", (string) $lastAppointment['scheduled_date_display'], $timeText);
         }
 
         return $greeting . "\n\n";
