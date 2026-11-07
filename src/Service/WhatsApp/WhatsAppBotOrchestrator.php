@@ -59,6 +59,18 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            if ($state !== null && $state['step'] === 'rescheduling_waiting_folio') {
+                $this->handleRescheduleFolio($from, $normalizedBody);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'rescheduling_confirming') {
+                $this->handleRescheduleConfirmation($from, $normalizedBody, $state);
+
+                return;
+            }
+
             if ($this->shouldStartCancellationFlow($normalizedBody)) {
                 $folio = $this->extractAppointmentFolioFromText($body);
 
@@ -160,7 +172,7 @@ final class WhatsAppBotOrchestrator
                 $menuResponse = match ($menuOption) {
                     'book', 'services' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'barbers' => $this->barbersResponse(),
-                    'reschedule' => $this->rescheduleResponse(),
+                    'reschedule' => $this->startRescheduleFlowAndReturnMessage($from, $body),
                     'products' => $this->productsResponse($body),
                     'haircut' => $this->haircutRecommendationResponse($body),
                     default => null,
@@ -202,7 +214,7 @@ final class WhatsAppBotOrchestrator
                     'greeting' => $this->mainMenu($from),
                     'check_agenda' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'check_barbers' => $this->barbersResponse(),
-                    'reschedule' => $this->rescheduleResponse(),
+                    'reschedule' => $this->startRescheduleFlowAndReturnMessage($from, $body),
                     'list_services' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'product_recommendation' => $this->productsResponse($body),
                     'haircut_recommendation' => $this->haircutRecommendationResponse($body),
@@ -839,18 +851,21 @@ También puedes responder: *es el mismo*"
             try {
                 $result = $this->appointmentBookingService->bookFromWhatsAppState($state);
 
+                $rescheduleNote = $this->cancelRescheduledAppointmentIfNeeded($from, $state);
+
                 $this->conversationStateService->clear($from);
 
                 $this->whatsAppClient->sendTextMessage(
                     $from,
                     sprintf(
-                        "Tu cita quedó reservada con éxito.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nTe esperamos.",
+                        "Tu cita quedó reservada con éxito.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nTe esperamos.%s",
                         (string) ($result['appointmentId'] ?? ''),
                         (string) ($state['branch_name'] ?? ''),
                         (string) ($state['service_name'] ?? ''),
                         (string) ($state['barber_name'] ?? ''),
                         (string) ($state['date'] ?? ''),
-                        (string) ($state['time_label'] ?? '')
+                        (string) ($state['time_label'] ?? ''),
+                        $rescheduleNote
                     )
                 );
 
@@ -893,6 +908,33 @@ También puedes responder: *es el mismo*"
             $from,
             $this->formatBookingConfirmation($state)
         );
+    }
+
+    private function cancelRescheduledAppointmentIfNeeded(string $from, array $state): string
+    {
+        $payload = $this->decodeStatePayload($state);
+        $oldAppointmentId = (int) ($payload['reschedule_appointment_id'] ?? 0);
+
+        if ($oldAppointmentId <= 0) {
+            return '';
+        }
+
+        try {
+            $this->appointmentCancellationService->cancelByFolioForWhatsApp($oldAppointmentId, $from);
+
+            return sprintf("\n\nTu cita anterior (folio *%d*) fue cancelada automáticamente.", $oldAppointmentId);
+        } catch (\Throwable $exception) {
+            $this->logger->warning('No se pudo cancelar la cita anterior al reagendar', [
+                'wa_id' => $from,
+                'appointment_id' => $oldAppointmentId,
+                'detail' => $exception->getMessage(),
+            ]);
+
+            return sprintf(
+                "\n\nNota: no pude cancelar tu cita anterior (folio *%d*). Si sigue activa, escríbeme *cancelar cita*.",
+                $oldAppointmentId
+            );
+        }
     }
 
     private function formatBookingConfirmation(array $state): string
@@ -2674,16 +2716,216 @@ Elige otro barbero:
             . "Escribe *agenda* para comenzar.";
     }
 
-    private function rescheduleResponse(): string
+    private function startRescheduleFlowAndReturnMessage(string $from, ?string $message = null): string
     {
+        $folio = $message !== null ? $this->extractRescheduleFolioFromText($message) : null;
+
+        if ($folio !== null) {
+            $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolioForWhatsApp($folio, $from);
+
+            if ($appointment !== null) {
+                $this->conversationStateService->start($from, 1);
+
+                $this->conversationStateService->updateState(
+                    $from,
+                    'rescheduling_confirming',
+                    [
+                        'payload_json' => [
+                            'flow' => 'appointment_reschedule',
+                            'appointment_id' => $folio,
+                            'appointment' => $appointment,
+                        ],
+                    ]
+                );
+
+                return $this->formatRescheduleConfirmation($appointment);
+            }
+
+            $this->conversationStateService->start($from, 1);
+
+            $this->conversationStateService->updateState(
+                $from,
+                'rescheduling_waiting_folio',
+                [
+                    'payload_json' => [
+                        'flow' => 'appointment_reschedule',
+                    ],
+                ]
+            );
+
+            return sprintf(
+                "No encontré una cita futura activa con el folio *%s* asociada a este número.\n\n%s",
+                (string) $folio,
+                $this->rescheduleFolioPrompt()
+            );
+        }
+
+        $this->conversationStateService->start($from, 1);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'rescheduling_waiting_folio',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_reschedule',
+                ],
+            ]
+        );
+
         return $this->configuredResponse('reschedule_intro')
-            ?? "Claro, puedo ayudarte a reagendar.\n\n"
-            . "Para ubicar tu cita necesito:\n"
-            . "• Nombre con el que se registró\n"
-            . "• Día original de la cita\n"
-            . "• Nuevo día u horario deseado\n\n"
-            . "Ejemplo:\n"
-            . "Reagendar Ernesto, cita de hoy, para mañana a las 5";
+            ?? "Claro, te ayudo a reagendar tu cita.\n\n"
+            . $this->rescheduleFolioPrompt();
+    }
+
+    private function rescheduleFolioPrompt(): string
+    {
+        return "Para ubicar tu cita necesito el *folio* (el número que te dimos al agendar).\n\n"
+            . "Ejemplo:\n*12*\n\n"
+            . "Cuando confirmes la nueva cita, la anterior se cancelará automáticamente.\n\n"
+            . "Si no tienes el folio, escribe *NO* para salir.";
+    }
+
+    private function extractRescheduleFolioFromText(string $text): ?int
+    {
+        $normalizedText = mb_strtolower(trim($text));
+
+        $hasFolioContext = (bool) preg_match('/folio|cita/u', $normalizedText);
+        $hasMultiDigitNumber = (bool) preg_match('/\d{2,}/', $normalizedText);
+
+        if (!$hasFolioContext && !$hasMultiDigitNumber) {
+            return null;
+        }
+
+        return $this->extractAppointmentFolioFromText($text);
+    }
+
+    private function formatRescheduleConfirmation(array $appointment): string
+    {
+        return sprintf(
+            "Encontré esta cita:\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\nCliente: *%s*\n\n¿Es esta la cita que quieres reagendar?\nAl confirmar la nueva, esta se cancelará.\n\nResponde *1* para continuar o *2* para salir.",
+            (string) ($appointment['appointment_id'] ?? ''),
+            (string) ($appointment['branch_name'] ?? ''),
+            (string) ($appointment['service_name'] ?? ''),
+            (string) ($appointment['barber_name'] ?? ''),
+            (string) ($appointment['scheduled_date_display'] ?? ''),
+            (string) ($appointment['scheduled_time_label'] ?? ''),
+            (string) ($appointment['customer_name'] ?? '')
+        );
+    }
+
+    private function handleRescheduleFolio(string $from, string $normalizedBody): void
+    {
+        if ($this->isBackToMenuCommand($normalizedBody) || $this->isCancelCurrentFlowCommand($normalizedBody) || $normalizedBody === 'no') {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, no moví ninguna cita.\n\nTu reservación sigue activa. Escribe *menú* para ver opciones."
+            );
+
+            return;
+        }
+
+        if (!ctype_digit($normalizedBody)) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "El folio debe ser numérico.\n\n" . $this->rescheduleFolioPrompt()
+            );
+
+            return;
+        }
+
+        $appointmentId = (int) $normalizedBody;
+        $appointment = $this->appointmentCancellationService->findCancelableAppointmentByFolioForWhatsApp($appointmentId, $from);
+
+        if ($appointment === null) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "No encontré una cita futura activa con el folio *%s* asociada a este número de WhatsApp.\n\n%s",
+                    (string) $appointmentId,
+                    $this->rescheduleFolioPrompt()
+                )
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'rescheduling_confirming',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_reschedule',
+                    'appointment_id' => $appointmentId,
+                    'appointment' => $appointment,
+                ],
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->formatRescheduleConfirmation($appointment)
+        );
+    }
+
+    private function handleRescheduleConfirmation(string $from, string $normalizedBody, array $state): void
+    {
+        $payload = $this->decodeStatePayload($state);
+
+        if ($this->isBackToMenuCommand($normalizedBody) || in_array($normalizedBody, ['2', 'no', 'salir', 'cancelar'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, no moví ninguna cita.\n\nTu reservación sigue activa. Escribe *menú* para ver opciones."
+            );
+
+            return;
+        }
+
+        if (!in_array($normalizedBody, ['1', 'si', 'sí', 'ok', 'confirmar', 'correcto', 'ese'], true)) {
+            $appointment = $payload['appointment'] ?? null;
+
+            if (is_array($appointment)) {
+                $this->whatsAppClient->sendTextMessage(
+                    $from,
+                    $this->formatRescheduleConfirmation($appointment)
+                );
+
+                return;
+            }
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Responde *1* para continuar con el nuevo agendado o *2* para salir."
+            );
+
+            return;
+        }
+
+        $appointmentId = (int) ($payload['appointment_id'] ?? 0);
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_branch',
+            [
+                'payload_json' => [
+                    'flow' => 'appointment_reschedule',
+                    'reschedule_appointment_id' => $appointmentId,
+                    'reschedule_appointment' => $payload['appointment'] ?? null,
+                ],
+            ]
+        );
+
+        $branches = $this->catalogService->getBranchesByCompany((int) ($state['company_id'] ?? 1));
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Perfecto. Vamos a agendar tu nueva fecha.\n\n"
+            . "La cita del folio *{$appointmentId}* se cancelará cuando confirmes la nueva.\n\n"
+            . $this->catalogService->formatBranchesMenu($branches)
+        );
     }
 
     private function productsResponse(string $message): string
