@@ -147,6 +147,19 @@ class WhatsAppCatalogService
             AND mp.deleted_at IS NULL
             AND st.is_active = true
             AND UPPER(st.name) NOT IN ('PRODUCTOS', 'CORTESIAS')
+            AND EXISTS (
+                SELECT 1
+                FROM tbr_barber_service abs
+                INNER JOIN "user" bu ON bu.id = abs.barber_user_id
+                INNER JOIN tbd_barber_schedules bsched ON bsched.barber_user_id = bu.id
+                WHERE abs.product_id = mp.id
+                  AND abs.is_active = true
+                  AND bu.barber_sn = true
+                  AND bu.enabled = true
+                  AND bsched.branch_id = :branchId
+                  AND (bsched.valid_from IS NULL OR bsched.valid_from <= CURRENT_DATE)
+                  AND (bsched.valid_to IS NULL OR bsched.valid_to >= CURRENT_DATE)
+            )
             GROUP BY mp.id, mp.name, mp.price
             ORDER BY mp.name ASC
             SQL,
