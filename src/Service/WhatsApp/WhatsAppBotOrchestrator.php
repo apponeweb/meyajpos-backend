@@ -1830,6 +1830,26 @@ Elige otro barbero:
         }
     }
 
+    private function extractBookingDateTextFromMessage(string $message): ?string
+    {
+        $text = $this->normalizeDateText($message);
+
+        foreach ([
+            '/\bhoy\b/u',
+            '/\bmanana\b/u',
+            '/\b\d{1,2}\/\d{1,2}\/\d{4}\b/u',
+            '/\b\d{4}-\d{1,2}-\d{1,2}\b/u',
+            '/(?:para\s+el|para|el)?\s*\d{1,2}\s*(?:de\s*)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b/u',
+            '/(?:para\s+el|para|el)\s+\d{1,2}\b/u',
+        ] as $pattern) {
+            if (preg_match($pattern, $text, $matches)) {
+                return trim((string) $matches[0]);
+            }
+        }
+
+        return null;
+    }
+
     private function parseBookingDate(string $message): ?string
     {
         $text = $this->normalizeDateText($message);

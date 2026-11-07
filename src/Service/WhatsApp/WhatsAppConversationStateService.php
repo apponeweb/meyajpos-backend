@@ -32,9 +32,6 @@ final class WhatsAppConversationStateService
 
     public function start(string $waId, int $companyId = 1): array
     {
-        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        $expiresAt = (new \DateTimeImmutable('+30 minutes'))->format('Y-m-d H:i:s');
-
         $this->connection->executeStatement(
             <<<SQL
             INSERT INTO tbd_whatsapp_conversation_state (
@@ -48,9 +45,9 @@ final class WhatsAppConversationStateService
                 :waId,
                 :step,
                 :companyId,
-                :expiresAt,
-                :createdAt,
-                :updatedAt
+                NOW() + INTERVAL '30 minutes',
+                NOW(),
+                NOW()
             )
             ON CONFLICT (wa_id)
             DO UPDATE SET
@@ -81,9 +78,6 @@ final class WhatsAppConversationStateService
                 'waId' => $waId,
                 'step' => 'selecting_branch',
                 'companyId' => $companyId,
-                'expiresAt' => $expiresAt,
-                'createdAt' => $now,
-                'updatedAt' => $now,
             ],
             [
                 'companyId' => ParameterType::INTEGER,
@@ -119,15 +113,13 @@ final class WhatsAppConversationStateService
 
         $sets = [
             'step = :step',
-            'expires_at = :expiresAt',
-            'updated_at = :updatedAt',
+            "expires_at = NOW() + INTERVAL '30 minutes'",
+            'updated_at = NOW()',
         ];
 
         $params = [
             'waId' => $waId,
             'step' => $step,
-            'expiresAt' => (new \DateTimeImmutable('+30 minutes'))->format('Y-m-d H:i:s'),
-            'updatedAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
         ];
 
         foreach ($allowedFields as $field) {
