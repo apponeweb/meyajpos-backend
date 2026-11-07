@@ -197,6 +197,19 @@ final class WhatsAppBotOrchestrator
                 }
             }
 
+            if ($this->isOptionsRequest($normalizedBody)) {
+                $this->whatsAppClient->sendTextMessage($from, $this->optionsMenu());
+
+                $this->logger->info('WhatsApp bot response sent', [
+                    'to' => $from,
+                    'body' => $body,
+                    'intent' => 'options_menu',
+                    'result' => true,
+                ]);
+
+                return;
+            }
+
             $intent = $this->intentClassifier->detect($body);
 
             if ($intent === 'cancel_appointment') {
@@ -1768,6 +1781,22 @@ Elige otro barbero:
         return in_array($normalizedBody, ['cancelar', 'cancel', 'salir'], true);
     }
 
+    private function isOptionsRequest(string $normalizedBody): bool
+    {
+        if (in_array($normalizedBody, [
+            'opciones', 'opcion', 'menu opciones', 'ver opciones', 'opciones por favor',
+            'ayuda', 'help', 'que puedes hacer', 'en que me puedes ayudar',
+            'que me puedes ayudar', 'menu completo', 'todos', 'todas',
+        ], true)) {
+            return true;
+        }
+
+        return str_contains($normalizedBody, 'opciones')
+            || str_contains($normalizedBody, 'que puedes hacer')
+            || str_contains($normalizedBody, 'en que me puedes ayudar')
+            || str_contains($normalizedBody, 'que me puedes ayudar');
+    }
+
     private function isBackToMenuCommand(string $normalizedBody): bool
     {
         if (in_array($normalizedBody, [
@@ -2677,22 +2706,10 @@ Elige otro barbero:
     private function mainMenu(string $from = ''): string
     {
         $menu = $this->configuredResponse('main_menu')
-            ?? "Hola 👋 Soy el asistente de la barbería.\n\n"
-            . "Puedo ayudarte con:\n"
-            . "1. Agendar una cita\n"
-            . "2. Ver servicios por sucursal\n"
-            . "3. Ver barberos disponibles\n"
-            . "4. Reagendar una cita\n"
-            . "5. Recomendar productos\n"
-            . "6. Recomendar un corte según tu tipo de cara\n\n"
-            . "Escribe por ejemplo:\n"
-            . "- agenda\n"
-            . "- quiero una cita\n"
-            . "- servicios\n"
-            . "- barberos\n"
-            . "- productos\n"
-            . "- corte para cara redonda\n\n"
-            . "Para consultar servicios o agendar, primero te pediré la sucursal.";
+            ?? "¿Quieres agendar una cita? 👇\n\n"
+            . "Responde *1* o escribe *agenda* para comenzar.\n\n"
+            . "También puedo ayudarte con: servicios, barberos, reagendar, productos y recomendación de corte.\n"
+            . "Escribe *opciones* para ver todas.";
 
         if ($from === '') {
             return $menu;
@@ -2701,12 +2718,26 @@ Elige otro barbero:
         $prefix = $this->personalizedGreetingPrefix($from);
 
         if ($prefix === '') {
-            return $menu;
+            $prefix = "Hola 👋 Soy el asistente de la barbería.\n\n";
         }
 
         $menuWithoutGreeting = preg_replace('/^Hola[^\n]*\n+/', '', $menu, 1) ?? $menu;
 
         return $prefix . $menuWithoutGreeting;
+    }
+
+    private function optionsMenu(): string
+    {
+        return $this->configuredResponse('options_menu')
+            ?? "Estas son mis opciones:\n\n"
+            . "1. Agendar una cita\n"
+            . "2. Ver servicios por sucursal\n"
+            . "3. Ver barberos disponibles\n"
+            . "4. Reagendar una cita\n"
+            . "5. Recomendar productos\n"
+            . "6. Recomendar un corte según tu tipo de cara\n\n"
+            . "Escribe el número o el nombre de la opción.\n\n"
+            . "Ejemplos: agenda, servicios, barberos, reagendar, productos, corte para cara redonda";
     }
 
     private function servicesResponse(): string
@@ -2787,9 +2818,9 @@ Elige otro barbero:
             ]
         );
 
-        return $this->configuredResponse('reschedule_intro')
-            ?? "Claro, te ayudo a reagendar tu cita.\n\n"
-            . $this->rescheduleFolioPrompt();
+        $intro = $this->configuredResponse('reschedule_intro') ?? "Claro, te ayudo a reagendar tu cita.";
+
+        return $intro . "\n\n" . $this->rescheduleFolioPrompt();
     }
 
     private function rescheduleFolioPrompt(): string
