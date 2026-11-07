@@ -2,6 +2,7 @@
 
 namespace App\Service\WhatsApp;
 
+use App\Enum\AppointmentStatus;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 
@@ -344,6 +345,51 @@ class WhatsAppCatalogService
         return [
             'id' => (int) $row['id'],
             'name' => trim((string) ($row['name'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array{scheduled_date_time:string, scheduled_date:string, scheduled_date_display:string, is_upcoming:bool}|null
+     */
+    public function findLastAppointmentForCustomer(int $customerId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            <<<SQL
+            SELECT aps.scheduled_date_time
+            FROM tbd_appointment a
+            INNER JOIN tbd_appointment_service aps ON aps.appointment_id = a.id
+            WHERE a.customer_id = :customerId
+              AND a.deleted_at IS NULL
+              AND a.status != :cancelledStatus
+            ORDER BY aps.scheduled_date_time DESC
+            LIMIT 1
+            SQL,
+            [
+                'customerId' => $customerId,
+                'cancelledStatus' => AppointmentStatus::CANCELLED->value,
+            ],
+            [
+                'customerId' => ParameterType::INTEGER,
+                'cancelledStatus' => ParameterType::INTEGER,
+            ]
+        );
+
+        if ($row === false || empty($row['scheduled_date_time'])) {
+            return null;
+        }
+
+        $scheduledDateTime = new \DateTimeImmutable(
+            (string) $row['scheduled_date_time'],
+            new \DateTimeZone(self::BOOKING_TIMEZONE)
+        );
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone(self::BOOKING_TIMEZONE));
+
+        return [
+            'scheduled_date_time' => (string) $row['scheduled_date_time'],
+            'scheduled_date' => $scheduledDateTime->format('Y-m-d'),
+            'scheduled_date_display' => $scheduledDateTime->format('d/m/Y'),
+            'is_upcoming' => $scheduledDateTime > $now,
         ];
     }
 

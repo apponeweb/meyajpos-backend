@@ -2623,7 +2623,7 @@ Elige otro barbero:
     }
 
     /**
-     * @return array{customer: array{id:int, name:string}, phone: array{country_code:string, phone:string}}|null
+     * @return array{customer: array{id:int, name:string}, phone: array{country_code:string, phone:string}, last_appointment: array{scheduled_date_time:string, scheduled_date:string, scheduled_date_display:string, is_upcoming:bool}|null}|null
      */
     private function knownCustomerForSender(string $from): ?array
     {
@@ -2642,6 +2642,7 @@ Elige otro barbero:
         return [
             'customer' => $customer,
             'phone' => $phoneData,
+            'last_appointment' => $this->catalogService->findLastAppointmentForCustomer((int) $customer['id']),
         ];
     }
 
@@ -2653,10 +2654,20 @@ Elige otro barbero:
             return '';
         }
 
-        return sprintf(
-            "Hola de nuevo, *%s*. Es un gusto tenerte de vuelta. 👋\n\n",
+        $greeting = sprintf(
+            "Hola de nuevo, *%s*. Es un gusto tenerte de vuelta. 👋",
             $known['customer']['name']
         );
+
+        $lastAppointment = $known['last_appointment'] ?? null;
+
+        if (is_array($lastAppointment) && !empty($lastAppointment['scheduled_date_display'])) {
+            $greeting .= !empty($lastAppointment['is_upcoming'])
+                ? sprintf("\nTu próxima cita está agendada para el *%s*.", (string) $lastAppointment['scheduled_date_display'])
+                : sprintf("\nTu última cita fue el *%s*.", (string) $lastAppointment['scheduled_date_display']);
+        }
+
+        return $greeting . "\n\n";
     }
 
     private function mainMenu(string $from = ''): string
