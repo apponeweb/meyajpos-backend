@@ -129,7 +129,7 @@ final class AppointmentBookingService
             ],
             'customer' => [
                 'name' => (string) $state['customer_name'],
-                'email' => (string) $state['customer_email'],
+                'email' => (string) ($state['customer_email'] ?? ''),
                 'phone' => (string) $state['customer_phone'],
                 'countryCode' => (string) ($state['customer_country_code'] ?? '+52'),
                 'notes' => (string) ($state['customer_notes'] ?? ''),
@@ -178,12 +178,25 @@ final class AppointmentBookingService
         $countryCode = $normalizedPhone['countryCode'];
 
         /** @var Customer|null $customer */
-        $customer = $this->customerRepository->createQueryBuilder('c')
-            ->where('LOWER(c.email) = :email')
-            ->setParameter('email', $email)
-            ->setMaxResults(1)
-            ->getQuery()
-            ->getOneOrNullResult();
+        $customer = null;
+
+        if ($email !== '') {
+            $customer = $this->customerRepository->createQueryBuilder('c')
+                ->where('LOWER(c.email) = :email')
+                ->setParameter('email', $email)
+                ->setMaxResults(1)
+                ->getQuery()
+                ->getOneOrNullResult();
+        } else {
+            $customer = $this->customerRepository->createQueryBuilder('c')
+                ->where('c.phone = :phone')
+                ->andWhere('c.countryCode = :countryCode')
+                ->setParameter('phone', $phone)
+                ->setParameter('countryCode', $countryCode)
+                ->setMaxResults(1)
+                ->getQuery()
+                ->getOneOrNullResult();
+        }
 
         if ($customer) {
             $customer->setName(trim((string) $customerData['name']));
@@ -191,11 +204,15 @@ final class AppointmentBookingService
             $customer->setCountryCode($countryCode);
             $customer->setBranch($branch);
 
+            if ($email !== '') {
+                $customer->setEmail($email);
+            }
+
             return $customer;
         }
 
         $customer = new Customer();
-        $customer->setEmail($email);
+        $customer->setEmail($email !== '' ? $email : null);
         $customer->setName(trim((string) $customerData['name']));
         $customer->setPhone($phone);
         $customer->setCountryCode($countryCode);
@@ -707,7 +724,13 @@ final class AppointmentBookingService
             throw new \InvalidArgumentException('Falta el nombre del cliente.');
         }
 
-        if (empty($data['customer']['email']) || !filter_var((string) $data['customer']['email'], FILTER_VALIDATE_EMAIL)) {
+        $customerEmail = trim((string) ($data['customer']['email'] ?? ''));
+        $isWhatsAppSource = ($data['source'] ?? '') === self::SOURCE_WHATSAPP;
+        $emailIsValid = $customerEmail === ''
+            ? $isWhatsAppSource
+            : (bool) filter_var($customerEmail, FILTER_VALIDATE_EMAIL);
+
+        if (!$emailIsValid) {
             throw new \InvalidArgumentException('El correo del cliente no es válido.');
         }
 
@@ -762,7 +785,6 @@ final class AppointmentBookingService
             'time_label',
             'scheduled_date_time',
             'customer_name',
-            'customer_email',
             'customer_phone',
         ];
 
@@ -772,7 +794,9 @@ final class AppointmentBookingService
             }
         }
 
-        if (!filter_var((string) $state['customer_email'], FILTER_VALIDATE_EMAIL)) {
+        $customerEmail = trim((string) ($state['customer_email'] ?? ''));
+
+        if ($customerEmail !== '' && !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
             throw new \InvalidArgumentException('El correo del cliente no es válido.');
         }
 

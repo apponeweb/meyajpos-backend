@@ -659,9 +659,11 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
             return;
         }
 
+        $suggestedPhone = $this->extractPhoneFromWhatsAppId($from);
+
         $this->conversationStateService->updateState(
             $from,
-            'collecting_customer_email',
+            'collecting_customer_phone',
             [
                 'customer_name' => $customerName,
             ]
@@ -670,8 +672,9 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
         $this->whatsAppClient->sendTextMessage(
             $from,
             sprintf(
-                "Gracias, *%s*.\n\nAhora escribe tu *correo electrónico* para registrar la cita.",
-                $customerName
+                "Gracias, *%s*.\n\nDetecté tu número de WhatsApp: *%s*\n\n¿Es correcto para tu cita? Responde *sí* para usarlo o escribe otro número con lada del país.",
+                $customerName,
+                $suggestedPhone !== '' ? $suggestedPhone : 'no detectado'
             )
         );
     }
@@ -679,11 +682,29 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
     private function handleCustomerEmail(string $from, string $body, array $state): void
     {
         $email = mb_strtolower(trim($body));
+        $skipPhrases = ['no', 'omitir', 'sin correo', 'no gracias', 'prefiero no', 'no quiero', 'paso', 'n/a'];
+
+        if (in_array($email, $skipPhrases, true)) {
+            $this->conversationStateService->updateState(
+                $from,
+                'collecting_customer_notes',
+                [
+                    'customer_email' => '',
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "De acuerdo, continuamos sin correo.\n\n¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
+            );
+
+            return;
+        }
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
-                "El correo no parece válido.\n\nPor favor escribe un correo como:\ncliente@email.com"
+                "El correo no parece válido.\n\nEscribe un correo como *cliente@email.com* o responde *no* para omitirlo."
             );
 
             return;
@@ -691,21 +712,15 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
 
         $this->conversationStateService->updateState(
             $from,
-            'collecting_customer_phone',
+            'collecting_customer_notes',
             [
                 'customer_email' => $email,
             ]
         );
 
-        $suggestedPhone = $this->extractPhoneFromWhatsAppId($from);
-
         $this->whatsAppClient->sendTextMessage(
             $from,
-            sprintf(
-                "Correo registrado: %s.\n\nAhora escribe tu *teléfono con lada del país*.\n\nEjemplos:\nMéxico: *+52 8180201499*\nCuba: *+53 55848425*\n\nDetecté este número de WhatsApp: *%s*\nPuedes responder con ese número completo o escribir otro.",
-                $email,
-                $suggestedPhone
-            )
+            "Correo registrado: {$email}.\n\n¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
         );
     }
 
@@ -732,7 +747,7 @@ También puedes responder: *es el mismo*"
 
         $this->conversationStateService->updateState(
             $from,
-            'collecting_customer_notes',
+            'collecting_customer_email',
             [
                 'customer_phone' => $phoneData['phone'],
                 'customer_country_code' => $phoneData['country_code'],
@@ -741,10 +756,11 @@ También puedes responder: *es el mismo*"
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            "¿Deseas agregar alguna nota para tu cita?
-
-Puedes escribir tu nota o responder:
-*sin notas*"
+            sprintf(
+                "Teléfono registrado: *%s %s*.\n\n¿Quieres agregar tu *correo electrónico*? Es opcional.\n\nEscribe el correo o responde *no* para omitirlo.",
+                $phoneData['country_code'],
+                $phoneData['phone']
+            )
         );
     }
 
@@ -845,7 +861,7 @@ Puedes escribir tu nota o responder:
             (string) ($state['date'] ?? ''),
             (string) ($state['time_label'] ?? ''),
             (string) ($state['customer_name'] ?? ''),
-            (string) ($state['customer_email'] ?? ''),
+            trim((string) ($state['customer_email'] ?? '')) !== '' ? (string) $state['customer_email'] : 'Sin correo',
             (string) ($state['customer_phone'] ?? ''),
             $notes !== '' ? $notes : 'Sin notas'
         );
@@ -1908,7 +1924,7 @@ Elige otro barbero:
             return array_values(array_filter($phrases, static fn (mixed $value): bool => is_string($value) && trim($value) !== ''));
         }
 
-        return ['es el mismo', 'el mismo', 'ese mismo', 'es el que detectaste', 'el que detectaste', 'usa ese', 'si ese', 'sí ese', 'correcto', 'ese', 'mi whatsapp', 'usa mi whatsapp'];
+        return ['es el mismo', 'el mismo', 'ese mismo', 'es el que detectaste', 'el que detectaste', 'usa ese', 'si ese', 'sí ese', 'correcto', 'ese', 'mi whatsapp', 'usa mi whatsapp', 'si', 'sí', 'ok', 'okay', 'sip', 'va', 'sale', 'claro', 'afirmativo'];
     }
 
     /**
