@@ -162,7 +162,7 @@ final class WhatsAppBotOrchestrator
                 $responseText = $this->startCancellationFlowAndReturnMessage($from);
             } else {
                 $responseText = match ($intent) {
-                    'greeting' => $this->mainMenu(),
+                    'greeting' => $this->mainMenu($from),
                     'check_agenda' => $this->startBookingFlowAndReturnMessage($from, $body),
                     'check_barbers' => $this->barbersResponse(),
                     'reschedule' => $this->rescheduleResponse(),
@@ -239,6 +239,8 @@ final class WhatsAppBotOrchestrator
             );
         }
 
+        $messageText = $this->personalizedGreetingPrefix($from) . $messageText;
+
         $this->whatsAppClient->sendTextMessage(
             $from,
             $messageText
@@ -263,7 +265,7 @@ final class WhatsAppBotOrchestrator
             );
         }
 
-        return $messageText;
+        return $this->personalizedGreetingPrefix($from) . $messageText;
     }
 
     private function applyBookingHintsFromMessage(string $from, array $state, ?string $message): array
@@ -618,12 +620,11 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
             $timeLabel
         );
 
-        $detectedPhone = $this->parseInternationalPhoneInput('es el mismo', $from);
-        $knownCustomer = $detectedPhone !== null
-            ? $this->catalogService->findCustomerByPhone($detectedPhone['phone'], $detectedPhone['country_code'])
-            : null;
+        $known = $this->knownCustomerForSender($from);
+        $detectedPhone = $known['phone'] ?? null;
+        $knownCustomer = $known['customer'] ?? null;
 
-        if ($knownCustomer !== null && $knownCustomer['name'] !== '') {
+        if ($knownCustomer !== null && $detectedPhone !== null) {
             $this->conversationStateService->updateState(
                 $from,
                 'collecting_customer_email',
@@ -892,7 +893,7 @@ También puedes responder: *es el mismo*"
         if ($this->isBackToMenuCommand($normalizedBody)) {
             $this->conversationStateService->clear($from);
 
-            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu());
+            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu($from));
 
             return true;
         }
@@ -2524,9 +2525,46 @@ Elige otro barbero:
         );
     }
 
-    private function mainMenu(): string
+    /**
+     * @return array{customer: array{id:int, name:string}, phone: array{country_code:string, phone:string}}|null
+     */
+    private function knownCustomerForSender(string $from): ?array
     {
-        return $this->configuredResponse('main_menu')
+        $phoneData = $this->parseInternationalPhoneInput('es el mismo', $from);
+
+        if ($phoneData === null) {
+            return null;
+        }
+
+        $customer = $this->catalogService->findCustomerByPhone($phoneData['phone'], $phoneData['country_code']);
+
+        if ($customer === null || $customer['name'] === '') {
+            return null;
+        }
+
+        return [
+            'customer' => $customer,
+            'phone' => $phoneData,
+        ];
+    }
+
+    private function personalizedGreetingPrefix(string $from): string
+    {
+        $known = $this->knownCustomerForSender($from);
+
+        if ($known === null) {
+            return '';
+        }
+
+        return sprintf(
+            "Hola de nuevo, *%s*. Es un gusto tenerte de vuelta. 👋\n\n",
+            $known['customer']['name']
+        );
+    }
+
+    private function mainMenu(string $from = ''): string
+    {
+        $menu = $this->configuredResponse('main_menu')
             ?? "Hola 👋 Soy el asistente de la barbería.\n\n"
             . "Puedo ayudarte con:\n"
             . "1. Agendar una cita\n"
@@ -2543,6 +2581,20 @@ Elige otro barbero:
             . "- productos\n"
             . "- corte para cara redonda\n\n"
             . "Para consultar servicios o agendar, primero te pediré la sucursal.";
+
+        if ($from === '') {
+            return $menu;
+        }
+
+        $prefix = $this->personalizedGreetingPrefix($from);
+
+        if ($prefix === '') {
+            return $menu;
+        }
+
+        $menuWithoutGreeting = preg_replace('/^Hola[^\n]*\n+/', '', $menu, 1) ?? $menu;
+
+        return $prefix . $menuWithoutGreeting;
     }
 
     private function servicesResponse(): string
