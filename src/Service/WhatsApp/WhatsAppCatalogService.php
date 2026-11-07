@@ -20,14 +20,16 @@ class WhatsAppCatalogService
             $services = $this->connection->fetchAllAssociative(
                 <<<SQL
                 SELECT
-                    id,
-                    name,
-                    price
-                FROM tbd_master_product
-                WHERE is_active = true
-                  AND deleted_at IS NULL
-                  AND service_type_id = 1
-                ORDER BY name ASC
+                    mp.id,
+                    mp.name,
+                    mp.price
+                FROM tbd_master_product mp
+                INNER JOIN tbn_service_type st ON st.id = mp.service_type_id
+                WHERE mp.is_active = true
+                  AND mp.deleted_at IS NULL
+                  AND st.is_active = true
+                  AND UPPER(st.name) NOT IN ('PRODUCTOS', 'CORTESIAS')
+                ORDER BY mp.name ASC
                 LIMIT :limit
                 SQL,
                 ['limit' => $limit],
@@ -137,12 +139,14 @@ class WhatsAppCatalogService
                 ) AS duration
             FROM tbd_branch_product bp
             INNER JOIN tbd_master_product mp ON mp.id = bp.product_id
+            INNER JOIN tbn_service_type st ON st.id = mp.service_type_id
             LEFT JOIN tbr_barber_service bs ON bs.product_id = mp.id
             WHERE bp.branch_id = :branchId
             AND bp.enabled = true
             AND mp.is_active = true
             AND mp.deleted_at IS NULL
-            AND mp.service_type_id = 1
+            AND st.is_active = true
+            AND UPPER(st.name) NOT IN ('PRODUCTOS', 'CORTESIAS')
             GROUP BY mp.id, mp.name, mp.price
             ORDER BY mp.name ASC
             SQL,
