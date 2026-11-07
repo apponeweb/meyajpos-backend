@@ -41,7 +41,7 @@ final class AppointmentCancellationService
             INNER JOIN tbd_appointment_service aps ON aps.appointment_id = a.id
             INNER JOIN tbd_master_product mp ON mp.id = aps.service_id
             INNER JOIN tbd_barber_profile bp ON bp.id = aps.barber_id
-            INNER JOIN public."user" u ON u.id = bp.barber_user_id
+            INNER JOIN "user" u ON u.id = bp.barber_user_id
             WHERE a.id = :appointmentId
               AND a.status != :cancelledStatus
             ORDER BY aps.scheduled_date_time ASC

@@ -213,7 +213,7 @@ class WhatsAppCatalogService
                 p.experience,
                 bsched.open_time,
                 bsched.close_time
-            FROM public."user" u
+            FROM "user" u
             LEFT JOIN tbd_barber_profile p ON p.barber_user_id = u.id
             INNER JOIN tbr_barber_service bserv ON bserv.barber_user_id = u.id
             INNER JOIN tbd_barber_schedules bsched ON bsched.barber_user_id = u.id
