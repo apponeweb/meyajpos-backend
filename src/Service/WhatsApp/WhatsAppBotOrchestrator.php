@@ -887,6 +887,16 @@ Puedes escribir tu nota o responder:
             return true;
         }
 
+        if ($this->trySwitchBranchFromText($from, $body, $state)) {
+            return true;
+        }
+
+        if ($this->isChangeBranchIntent($normalizedBody)) {
+            $this->restartBranchSelection($from, $state);
+
+            return true;
+        }
+
         if ($this->trySwitchServiceFromText($from, $body, $state)) {
             return true;
         }
@@ -950,6 +960,104 @@ Puedes escribir tu nota o responder:
         }
 
         return false;
+    }
+
+    private function trySwitchBranchFromText(string $from, string $body, array $state): bool
+    {
+        $step = (string) ($state['step'] ?? '');
+
+        if (
+            $step === 'selecting_branch'
+            || in_array($step, [
+                'collecting_customer_name',
+                'collecting_customer_email',
+                'collecting_customer_phone',
+                'collecting_customer_notes',
+                'confirming_booking',
+            ], true)
+            || empty($state['company_id'])
+        ) {
+            return false;
+        }
+
+        $branch = $this->catalogService->getBranchByText((int) $state['company_id'], $body);
+
+        if ($branch === null || (int) ($state['branch_id'] ?? 0) === (int) $branch['id']) {
+            return false;
+        }
+
+        $branchStateData = [
+            'branch_id' => (int) $branch['id'],
+            'branch_name' => (string) $branch['name'],
+            'branch_address' => (string) ($branch['address'] ?? ''),
+            'service_id' => null,
+            'service_name' => null,
+            'service_price' => null,
+            'service_duration' => null,
+            'barber_id' => null,
+            'barber_name' => null,
+            'time_label' => null,
+            'scheduled_date_time' => null,
+        ];
+
+        if (!empty($state['date'])) {
+            $branchStateData['date'] = (string) $state['date'];
+        }
+
+        if (!empty($state['date_text'])) {
+            $branchStateData['date_text'] = (string) $state['date_text'];
+        }
+
+        $this->conversationStateService->updateState($from, 'selecting_service', $branchStateData);
+
+        $services = $this->catalogService->getServicesByBranch((int) $branch['id']);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf("Perfecto, cambiamos a *%s*.\n\n", (string) $branch['name'])
+            . $this->catalogService->formatServicesMenu((string) $branch['name'], $services)
+        );
+
+        return true;
+    }
+
+    private function restartBranchSelection(string $from, array $state): void
+    {
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_branch',
+            [
+                'service_id' => null,
+                'service_name' => null,
+                'service_price' => null,
+                'service_duration' => null,
+                'barber_id' => null,
+                'barber_name' => null,
+                'time_label' => null,
+                'scheduled_date_time' => null,
+            ]
+        );
+
+        $branches = $this->catalogService->getBranchesByCompany((int) ($state['company_id'] ?? 1));
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            "Claro, elegimos otra sucursal.\n\n" . $this->catalogService->formatBranchesMenu($branches)
+        );
+    }
+
+    private function isChangeBranchIntent(string $normalizedBody): bool
+    {
+        return str_contains($normalizedBody, 'cambiar sucursal')
+            || str_contains($normalizedBody, 'cambiar la sucursal')
+            || str_contains($normalizedBody, 'cambiar de sucursal')
+            || str_contains($normalizedBody, 'otra sucursal')
+            || str_contains($normalizedBody, 'en otra sucursal')
+            || str_contains($normalizedBody, 'en la otra sucursal')
+            || str_contains($normalizedBody, 'mejor en cumbres')
+            || str_contains($normalizedBody, 'mejor en valle')
+            || str_contains($normalizedBody, 'prefiero en cumbres')
+            || str_contains($normalizedBody, 'prefiero en valle');
     }
 
     private function trySwitchServiceFromText(string $from, string $body, array $state): bool
