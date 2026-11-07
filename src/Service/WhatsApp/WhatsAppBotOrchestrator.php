@@ -136,12 +136,6 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
-            if ($state !== null && $state['step'] === 'collecting_customer_notes') {
-                $this->handleCustomerNotes($from, $body, $state);
-
-                return;
-            }
-
             if ($state !== null && $state['step'] === 'confirming_booking') {
                 $this->handleBookingConfirmation($from, $normalizedBody, $state);
 
@@ -720,23 +714,8 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
         $skipPhrases = ['no', 'omitir', 'sin correo', 'no gracias', 'prefiero no', 'no quiero', 'paso', 'n/a'];
 
         if (in_array($email, $skipPhrases, true)) {
-            $this->conversationStateService->updateState(
-                $from,
-                'collecting_customer_notes',
-                [
-                    'customer_email' => '',
-                ]
-            );
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                "De acuerdo, continuamos sin correo.\n\n¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
-            );
-
-            return;
-        }
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $email = '';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->whatsAppClient->sendTextMessage(
                 $from,
                 "El correo no parece válido.\n\nEscribe un correo como *cliente@email.com* o responde *no* para omitirlo."
@@ -745,17 +724,18 @@ Puedes intentar con otra fecha escribiendo, por ejemplo:
             return;
         }
 
-        $this->conversationStateService->updateState(
+        $updatedState = $this->conversationStateService->updateState(
             $from,
-            'collecting_customer_notes',
+            'confirming_booking',
             [
                 'customer_email' => $email,
+                'customer_notes' => '',
             ]
         );
 
         $this->whatsAppClient->sendTextMessage(
             $from,
-            "Correo registrado: {$email}.\n\n¿Deseas agregar alguna nota para tu cita?\n\nPuedes escribir tu nota o responder:\n*sin notas*"
+            $this->formatBookingConfirmation($updatedState)
         );
     }
 
@@ -796,29 +776,6 @@ También puedes responder: *es el mismo*"
                 $phoneData['country_code'],
                 $phoneData['phone']
             )
-        );
-    }
-
-    private function handleCustomerNotes(string $from, string $body, array $state): void
-    {
-        $notes = trim($body);
-        $normalizedNotes = mb_strtolower($notes);
-
-        if ($notes === '' || in_array($normalizedNotes, ['sin notas', 'no', 'ninguna', 'nada'], true)) {
-            $notes = '';
-        }
-
-        $updatedState = $this->conversationStateService->updateState(
-            $from,
-            'confirming_booking',
-            [
-                'customer_notes' => $notes,
-            ]
-        );
-
-        $this->whatsAppClient->sendTextMessage(
-            $from,
-            $this->formatBookingConfirmation($updatedState)
         );
     }
 
@@ -1025,7 +982,6 @@ También puedes responder: *es el mismo*"
                 'collecting_customer_name',
                 'collecting_customer_email',
                 'collecting_customer_phone',
-                'collecting_customer_notes',
                 'confirming_booking',
             ], true)
             || empty($state['company_id'])
@@ -1122,7 +1078,6 @@ También puedes responder: *es el mismo*"
                 'collecting_customer_name',
                 'collecting_customer_email',
                 'collecting_customer_phone',
-                'collecting_customer_notes',
                 'confirming_booking',
             ], true)
             || empty($state['branch_id'])
@@ -1205,7 +1160,7 @@ También puedes responder: *es el mismo*"
     {
         $step = (string) ($state['step'] ?? '');
 
-        if (!in_array($step, ['selecting_barber', 'selecting_time', 'collecting_customer_name', 'collecting_customer_email', 'collecting_customer_phone', 'collecting_customer_notes', 'confirming_booking'], true)) {
+        if (!in_array($step, ['selecting_barber', 'selecting_time', 'collecting_customer_name', 'collecting_customer_email', 'collecting_customer_phone', 'confirming_booking'], true)) {
             return false;
         }
 
@@ -1515,7 +1470,6 @@ También puedes responder: *es el mismo*"
             'collecting_customer_name',
             'collecting_customer_email',
             'collecting_customer_phone',
-            'collecting_customer_notes',
             'confirming_booking',
         ], true)) {
             return false;
@@ -1707,7 +1661,6 @@ Elige otro barbero:
             'collecting_customer_name',
             'collecting_customer_email',
             'collecting_customer_phone',
-            'collecting_customer_notes',
             'confirming_booking',
         ], true);
     }
