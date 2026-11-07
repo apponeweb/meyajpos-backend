@@ -824,7 +824,18 @@ También puedes responder: *es el mismo*"
 
     private function handleBookingConfirmation(string $from, string $normalizedBody, array $state): void
     {
-        if (in_array($normalizedBody, ['confirmar', 'confirmo', 'si', 'sí', 'ok'], true)) {
+        if (in_array($normalizedBody, ['2', 'cancelar', 'cancel', 'no', 'salir'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Listo, cancelé esta cita.\n\nPuedes escribir *agenda* cuando quieras agendar de nuevo."
+            );
+
+            return;
+        }
+
+        if (in_array($normalizedBody, ['1', 'confirmar', 'confirmo', 'si', 'sí', 'ok'], true)) {
             try {
                 $result = $this->appointmentBookingService->bookFromWhatsAppState($state);
 
@@ -889,7 +900,7 @@ También puedes responder: *es el mismo*"
         $notes = trim((string) ($state['customer_notes'] ?? ''));
 
         return sprintf(
-            "Confirma los datos de tu cita:\n\nSucursal: %s\nServicio: %s\nBarbero: %s\nFecha: %s\nHorario: %s\nNombre: %s\nCorreo: %s\nTeléfono: %s\nNotas: %s\n\nResponde *CONFIRMAR* para reservar o *CANCELAR* para salir.",
+            "Confirma los datos de tu cita:\n\nSucursal: %s\nServicio: %s\nBarbero: %s\nFecha: %s\nHorario: %s\nNombre: %s\nCorreo: %s\nTeléfono: %s\nNotas: %s\n\nResponde *1* para confirmar o *2* para cancelar.",
             (string) ($state['branch_name'] ?? ''),
             (string) ($state['service_name'] ?? ''),
             (string) ($state['barber_name'] ?? ''),
