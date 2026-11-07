@@ -85,6 +85,15 @@ final class WhatsAppBotOrchestrator
                 return;
             }
 
+            if ($state !== null && $state['step'] === 'asking_booking_interest') {
+                if ($this->handleBookingInterestAnswer($from, $body, $normalizedBody, $state)) {
+                    return;
+                }
+
+                $this->conversationStateService->clear($from);
+                $state = null;
+            }
+
             if ($state !== null && $this->handleBookingInterruption($from, $body, $normalizedBody, $state)) {
                 return;
             }
@@ -2706,10 +2715,8 @@ Elige otro barbero:
     private function mainMenu(string $from = ''): string
     {
         $menu = $this->configuredResponse('main_menu')
-            ?? "¿Quieres agendar una cita? 👇\n\n"
-            . "Responde *1* o escribe *agenda* para comenzar.\n\n"
-            . "También puedo ayudarte con: servicios, barberos, reagendar, productos y recomendación de corte.\n"
-            . "Escribe *opciones* para ver todas.";
+            ?? "¿Quieres agendar una cita?\n\n"
+            . "Responde *SI* para agendar o *NO* para ver otras opciones.";
 
         if ($from === '') {
             return $menu;
@@ -2722,6 +2729,9 @@ Elige otro barbero:
         }
 
         $menuWithoutGreeting = preg_replace('/^Hola[^\n]*\n+/', '', $menu, 1) ?? $menu;
+
+        $this->conversationStateService->start($from, 1);
+        $this->conversationStateService->updateState($from, 'asking_booking_interest');
 
         return $prefix . $menuWithoutGreeting;
     }
@@ -2738,6 +2748,92 @@ Elige otro barbero:
             . "6. Recomendar un corte según tu tipo de cara\n\n"
             . "Escribe el número o el nombre de la opción.\n\n"
             . "Ejemplos: agenda, servicios, barberos, reagendar, productos, corte para cara redonda";
+    }
+
+    private function nonBookingOptionsMenu(): string
+    {
+        return "Claro, estas son las opciones que no son cita:\n\n"
+            . "• Ver servicios por sucursal\n"
+            . "• Ver barberos disponibles\n"
+            . "• Reagendar una cita\n"
+            . "• Recomendar productos\n"
+            . "• Recomendar un corte según tu tipo de cara\n\n"
+            . "Escribe el nombre de la opción. Si luego quieres agendar, escribe *agenda*.";
+    }
+
+    private function handleBookingInterestAnswer(string $from, string $body, string $normalizedBody, array $state): bool
+    {
+        if ($this->isBackToMenuCommand($normalizedBody) || $this->isCancelCurrentFlowCommand($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu($from));
+
+            return true;
+        }
+
+        if (str_contains($normalizedBody, 'reagend') || str_contains($normalizedBody, 'cancel')) {
+            $this->conversationStateService->clear($from);
+
+            return false;
+        }
+
+        if ($this->isOptionsRequest($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+            $this->whatsAppClient->sendTextMessage($from, $this->optionsMenu());
+
+            return true;
+        }
+
+        if ($this->isBookingInterestNo($normalizedBody)) {
+            $this->conversationStateService->clear($from);
+            $this->whatsAppClient->sendTextMessage($from, $this->nonBookingOptionsMenu());
+
+            return true;
+        }
+
+        if ($this->isBookingInterestYes($normalizedBody)) {
+            $this->startBookingFlow($from, $body);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function isBookingInterestYes(string $normalizedBody): bool
+    {
+        if (in_array($normalizedBody, [
+            'si', 'sí', '1', 'yes', 'ok', 'okay', 'va', 'sale', 'claro',
+            'afirmativo', 'claro que si', 'si quiero', 'quiero', 'agenda',
+            'agendar', 'cita', 'quiero una cita', 'quiero agendar',
+            'hacer cita', 'una cita', 'agendame', 'agenda me',
+        ], true)) {
+            return true;
+        }
+
+        return str_contains($normalizedBody, 'agendar')
+            || str_contains($normalizedBody, 'agenda')
+            || str_contains($normalizedBody, 'quiero una cita')
+            || str_contains($normalizedBody, 'quiero cita')
+            || str_contains($normalizedBody, 'hacer cita')
+            || str_contains($normalizedBody, 'agendame')
+            || str_contains($normalizedBody, 'agenda me');
+    }
+
+    private function isBookingInterestNo(string $normalizedBody): bool
+    {
+        if (in_array($normalizedBody, [
+            'no', '2', 'nop', 'nel', 'na', 'nah', 'negativo', 'no gracias',
+            'no quiero', 'ahorita no', 'despues', 'luego', 'para despues',
+            'mejor no', 'prefiero no',
+        ], true)) {
+            return true;
+        }
+
+        return str_starts_with($normalizedBody, 'no ')
+            || str_starts_with($normalizedBody, 'no,')
+            || str_contains($normalizedBody, 'no quiero')
+            || str_contains($normalizedBody, 'prefiero no')
+            || str_contains($normalizedBody, 'mejor no');
     }
 
     private function servicesResponse(): string

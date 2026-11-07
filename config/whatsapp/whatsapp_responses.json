@@ -2,7 +2,7 @@
     "version": 2,
     "description": "Textos configurables para el bot de WhatsApp BookinPOS.",
     "responses": {
-        "main_menu": "¿Quieres agendar una cita? 👇\n\nResponde *1* o escribe *agenda* para comenzar.\n\nTambién puedo ayudarte con: servicios, barberos, reagendar, productos y recomendación de corte.\nEscribe *opciones* para ver todas.",
+        "main_menu": "¿Quieres agendar una cita?\n\nResponde *SI* para agendar o *NO* para ver otras opciones.",
         "unknown": "No estoy seguro de haber entendido tu mensaje.\n\nPuedes escribir *agenda* para agendar o *opciones* para ver todo lo que puedo hacer.",
         "services_intro": "Para consultar servicios primero necesito saber la sucursal.\\n\\nEscribe *servicios* o *agenda* para comenzar.",
         "agenda_intro": "Claro. Para revisar disponibilidad vamos a iniciar tu cita paso a paso.\\n\\nEscribe *agenda* para comenzar.",
