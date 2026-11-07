@@ -2679,9 +2679,9 @@ Elige otro barbero:
         return $this->configuredResponse('reschedule_intro')
             ?? "Claro, puedo ayudarte a reagendar.\n\n"
             . "Para ubicar tu cita necesito:\n"
-            . "1. Nombre con el que se registró\n"
-            . "2. Día original de la cita\n"
-            . "3. Nuevo día u horario deseado\n\n"
+            . "• Nombre con el que se registró\n"
+            . "• Día original de la cita\n"
+            . "• Nuevo día u horario deseado\n\n"
             . "Ejemplo:\n"
             . "Reagendar Ernesto, cita de hoy, para mañana a las 5";
     }
@@ -2698,9 +2698,9 @@ Elige otro barbero:
 
         if (str_contains($text, 'barba')) {
             return "Para barba te recomiendo preguntar en sucursal por:\n\n"
-                . "1. Aceite para barba\n"
-                . "2. Bálsamo para barba\n"
-                . "3. Shampoo para barba\n\n"
+                . "• Aceite para barba\n"
+                . "• Bálsamo para barba\n"
+                . "• Shampoo para barba\n\n"
                 . "Te ayudan a hidratar, dar forma y reducir resequedad.";
         }
 
@@ -2712,18 +2712,18 @@ Elige otro barbero:
             || str_contains($text, 'gel')
         ) {
             return "Para peinado con fijación puedes buscar:\n\n"
-                . "1. Pomada de fijación media\n"
-                . "2. Cera con acabado natural\n"
-                . "3. Gel de fijación fuerte\n\n"
+                . "• Pomada de fijación media\n"
+                . "• Cera con acabado natural\n"
+                . "• Gel de fijación fuerte\n\n"
                 . "Si quieres acabado natural, pide cera o pomada mate.";
         }
 
         return "Puedo recomendarte productos según lo que necesitas:\n\n"
-            . "1. Fijación fuerte\n"
-            . "2. Acabado natural\n"
-            . "3. Cuidado de barba\n"
-            . "4. Cabello seco\n"
-            . "5. Control de frizz\n\n"
+            . "• Fijación fuerte\n"
+            . "• Acabado natural\n"
+            . "• Cuidado de barba\n"
+            . "• Cabello seco\n"
+            . "• Control de frizz\n\n"
             . "Ejemplo: producto para fijación fuerte";
     }
 
@@ -2799,59 +2799,59 @@ Elige otro barbero:
 
         if (str_contains($text, 'redonda')) {
             return "Para cara redonda suelen favorecer cortes con volumen arriba y laterales más cortos:\n\n"
-                . "1. Quiff texturizado\n"
-                . "2. Pompadour bajo\n"
-                . "3. Fade medio con volumen superior\n"
-                . "4. Side part con laterales limpios\n\n"
+                . "• Quiff texturizado\n"
+                . "• Pompadour bajo\n"
+                . "• Fade medio con volumen superior\n"
+                . "• Side part con laterales limpios\n\n"
                 . "La idea es alargar visualmente el rostro.";
         }
 
         if (str_contains($text, 'ovalada')) {
             return "Para cara ovalada hay bastante libertad. Opciones recomendadas:\n\n"
-                . "1. Crop texturizado\n"
-                . "2. Fade bajo\n"
-                . "3. Slick back\n"
-                . "4. Corte clásico con raya lateral";
+                . "• Crop texturizado\n"
+                . "• Fade bajo\n"
+                . "• Slick back\n"
+                . "• Corte clásico con raya lateral";
         }
 
         if (str_contains($text, 'cuadrada')) {
             return "Para cara cuadrada funcionan bien cortes que respetan la mandíbula marcada:\n\n"
-                . "1. Buzz cut con fade\n"
-                . "2. Crew cut\n"
-                . "3. Side part clásico\n"
-                . "4. French crop";
+                . "• Buzz cut con fade\n"
+                . "• Crew cut\n"
+                . "• Side part clásico\n"
+                . "• French crop";
         }
 
         if (str_contains($text, 'alargada')) {
             return "Para cara alargada conviene evitar demasiado volumen arriba. Opciones recomendadas:\n\n"
-                . "1. Corte medio texturizado\n"
-                . "2. Flequillo ligero\n"
-                . "3. Side part bajo\n"
-                . "4. Taper clásico";
+                . "• Corte medio texturizado\n"
+                . "• Flequillo ligero\n"
+                . "• Side part bajo\n"
+                . "• Taper clásico";
         }
 
         if (str_contains($text, 'diamante')) {
             return "Para cara tipo diamante conviene equilibrar pómulos y frente:\n\n"
-                . "1. Fringe texturizado\n"
-                . "2. Taper con volumen medio\n"
-                . "3. Corte en capas\n"
-                . "4. Side swept";
+                . "• Fringe texturizado\n"
+                . "• Taper con volumen medio\n"
+                . "• Corte en capas\n"
+                . "• Side swept";
         }
 
         if (str_contains($text, 'corazon') || str_contains($text, 'corazón')) {
             return "Para cara tipo corazón conviene equilibrar frente y mentón:\n\n"
-                . "1. Flequillo ligero\n"
-                . "2. Taper bajo\n"
-                . "3. Corte texturizado medio\n"
-                . "4. Side part suave";
+                . "• Flequillo ligero\n"
+                . "• Taper bajo\n"
+                . "• Corte texturizado medio\n"
+                . "• Side part suave";
         }
 
         return "Claro. Te puedo recomendar cortes según tu tipo de cara.\n\n"
             . "Dime si tu cara es:\n"
-            . "1. Ovalada\n"
-            . "2. Redonda\n"
-            . "3. Cuadrada\n"
-            . "4. Alargada\n"
+            . "• Ovalada\n"
+            . "• Redonda\n"
+            . "• Cuadrada\n"
+            . "• Alargada\n"
             . "5. Diamante\n"
             . "6. Corazón\n\n"
             . "Ejemplo: corte para cara redonda";

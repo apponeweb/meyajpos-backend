@@ -50,7 +50,7 @@
         "redonda",
         "cara redonda"
       ],
-      "response": "Para cara redonda suelen favorecer cortes con volumen arriba y laterales más cortos:\\n\\n1. Quiff texturizado\\n2. Pompadour bajo\\n3. Fade medio con volumen superior\\n4. Side part con laterales limpios\\n\\nLa idea es alargar visualmente el rostro."
+      "response": "Para cara redonda suelen favorecer cortes con volumen arriba y laterales más cortos:\\n\\n• Quiff texturizado\\n• Pompadour bajo\\n• Fade medio con volumen superior\\n• Side part con laterales limpios\\n\\nLa idea es alargar visualmente el rostro."
     },
     {
       "shape": "ovalada",
@@ -58,7 +58,7 @@
         "ovalada",
         "cara ovalada"
       ],
-      "response": "Para cara ovalada hay bastante libertad. Opciones recomendadas:\\n\\n1. Crop texturizado\\n2. Fade bajo\\n3. Slick back\\n4. Corte clásico con raya lateral"
+      "response": "Para cara ovalada hay bastante libertad. Opciones recomendadas:\\n\\n• Crop texturizado\\n• Fade bajo\\n• Slick back\\n• Corte clásico con raya lateral"
     },
     {
       "shape": "cuadrada",
@@ -66,7 +66,7 @@
         "cuadrada",
         "cara cuadrada"
       ],
-      "response": "Para cara cuadrada funcionan bien cortes que respetan la mandíbula marcada:\\n\\n1. Buzz cut con fade\\n2. Crew cut\\n3. Side part clásico\\n4. French crop"
+      "response": "Para cara cuadrada funcionan bien cortes que respetan la mandíbula marcada:\\n\\n• Buzz cut con fade\\n• Crew cut\\n• Side part clásico\\n• French crop"
     },
     {
       "shape": "alargada",
@@ -75,7 +75,7 @@
         "cara alargada",
         "larga"
       ],
-      "response": "Para cara alargada conviene evitar demasiado volumen arriba. Opciones recomendadas:\\n\\n1. Corte medio texturizado\\n2. Flequillo ligero\\n3. Side part bajo\\n4. Taper clásico"
+      "response": "Para cara alargada conviene evitar demasiado volumen arriba. Opciones recomendadas:\\n\\n• Corte medio texturizado\\n• Flequillo ligero\\n• Side part bajo\\n• Taper clásico"
     },
     {
       "shape": "diamante",
@@ -83,7 +83,7 @@
         "diamante",
         "cara diamante"
       ],
-      "response": "Para cara tipo diamante conviene equilibrar pómulos y frente:\\n\\n1. Fringe texturizado\\n2. Taper con volumen medio\\n3. Corte en capas\\n4. Side swept"
+      "response": "Para cara tipo diamante conviene equilibrar pómulos y frente:\\n\\n• Fringe texturizado\\n• Taper con volumen medio\\n• Corte en capas\\n• Side swept"
     },
     {
       "shape": "corazon",
@@ -93,7 +93,7 @@
         "cara corazon",
         "cara corazón"
       ],
-      "response": "Para cara tipo corazón conviene equilibrar frente y mentón:\\n\\n1. Flequillo ligero\\n2. Taper bajo\\n3. Corte texturizado medio\\n4. Side part suave"
+      "response": "Para cara tipo corazón conviene equilibrar frente y mentón:\\n\\n• Flequillo ligero\\n• Taper bajo\\n• Corte texturizado medio\\n• Side part suave"
     }
   ]
 }
