@@ -270,6 +270,31 @@ class WhatsAppCatalogService
         }, $barbers);
     }
 
+    public function countBarbersForServiceAtBranch(int $branchId, int $productId): int
+    {
+        return (int) $this->connection->fetchOne(
+            <<<SQL
+            SELECT COUNT(DISTINCT u.id)
+            FROM "user" u
+            INNER JOIN tbr_barber_service bserv ON bserv.barber_user_id = u.id
+            INNER JOIN tbd_barber_schedules bsched ON bsched.barber_user_id = u.id
+            WHERE u.barber_sn = true
+              AND u.enabled = true
+              AND bserv.product_id = :productId
+              AND bserv.is_active = true
+              AND bsched.branch_id = :branchId
+            SQL,
+            [
+                'productId' => $productId,
+                'branchId' => $branchId,
+            ],
+            [
+                'productId' => ParameterType::INTEGER,
+                'branchId' => ParameterType::INTEGER,
+            ]
+        );
+    }
+
     public function getAvailableBarberByOption(int $branchId, string $date, int $productId, int $option): ?array
     {
         $barbers = $this->getAvailableBarbers($branchId, $date, $productId);
@@ -285,7 +310,7 @@ class WhatsAppCatalogService
     ): string {
         if ($barbers === []) {
             return sprintf(
-                "Por el momento no encontré barberos disponibles para:\n\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*",
+                "Por el momento no encontré barberos disponibles para:\n\nSucursal: *%s*\nServicio: *%s*\nFecha: *%s*\n\nPuedes intentar con otra fecha escribiendo, por ejemplo:\n*mañana*\n*18/06/2026*\n\nO escribe *cambiar servicio* para elegir otro servicio.",
                 $branchName,
                 $serviceName,
                 $this->formatDateForDisplay($date)

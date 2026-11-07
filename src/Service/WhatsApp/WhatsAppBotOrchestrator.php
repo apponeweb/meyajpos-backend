@@ -455,22 +455,13 @@ final class WhatsAppBotOrchestrator
         );
 
         if ($barbers === []) {
-            $this->conversationStateService->updateState(
+            $this->respondNoBarbersAvailable(
                 $from,
-                'selecting_date',
-                [
-                    'date' => $date,
-                ]
-            );
-
-            $this->whatsAppClient->sendTextMessage(
-                $from,
-                $this->catalogService->formatAvailableBarbersMenu(
-                    $branchName,
-                    $serviceName,
-                    $date,
-                    $barbers
-                )
+                $branchId,
+                $branchName,
+                $serviceId,
+                $serviceName,
+                $date
             );
 
             return;
@@ -1243,6 +1234,19 @@ Puedes escribir tu nota o responder:
 
         $barbers = $this->catalogService->getAvailableBarbers($branchId, $date, $serviceId);
 
+        if ($barbers === []) {
+            $this->respondNoBarbersAvailable(
+                $from,
+                $branchId,
+                $branchName,
+                $serviceId,
+                $serviceName,
+                $date
+            );
+
+            return;
+        }
+
         $this->conversationStateService->updateState(
             $from,
             'selecting_barber',
@@ -1266,6 +1270,64 @@ Puedes escribir tu nota o responder:
                     $date,
                     $barbers
                 )
+            )
+        );
+    }
+
+    private function respondNoBarbersAvailable(
+        string $from,
+        int $branchId,
+        string $branchName,
+        int $serviceId,
+        string $serviceName,
+        string $date
+    ): void {
+        if ($this->catalogService->countBarbersForServiceAtBranch($branchId, $serviceId) === 0) {
+            $services = $this->catalogService->getServicesByBranch($branchId);
+
+            $this->conversationStateService->updateState(
+                $from,
+                'selecting_service',
+                [
+                    'service_id' => null,
+                    'service_name' => null,
+                    'service_price' => null,
+                    'service_duration' => null,
+                    'barber_id' => null,
+                    'barber_name' => null,
+                    'time_label' => null,
+                    'scheduled_date_time' => null,
+                ]
+            );
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                sprintf(
+                    "Ningún barbero de *%s* realiza *%s*, así que no hay agenda disponible para ese servicio.\n\nEstos son los servicios que sí tienen barberos en esta sucursal:\n\n%s",
+                    $branchName,
+                    $serviceName,
+                    $this->catalogService->formatServicesMenu($branchName, $services)
+                )
+            );
+
+            return;
+        }
+
+        $this->conversationStateService->updateState(
+            $from,
+            'selecting_date',
+            [
+                'date' => $date,
+            ]
+        );
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            $this->catalogService->formatAvailableBarbersMenu(
+                $branchName,
+                $serviceName,
+                $date,
+                []
             )
         );
     }
