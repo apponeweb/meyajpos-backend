@@ -170,6 +170,11 @@ class CustomerController extends BaseController
             'notes' => $customer->getNotes(),
             'preferences' => $customer->getPreferences(),
             'visitFrequencyDays' => $customer->getVisitFrequencyDays(),
+            'isActive' => $customer->isActive(),
+            'branch' => $customer->getBranch() ? [
+                'id' => $customer->getBranch()->getId(),
+                'name' => $customer->getBranch()->getName()
+            ] : null,
             'history' => $history,
             'segmentation' => $this->calculateSegmentation($customer, count($appointments) > 0 ? $appointments[0] : null, count($appointments))
         ], Response::HTTP_OK);
@@ -382,6 +387,64 @@ class CustomerController extends BaseController
         return 'Hola {nombre}, somos Tio\'s Barber.{proxima_visita}'
             . "\n\n¿Te gustaría agendar tu próxima cita? Responde a este mensaje o escribe *agenda* para reservar."
             . "\n\n¡Te esperamos!";
+    }
+
+    #[Route('/{id}', name: 'api_customer_update', methods: ['PATCH'])]
+    public function updateCustomer(Request $request, Customer $customer): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?? [];
+
+        if (array_key_exists('name', $data)) {
+            $name = trim((string) $data['name']);
+            if ($name === '') {
+                return $this->json(['message' => 'El nombre no puede estar vacío.'], Response::HTTP_BAD_REQUEST);
+            }
+            $customer->setName($name);
+        }
+
+        if (array_key_exists('email', $data)) {
+            $email = mb_strtolower(trim((string) $data['email']));
+            $customer->setEmail($email !== '' ? $email : null);
+        }
+
+        if (array_key_exists('phone', $data) || array_key_exists('countryCode', $data)) {
+            $countryCode = array_key_exists('countryCode', $data)
+                ? (string) $data['countryCode']
+                : (string) ($customer->getCountryCode() ?? '');
+            $phone = array_key_exists('phone', $data)
+                ? (string) $data['phone']
+                : (string) ($customer->getPhone() ?? '');
+
+            $normalized = $this->phoneNumberService->normalize($countryCode, $phone);
+
+            if (($normalized['phone'] ?? null) !== null) {
+                $customer->setPhone((string) $normalized['phone']);
+                $customer->setCountryCode((string) $normalized['countryCode']);
+            } else {
+                $customer->setPhone(trim($phone) !== '' ? trim($phone) : null);
+                $customer->setCountryCode(trim($countryCode) !== '' ? trim($countryCode) : null);
+            }
+        }
+
+        if (array_key_exists('notes', $data)) {
+            $customer->setNotes(trim((string) $data['notes']) !== '' ? (string) $data['notes'] : null);
+        }
+
+        if (array_key_exists('branchId', $data)) {
+            $branchId = (int) $data['branchId'];
+            $branch = $branchId > 0
+                ? $this->entityManager->getRepository(\App\Entity\Branch::class)->find($branchId)
+                : null;
+            $customer->setBranch($branch);
+        }
+
+        if (array_key_exists('isActive', $data)) {
+            $customer->setIsActive((bool) $data['isActive']);
+        }
+
+        $this->entityManager->flush();
+
+        return $this->json(['message' => 'Cliente actualizado correctamente'], Response::HTTP_OK);
     }
 
     #[Route('/{id}/preferences', name: 'api_customer_update_preferences', methods: ['PATCH'])]
