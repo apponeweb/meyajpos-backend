@@ -36,6 +36,9 @@ class Appointment extends BaseEntity
     #[ORM\Column(type: Types::SMALLINT, enumType: AppointmentStatus::class)]
     private AppointmentStatus $status = AppointmentStatus::PENDING;
 
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $visitFrequencyDays = null;
+
     #[ORM\OneToMany(targetEntity: AppointmentService::class, mappedBy: 'appointment', cascade: ['persist', 'remove'])]
     private Collection $services;
 
@@ -101,6 +104,17 @@ class Appointment extends BaseEntity
     public function setStatus(AppointmentStatus $status): self
     {
         $this->status = $status;
+        return $this;
+    }
+
+    public function getVisitFrequencyDays(): ?int
+    {
+        return $this->visitFrequencyDays;
+    }
+
+    public function setVisitFrequencyDays(?int $visitFrequencyDays): self
+    {
+        $this->visitFrequencyDays = $visitFrequencyDays;
         return $this;
     }
 

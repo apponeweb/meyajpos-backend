@@ -2,6 +2,7 @@
 
 namespace App\Service\WhatsApp;
 
+use App\Entity\Appointment;
 use App\Entity\Customer;
 use App\Service\Appointment\AppointmentBookingService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -1126,6 +1127,7 @@ También puedes responder: *es el mismo*"
                     [
                         'payload_json' => [
                             'customer_id' => (int) ($result['customerId'] ?? 0),
+                            'appointment_id' => (int) ($result['appointmentId'] ?? 0),
                             'scheduled_date_time' => (string) ($state['scheduled_date_time'] ?? ''),
                         ],
                     ]
@@ -1235,6 +1237,7 @@ También puedes responder: *es el mismo*"
 
         $payload = $this->decodeStatePayload($state);
         $customerId = (int) ($payload['customer_id'] ?? 0);
+        $appointmentId = (int) ($payload['appointment_id'] ?? 0);
 
         if ($customerId > 0) {
             /** @var Customer|null $customer */
@@ -1242,9 +1245,19 @@ También puedes responder: *es el mismo*"
 
             if ($customer !== null) {
                 $customer->setVisitFrequencyDays($days);
-                $this->entityManager->flush();
             }
         }
+
+        if ($appointmentId > 0) {
+            /** @var Appointment|null $appointment */
+            $appointment = $this->entityManager->find(Appointment::class, $appointmentId);
+
+            if ($appointment !== null) {
+                $appointment->setVisitFrequencyDays($days);
+            }
+        }
+
+        $this->entityManager->flush();
 
         $this->conversationStateService->clear($from);
 

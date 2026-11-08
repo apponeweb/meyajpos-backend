@@ -315,7 +315,7 @@ class CustomerController extends BaseController
 
         /** @var array<int, array{cid: int, dt: \DateTime, status: mixed}> $rows */
         $rows = $this->entityManager->createQuery(
-            'SELECT IDENTITY(a.customer) AS cid, aps.scheduledDateTime AS dt, a.status AS status
+            'SELECT IDENTITY(a.customer) AS cid, aps.scheduledDateTime AS dt, a.status AS status, a.visitFrequencyDays AS apptFreq
              FROM App\Entity\AppointmentService aps
              JOIN aps.appointment a
              WHERE a.customer IN (:customers)
@@ -329,6 +329,9 @@ class CustomerController extends BaseController
 
         $pastMax = [];
         $completedMax = [];
+        $futureMin = [];
+        $pastFreq = [];
+        $completedFreq = [];
 
         foreach ($rows as $row) {
             $cid = (int) $row['cid'];
@@ -342,17 +345,23 @@ class CustomerController extends BaseController
                 continue;
             }
 
-            // Solo cuentan citas cuya fecha programada ya paso
             if ($dt >= $now) {
+                if (!isset($futureMin[$cid]) || $dt < $futureMin[$cid]) {
+                    $futureMin[$cid] = $dt;
+                }
                 continue;
             }
 
+            $apptFreq = isset($row['apptFreq']) ? (int) $row['apptFreq'] : null;
+
             if ($isCompleted && (!isset($completedMax[$cid]) || $dt > $completedMax[$cid])) {
                 $completedMax[$cid] = $dt;
+                $completedFreq[$cid] = $apptFreq;
             }
 
             if (!isset($pastMax[$cid]) || $dt > $pastMax[$cid]) {
                 $pastMax[$cid] = $dt;
+                $pastFreq[$cid] = $apptFreq;
             }
         }
 
@@ -366,13 +375,21 @@ class CustomerController extends BaseController
                 $visitMap[$cid]['lastVisit'] = $pastMax[$cid];
             }
 
-            if ($frequencyDays) {
-                if (isset($pastMax[$cid])) {
-                    $nextVisit = (clone $pastMax[$cid])->modify('+' . $frequencyDays . ' days');
+            // Proxima visita: la cita ya programada mas proxima; si no hay, ultima visita + frecuencia
+            if (isset($futureMin[$cid])) {
+                $nextVisit = $futureMin[$cid];
+            } elseif (isset($pastMax[$cid])) {
+                $freq = $pastFreq[$cid] ?? $frequencyDays;
+                if ($freq) {
+                    $nextVisit = (clone $pastMax[$cid])->modify('+' . $freq . ' days');
                 }
+            }
 
-                if (isset($completedMax[$cid])) {
-                    $suggestedVisit = (clone $completedMax[$cid])->modify('+' . $frequencyDays . ' days');
+            // Visita sugerida: ultima cita completada + frecuencia capturada en esa programacion
+            if (isset($completedMax[$cid])) {
+                $freq = $completedFreq[$cid] ?? $frequencyDays;
+                if ($freq) {
+                    $suggestedVisit = (clone $completedMax[$cid])->modify('+' . $freq . ' days');
                 }
             }
 
