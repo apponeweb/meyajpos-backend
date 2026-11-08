@@ -110,6 +110,11 @@ class CustomerController extends BaseController
             }
 
             $appointmentCount = $this->appointmentRepository->count(['customer' => $customer]);
+            $completedVisits = $this->appointmentRepository->count([
+                'customer' => $customer,
+                'status' => AppointmentStatus::COMPLETED,
+                'deletedAt' => null,
+            ]);
 
             $segmentation = $this->calculateSegmentation($customer, $lastAppointment, $appointmentCount);
 
@@ -125,6 +130,7 @@ class CustomerController extends BaseController
                 'visitFrequencyDays' => $customer->getVisitFrequencyDays(),
                 'segmentation' => $segmentation,
                 'appointmentCount' => $appointmentCount,
+                'visits' => $completedVisits,
                 'isActive' => $customer->isActive(),
                 'branch' => $customer->getBranch() ? [
                     'id' => $customer->getBranch()->getId(),
