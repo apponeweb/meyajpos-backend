@@ -34,6 +34,9 @@ class Customer extends BaseEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $preferences = null;
 
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $visitFrequencyDays = null;
+
     #[ORM\ManyToOne(targetEntity: Branch::class)]
     #[ORM\JoinColumn(name: 'branch_id', referencedColumnName: 'id', nullable: true)]
     private ?Branch $branch = null;
@@ -106,6 +109,17 @@ class Customer extends BaseEntity
     public function setPreferences(?string $preferences): self
     {
         $this->preferences = $preferences;
+        return $this;
+    }
+
+    public function getVisitFrequencyDays(): ?int
+    {
+        return $this->visitFrequencyDays;
+    }
+
+    public function setVisitFrequencyDays(?int $visitFrequencyDays): self
+    {
+        $this->visitFrequencyDays = $visitFrequencyDays;
         return $this;
     }
 

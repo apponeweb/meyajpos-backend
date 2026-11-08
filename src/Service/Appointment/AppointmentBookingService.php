@@ -92,6 +92,7 @@ final class AppointmentBookingService
             $result = [
                 'appointmentId' => $appointment->getId(),
                 'customer' => $customer->getName(),
+                'customerId' => $customer->getId(),
             ];
 
             $this->notifyCustomerByWhatsAppIfNeeded($data, $appointment, $customer, $branch);

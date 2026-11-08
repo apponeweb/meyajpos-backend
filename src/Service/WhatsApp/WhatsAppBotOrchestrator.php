@@ -2,7 +2,9 @@
 
 namespace App\Service\WhatsApp;
 
+use App\Entity\Customer;
 use App\Service\Appointment\AppointmentBookingService;
+use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use App\Service\Appointment\AppointmentCancellationService;
 
@@ -15,6 +17,7 @@ final class WhatsAppBotOrchestrator
         private readonly WhatsAppConversationStateService $conversationStateService,
         private readonly AppointmentBookingService $appointmentBookingService,
         private readonly AppointmentCancellationService $appointmentCancellationService,
+        private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -81,6 +84,12 @@ final class WhatsAppBotOrchestrator
                 }
 
                 $this->startCancellationFlow($from);
+
+                return;
+            }
+
+            if ($state !== null && $state['step'] === 'asking_visit_frequency') {
+                $this->handleVisitFrequencyAnswer($from, $body, $normalizedBody, $state);
 
                 return;
             }
@@ -1111,19 +1120,29 @@ También puedes responder: *es el mismo*"
 
                 $rescheduleNote = $this->cancelRescheduledAppointmentIfNeeded($from, $state);
 
-                $this->conversationStateService->clear($from);
+                $this->conversationStateService->updateState(
+                    $from,
+                    'asking_visit_frequency',
+                    [
+                        'payload_json' => [
+                            'customer_id' => (int) ($result['customerId'] ?? 0),
+                            'scheduled_date_time' => (string) ($state['scheduled_date_time'] ?? ''),
+                        ],
+                    ]
+                );
 
                 $this->whatsAppClient->sendTextMessage(
                     $from,
                     sprintf(
-                        "Tu cita quedó reservada con éxito.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nTe esperamos.%s",
+                        "Tu cita quedó reservada con éxito.\n\nFolio: *%s*\nSucursal: *%s*\nServicio: *%s*\nBarbero: *%s*\nFecha: *%s*\nHorario: *%s*\n\nTe esperamos.%s\n\n%s",
                         (string) ($result['appointmentId'] ?? ''),
                         (string) ($state['branch_name'] ?? ''),
                         (string) ($state['service_name'] ?? ''),
                         (string) ($state['barber_name'] ?? ''),
                         (string) ($state['date'] ?? ''),
                         (string) ($state['time_label'] ?? ''),
-                        $rescheduleNote
+                        $rescheduleNote,
+                        $this->visitFrequencyQuestion()
                     )
                 );
 
@@ -1166,6 +1185,114 @@ También puedes responder: *es el mismo*"
             $from,
             $this->formatBookingConfirmation($state)
         );
+    }
+
+    private function visitFrequencyQuestion(): string
+    {
+        return "Una última pregunta: ¿cada cuánto te gustaría volver?\n\n"
+            . "Responde:\n"
+            . "1) Cada semana\n"
+            . "2) Cada 15 días\n"
+            . "3) Cada mes\n"
+            . "4) Cada 2 meses\n"
+            . "5) Cada 3 meses\n\n"
+            . "O escribe *cada X días* (ej. cada 45 días). Escribe *no* para omitir.";
+    }
+
+    private function handleVisitFrequencyAnswer(string $from, string $body, string $normalizedBody, array $state): void
+    {
+        $skipPhrases = ['no', 'omitir', 'saltar', 'despues', 'después', 'luego', 'n/a', 'ninguna', 'no gracias', 'prefiero no'];
+
+        if (in_array($normalizedBody, $skipPhrases, true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "Perfecto, sin problema.\n\nCuando quieras agendar de nuevo, escribe *agenda*."
+            );
+
+            return;
+        }
+
+        if (in_array($normalizedBody, ['menú', 'menu'], true)) {
+            $this->conversationStateService->clear($from);
+
+            $this->whatsAppClient->sendTextMessage($from, $this->mainMenu($from));
+
+            return;
+        }
+
+        $days = $this->parseVisitFrequencyDays($normalizedBody);
+
+        if ($days === null) {
+            $this->whatsAppClient->sendTextMessage(
+                $from,
+                "No entendí la frecuencia.\n\n" . $this->visitFrequencyQuestion()
+            );
+
+            return;
+        }
+
+        $payload = $this->decodeStatePayload($state);
+        $customerId = (int) ($payload['customer_id'] ?? 0);
+
+        if ($customerId > 0) {
+            /** @var Customer|null $customer */
+            $customer = $this->entityManager->find(Customer::class, $customerId);
+
+            if ($customer !== null) {
+                $customer->setVisitFrequencyDays($days);
+                $this->entityManager->flush();
+            }
+        }
+
+        $this->conversationStateService->clear($from);
+
+        $this->whatsAppClient->sendTextMessage(
+            $from,
+            sprintf(
+                "Anotado: prefieres visitarnos cada *%d días*.\n\nGracias por tu cita. ¡Te esperamos!",
+                $days
+            )
+        );
+    }
+
+    private function parseVisitFrequencyDays(string $normalizedBody): ?int
+    {
+        $presets = [
+            '1' => 7,
+            '2' => 15,
+            '3' => 30,
+            '4' => 60,
+            '5' => 90,
+        ];
+
+        if (isset($presets[$normalizedBody])) {
+            return $presets[$normalizedBody];
+        }
+
+        $number = null;
+        if (preg_match('/(\d+)/', $normalizedBody, $matches)) {
+            $number = (int) $matches[1];
+        }
+
+        if (preg_match('/mes/u', $normalizedBody)) {
+            $days = $number !== null ? $number * 30 : 30;
+        } elseif (preg_match('/semana/u', $normalizedBody)) {
+            $days = $number !== null ? $number * 7 : 7;
+        } elseif (str_contains($normalizedBody, 'quincena')) {
+            $days = 15;
+        } elseif ($number !== null && preg_match('/^\d{1,3}$/', $normalizedBody)) {
+            $days = $number;
+        } else {
+            return null;
+        }
+
+        if ($days < 1 || $days > 365) {
+            return null;
+        }
+
+        return $days;
     }
 
     private function cancelRescheduledAppointmentIfNeeded(string $from, array $state): string
