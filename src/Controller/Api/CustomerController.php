@@ -104,10 +104,9 @@ class CustomerController extends BaseController
                 ['createdAt' => 'DESC']
             );
 
-            $lastVisitDate = null;
-            if ($lastAppointment && count($lastAppointment->getServices()) > 0) {
-                $lastVisitDate = $lastAppointment->getServices()->first()->getScheduledDateTime()?->format('d/m/Y H:i:s');
-            }
+            $lastVisitDate = isset($visit['lastVisit']) && $visit['lastVisit'] instanceof \DateTimeInterface
+                ? $visit['lastVisit']->format('d/m/Y H:i:s')
+                : null;
 
             $appointmentCount = $this->appointmentRepository->count(['customer' => $customer]);
             $completedVisits = $this->appointmentRepository->count([
@@ -288,7 +287,7 @@ class CustomerController extends BaseController
      * última cita + visit_frequency_days.
      *
      * @param Customer[] $customers
-     * @return array<int, array{nextVisit: ?\DateTime, nextVisitIso: ?string, daysUntilNextVisit: ?int}>
+     * @return array<int, array{nextVisit: ?\DateTime, nextVisitIso: ?string, daysUntilNextVisit: ?int, suggestedVisit: ?\DateTime, suggestedVisitIso: ?string, daysUntilSuggested: ?int, lastVisit: ?\DateTime}>
      */
     private function buildVisitMap(array $customers): array
     {
@@ -304,6 +303,7 @@ class CustomerController extends BaseController
                 'suggestedVisit' => null,
                 'suggestedVisitIso' => null,
                 'daysUntilSuggested' => null,
+                'lastVisit' => null,
             ];
         }
 
@@ -342,12 +342,13 @@ class CustomerController extends BaseController
                 continue;
             }
 
-            if ($isCompleted && (!isset($completedMax[$cid]) || $dt > $completedMax[$cid])) {
-                $completedMax[$cid] = $dt;
-            }
-
+            // Solo cuentan citas cuya fecha programada ya paso
             if ($dt >= $now) {
                 continue;
+            }
+
+            if ($isCompleted && (!isset($completedMax[$cid]) || $dt > $completedMax[$cid])) {
+                $completedMax[$cid] = $dt;
             }
 
             if (!isset($pastMax[$cid]) || $dt > $pastMax[$cid]) {
@@ -360,6 +361,10 @@ class CustomerController extends BaseController
             $frequencyDays = $customer->getVisitFrequencyDays();
             $nextVisit = null;
             $suggestedVisit = null;
+
+            if (isset($pastMax[$cid])) {
+                $visitMap[$cid]['lastVisit'] = $pastMax[$cid];
+            }
 
             if ($frequencyDays) {
                 if (isset($pastMax[$cid])) {
