@@ -281,9 +281,8 @@ class CustomerController extends BaseController
     }
 
     /**
-     * Calcula la próxima visita de cada cliente:
-     * 1) La cita futura más próxima agendada, si existe.
-     * 2) Si no hay cita futura y el cliente indicó frecuencia, última cita + frecuencia.
+     * Calcula la próxima visita de cada cliente según la frecuencia indicada:
+     * última cita + visit_frequency_days.
      *
      * @param Customer[] $customers
      * @return array<int, array{nextVisit: ?\DateTime, nextVisitIso: ?string, daysUntilNextVisit: ?int}>
@@ -322,33 +321,26 @@ class CustomerController extends BaseController
             ->setParameter('cancelled', AppointmentStatus::CANCELLED)
             ->getArrayResult();
 
-        $futureMin = [];
         $pastMax = [];
 
         foreach ($rows as $row) {
             $cid = (int) $row['cid'];
             $dt = $row['dt'];
 
-            if (!$dt instanceof \DateTimeInterface) {
+            if (!$dt instanceof \DateTimeInterface || $dt >= $now) {
                 continue;
             }
 
-            if ($dt >= $now) {
-                if (!isset($futureMin[$cid]) || $dt < $futureMin[$cid]) {
-                    $futureMin[$cid] = $dt;
-                }
-            } else {
-                if (!isset($pastMax[$cid]) || $dt > $pastMax[$cid]) {
-                    $pastMax[$cid] = $dt;
-                }
+            if (!isset($pastMax[$cid]) || $dt > $pastMax[$cid]) {
+                $pastMax[$cid] = $dt;
             }
         }
 
         foreach ($customers as $customer) {
             $cid = $customer->getId();
-            $nextVisit = $futureMin[$cid] ?? null;
+            $nextVisit = null;
 
-            if ($nextVisit === null && isset($pastMax[$cid]) && $customer->getVisitFrequencyDays()) {
+            if (isset($pastMax[$cid]) && $customer->getVisitFrequencyDays()) {
                 $nextVisit = (clone $pastMax[$cid])->modify('+' . $customer->getVisitFrequencyDays() . ' days');
             }
 
@@ -442,6 +434,13 @@ class CustomerController extends BaseController
                 ? $this->entityManager->getRepository(\App\Entity\Branch::class)->find($branchId)
                 : null;
             $customer->setBranch($branch);
+        }
+
+        if (array_key_exists('visitFrequencyDays', $data)) {
+            $days = $data['visitFrequencyDays'];
+            $customer->setVisitFrequencyDays(
+                $days === null || $days === '' ? null : max(1, min(365, (int) $days))
+            );
         }
 
         if (array_key_exists('isActive', $data)) {
