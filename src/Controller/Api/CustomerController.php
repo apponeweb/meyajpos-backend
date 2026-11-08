@@ -223,12 +223,25 @@ class CustomerController extends BaseController
             }
 
             $visit = $visitMap[$customer->getId()] ?? null;
-            $message = $customMessage !== ''
-                ? $this->renderCustomerMessage($customMessage, $customer, $visit)
-                : $this->defaultReminderMessage($customer, $visit);
 
             try {
-                $this->whatsAppClient->sendTextMessage($recipient, $message);
+                if ($customMessage !== '') {
+                    $this->whatsAppClient->sendTextMessage(
+                        $recipient,
+                        $this->renderCustomerMessage($customMessage, $customer, $visit)
+                    );
+                } else {
+                    $this->whatsAppClient->sendTemplateMessage(
+                        to: $recipient,
+                        templateName: 'aviso_reagendar',
+                        languageCode: 'es_MX',
+                        bodyParameters: [
+                            $name,
+                            $this->nextVisitTemplateParam($visit),
+                        ]
+                    );
+                }
+
                 $summary['sent']++;
                 $summary['details'][] = [
                     'customerId' => $customer->getId(),
@@ -347,19 +360,14 @@ class CustomerController extends BaseController
         ]);
     }
 
-    private function defaultReminderMessage(Customer $customer, ?array $visit): string
+    private function nextVisitTemplateParam(?array $visit): string
     {
-        $name = (string) ($customer->getName() ?? 'Cliente');
-        $visitLine = '';
-
         if ($visit !== null && $visit['nextVisit'] !== null) {
-            $visitLine = "\n\nSegún tu frecuencia de visitas, tu próxima cita sugerida es el *"
-                . $visit['nextVisit']->format('d/m/Y') . "*.";
+            return 'Según tu frecuencia de visitas, tu próxima visita sugerida es el '
+                . $visit['nextVisit']->format('d/m/Y') . '.';
         }
 
-        return "Hola *{$name}* 👋\n\nSoy el asistente de *Tio's Barber*."
-            . $visitLine
-            . "\n\n¿Te gustaría agendar tu próxima cita? Responde a este mensaje o escribe *agenda* para reservar.";
+        return 'Te recomendamos agendar tu próxima visita.';
     }
 
     #[Route('/{id}/preferences', name: 'api_customer_update_preferences', methods: ['PATCH'])]
