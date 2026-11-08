@@ -281,8 +281,25 @@ class ReservationController extends BaseController
     {
         $data = json_decode($request->getContent(), true);
         if (isset($data['status'])) {
-            $appointment->setStatus(AppointmentStatus::from($data['status']));
+            $newStatus = AppointmentStatus::from($data['status']);
+            $wasCancelled = $appointment->getStatus() === AppointmentStatus::CANCELLED;
+
+            $appointment->setStatus($newStatus);
             $this->entityManager->flush();
+
+            $connection = $this->entityManager->getConnection();
+
+            if ($newStatus === AppointmentStatus::CANCELLED) {
+                $connection->executeStatement(
+                    'UPDATE tbd_appointment_service SET deleted_at = NOW(), updated_at = NOW() WHERE appointment_id = :appointmentId AND deleted_at IS NULL',
+                    ['appointmentId' => $appointment->getId()]
+                );
+            } elseif ($wasCancelled) {
+                $connection->executeStatement(
+                    'UPDATE tbd_appointment_service SET deleted_at = NULL, updated_at = NOW() WHERE appointment_id = :appointmentId AND deleted_at IS NOT NULL',
+                    ['appointmentId' => $appointment->getId()]
+                );
+            }
         }
 
         return $this->json(['message' => 'Estado actualizado'], Response::HTTP_OK);

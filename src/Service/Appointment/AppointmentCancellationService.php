@@ -182,6 +182,19 @@ final class AppointmentCancellationService
             throw new \RuntimeException('La cita no pudo cancelarse o ya estaba cancelada.');
         }
 
+        $this->connection->executeStatement(
+            <<<SQL
+            UPDATE tbd_appointment_service
+            SET
+                deleted_at = NOW(),
+                updated_at = NOW()
+            WHERE appointment_id = :appointmentId
+              AND deleted_at IS NULL
+            SQL,
+            ['appointmentId' => $appointmentId],
+            ['appointmentId' => ParameterType::INTEGER]
+        );
+
         return $appointment;
     }
 
