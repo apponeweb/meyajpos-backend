@@ -231,15 +231,22 @@ class CustomerController extends BaseController
                         $this->renderCustomerMessage($customMessage, $customer, $visit)
                     );
                 } else {
-                    $this->whatsAppClient->sendTemplateMessage(
-                        to: $recipient,
-                        templateName: 'aviso_reagendar',
-                        languageCode: 'es_MX',
-                        bodyParameters: [
-                            $name,
-                            $this->nextVisitTemplateParam($visit),
-                        ]
-                    );
+                    try {
+                        $this->whatsAppClient->sendTemplateMessage(
+                            to: $recipient,
+                            templateName: 'aviso_reagendar',
+                            languageCode: 'es_MX',
+                            bodyParameters: [
+                                $name,
+                                $this->nextVisitTemplateParam($visit),
+                            ]
+                        );
+                    } catch (\Throwable $templateException) {
+                        $this->whatsAppClient->sendTextMessage(
+                            $recipient,
+                            $this->renderCustomerMessage($this->defaultReminderTemplate(), $customer, $visit)
+                        );
+                    }
                 }
 
                 $summary['sent']++;
@@ -368,6 +375,13 @@ class CustomerController extends BaseController
         }
 
         return 'Te recomendamos agendar tu próxima visita.';
+    }
+
+    private function defaultReminderTemplate(): string
+    {
+        return 'Hola {nombre}, somos Tio\'s Barber.{proxima_visita}'
+            . "\n\n¿Te gustaría agendar tu próxima cita? Responde a este mensaje o escribe *agenda* para reservar."
+            . "\n\n¡Te esperamos!";
     }
 
     #[Route('/{id}/preferences', name: 'api_customer_update_preferences', methods: ['PATCH'])]
