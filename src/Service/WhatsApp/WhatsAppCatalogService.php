@@ -999,6 +999,7 @@ class WhatsAppCatalogService
                 INNER JOIN tbd_barber_profile bp ON bp.id = aps.barber_id
                 INNER JOIN tbd_appointment a ON a.id = aps.appointment_id
                 WHERE bp.barber_user_id = :barberId
+                  AND a.deleted_at IS NULL
                   AND aps.scheduled_date_time >= :startOfDay
                   AND aps.scheduled_date_time <= :endOfDay
                   AND a.status != :cancelledStatus

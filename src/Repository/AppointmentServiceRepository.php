@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\AppointmentService;
+use App\Enum\AppointmentStatus;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -33,10 +34,14 @@ class AppointmentServiceRepository extends BaseRepository
         $dayEnd = (clone $start)->setTime(23, 59, 59);
 
         $appointments = $this->createQueryBuilder('asv')
+            ->join('asv.appointment', 'a')
             ->where('asv.barber = :barberId')
             ->andWhere('asv.deletedAt IS NULL')
+            ->andWhere('a.deletedAt IS NULL')
+            ->andWhere('a.status != :cancelledStatus')
             ->andWhere('asv.scheduledDateTime BETWEEN :dayStart AND :dayEnd')
             ->setParameter('barberId', $barberId)
+            ->setParameter('cancelledStatus', AppointmentStatus::CANCELLED)
             ->setParameter('dayStart', $dayStart)
             ->setParameter('dayEnd', $dayEnd)
             ->getQuery()
