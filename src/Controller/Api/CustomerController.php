@@ -188,6 +188,39 @@ class CustomerController extends BaseController
         ], Response::HTTP_OK);
     }
 
+    #[Route('/{id}/whatsapp-messages', name: 'api_customer_whatsapp_messages', methods: ['GET'])]
+    public function whatsappMessages(Customer $customer): JsonResponse
+    {
+        $national = preg_replace('/\D+/', '', (string) $customer->getPhone()) ?? '';
+        $national = substr($national, -10);
+
+        if ($national === '') {
+            return $this->json(['results' => []], Response::HTTP_OK);
+        }
+
+        $rows = $this->entityManager->getConnection()->fetchAllAssociative(
+            "SELECT direction, body, created_at
+             FROM tbd_whatsapp_message
+             WHERE RIGHT(regexp_replace(wa_id, '\\D', '', 'g'), 10) = :national
+             ORDER BY created_at DESC
+             LIMIT 200",
+            ['national' => $national]
+        );
+
+        $results = [];
+        foreach (array_reverse($rows) as $row) {
+            $results[] = [
+                'direction' => $row['direction'],
+                'body' => $row['body'],
+                'createdAt' => $row['created_at'] instanceof \DateTimeInterface
+                    ? $row['created_at']->format('d/m/Y H:i:s')
+                    : (string) $row['created_at'],
+            ];
+        }
+
+        return $this->json(['results' => $results], Response::HTTP_OK);
+    }
+
     #[Route('/send-messages', name: 'api_customer_send_messages', methods: ['POST'])]
     public function sendMessages(Request $request): JsonResponse
     {

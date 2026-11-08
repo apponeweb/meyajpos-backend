@@ -11,12 +11,15 @@ final class WhatsAppClient
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly string $whatsappAccessToken,
-        private readonly string $whatsappPhoneNumberId
+        private readonly string $whatsappPhoneNumberId,
+        private readonly WhatsAppMessageLogService $messageLogService,
     ) {
     }
 
     public function sendTextMessage(string $to, string $message): array
     {
+        $this->messageLogService->log($to, 'out', $message);
+
         $url = sprintf(
             'https://graph.facebook.com/%s/%s/messages',
             self::GRAPH_API_VERSION,
@@ -65,6 +68,10 @@ final class WhatsAppClient
         string $languageCode,
         array $bodyParameters = []
     ): array {
+        $logBody = '[plantilla: ' . $templateName . ']'
+            . ($bodyParameters !== [] ? ' ' . implode(' | ', array_map('strval', $bodyParameters)) : '');
+        $this->messageLogService->log($to, 'out', $logBody);
+
         $url = sprintf(
             'https://graph.facebook.com/%s/%s/messages',
             self::GRAPH_API_VERSION,

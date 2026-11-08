@@ -20,6 +20,7 @@ final class WhatsAppBotOrchestrator
         private readonly AppointmentCancellationService $appointmentCancellationService,
         private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
+        private readonly WhatsAppMessageLogService $messageLogService,
     ) {
     }
 
@@ -31,6 +32,8 @@ final class WhatsAppBotOrchestrator
         if (!$from) {
             return;
         }
+
+        $this->messageLogService->log((string) $from, 'in', $body !== '' ? $body : (string) ($message['type'] ?? 'message'));
 
         $messageId = trim((string) ($message['id'] ?? ''));
 
