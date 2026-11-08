@@ -97,7 +97,7 @@ class CustomerController extends BaseController
         $results = [];
 
         foreach ($pageCustomers as $customer) {
-            $visit = $visitMap[$customer->getId()] ?? ['nextVisit' => null, 'nextVisitIso' => null, 'daysUntilNextVisit' => null];
+            $visit = $visitMap[$customer->getId()] ?? ['nextVisit' => null, 'nextVisitIso' => null, 'daysUntilNextVisit' => null, 'suggestedVisit' => null, 'suggestedVisitIso' => null, 'daysUntilSuggested' => null];
 
             $lastAppointment = $this->appointmentRepository->findOneBy(
                 ['customer' => $customer],
@@ -127,6 +127,9 @@ class CustomerController extends BaseController
                 'nextVisit' => $visit['nextVisit']?->format('d/m/Y'),
                 'nextVisitIso' => $visit['nextVisitIso'],
                 'daysUntilNextVisit' => $visit['daysUntilNextVisit'],
+                'suggestedVisit' => $visit['suggestedVisit']?->format('d/m/Y'),
+                'suggestedVisitIso' => $visit['suggestedVisitIso'],
+                'daysUntilSuggested' => $visit['daysUntilSuggested'],
                 'visitFrequencyDays' => $customer->getVisitFrequencyDays(),
                 'segmentation' => $segmentation,
                 'appointmentCount' => $appointmentCount,
@@ -298,6 +301,9 @@ class CustomerController extends BaseController
                 'nextVisit' => null,
                 'nextVisitIso' => null,
                 'daysUntilNextVisit' => null,
+                'suggestedVisit' => null,
+                'suggestedVisitIso' => null,
+                'daysUntilSuggested' => null,
             ];
         }
 
@@ -307,9 +313,9 @@ class CustomerController extends BaseController
 
         $now = new \DateTime();
 
-        /** @var array<int, array{cid: int, dt: \DateTime}> $rows */
+        /** @var array<int, array{cid: int, dt: \DateTime, status: mixed}> $rows */
         $rows = $this->entityManager->createQuery(
-            'SELECT IDENTITY(a.customer) AS cid, aps.scheduledDateTime AS dt
+            'SELECT IDENTITY(a.customer) AS cid, aps.scheduledDateTime AS dt, a.status AS status
              FROM App\Entity\AppointmentService aps
              JOIN aps.appointment a
              WHERE a.customer IN (:customers)
@@ -322,12 +328,25 @@ class CustomerController extends BaseController
             ->getArrayResult();
 
         $pastMax = [];
+        $completedMax = [];
 
         foreach ($rows as $row) {
             $cid = (int) $row['cid'];
             $dt = $row['dt'];
+            $status = $row['status'] ?? null;
+            $isCompleted = $status instanceof AppointmentStatus
+                ? $status === AppointmentStatus::COMPLETED
+                : (int) $status === AppointmentStatus::COMPLETED->value;
 
-            if (!$dt instanceof \DateTimeInterface || $dt >= $now) {
+            if (!$dt instanceof \DateTimeInterface) {
+                continue;
+            }
+
+            if ($isCompleted && (!isset($completedMax[$cid]) || $dt > $completedMax[$cid])) {
+                $completedMax[$cid] = $dt;
+            }
+
+            if ($dt >= $now) {
                 continue;
             }
 
@@ -338,19 +357,32 @@ class CustomerController extends BaseController
 
         foreach ($customers as $customer) {
             $cid = $customer->getId();
+            $frequencyDays = $customer->getVisitFrequencyDays();
             $nextVisit = null;
+            $suggestedVisit = null;
 
-            if (isset($pastMax[$cid]) && $customer->getVisitFrequencyDays()) {
-                $nextVisit = (clone $pastMax[$cid])->modify('+' . $customer->getVisitFrequencyDays() . ' days');
+            if ($frequencyDays) {
+                if (isset($pastMax[$cid])) {
+                    $nextVisit = (clone $pastMax[$cid])->modify('+' . $frequencyDays . ' days');
+                }
+
+                if (isset($completedMax[$cid])) {
+                    $suggestedVisit = (clone $completedMax[$cid])->modify('+' . $frequencyDays . ' days');
+                }
             }
 
             if ($nextVisit !== null) {
                 $diffSeconds = $nextVisit->getTimestamp() - $now->getTimestamp();
-                $visitMap[$cid] = [
-                    'nextVisit' => $nextVisit,
-                    'nextVisitIso' => $nextVisit->format('Y-m-d'),
-                    'daysUntilNextVisit' => (int) floor($diffSeconds / 86400),
-                ];
+                $visitMap[$cid]['nextVisit'] = $nextVisit;
+                $visitMap[$cid]['nextVisitIso'] = $nextVisit->format('Y-m-d');
+                $visitMap[$cid]['daysUntilNextVisit'] = (int) floor($diffSeconds / 86400);
+            }
+
+            if ($suggestedVisit !== null) {
+                $diffSeconds = $suggestedVisit->getTimestamp() - $now->getTimestamp();
+                $visitMap[$cid]['suggestedVisit'] = $suggestedVisit;
+                $visitMap[$cid]['suggestedVisitIso'] = $suggestedVisit->format('Y-m-d');
+                $visitMap[$cid]['daysUntilSuggested'] = (int) floor($diffSeconds / 86400);
             }
         }
 
