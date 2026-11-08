@@ -141,6 +141,7 @@ class ReservationController extends BaseController
                 'statusColor' => $configs[$app->getStatus()->value]['color'] ?? $this->getDefaultColor($app->getStatus()),
                 'totalAmount' => $app->getTotalAmount(),
                 'createdAt' => $app->getCreatedAt()->format('d/m/Y H:i:s'),
+                'appointmentDate' => $startTime ? $startTime->format('d/m/Y H:i:s') : null,
                 'startTime' => $startTime ? $startTime->format('d/m/Y H:i:s') : null,
                 'endTime' => $endTime ? $endTime->format('d/m/Y H:i:s') : null,
                 'services' => $services
