@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\BranchProduct;
 use App\Entity\CashBoxMovement;
 use App\Entity\CommissionDetail;
 use App\Entity\CommissionGenerated;
@@ -180,9 +181,15 @@ final class SaleController extends BaseController
                     $commisionDetail = $this->entityManager->getRepository(CommissionDetail::class)->findOneBy(['commission' => $commision, 'serviceType' => $productType]);
                     if ($commisionDetail) {
                         $percentage = $commisionDetail->getPercentage();
-                        $commissionAmount = ($detail->getUnitPrice() * $percentage) / 100;
+                        $basePrice = (float)$detail->getUnitPrice();
+                        if ($basePrice <= 0 && ($detail->isCourtesy() || $detail->getProduct()->getServiceType()->isCourtesy())) {
+                            $branchProduct = $this->entityManager->getRepository(BranchProduct::class)->findOneBy(['branch' => $activeSession->getCashBox()->getBranch(), 'product' => $detail->getProduct()]);
+                            $basePrice = $branchProduct ? $branchProduct->getEffectivePrice() : (float)$detail->getProduct()->getPrice();
+                        }
+                        $commissionAmount = ($basePrice * $percentage) / 100;
 
                         $commisionGenerated = new CommissionGenerated();
+                        $commisionGenerated->setBaseCommission((string)$basePrice);
                         $commisionGenerated->setUser($detail->getServiceProvider());
                         $commisionGenerated->setSaleDetail($detail);
                         $commisionGenerated->setPercentage($percentage);
